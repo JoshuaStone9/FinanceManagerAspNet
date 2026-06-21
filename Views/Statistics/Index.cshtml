@@ -1,0 +1,193 @@
+@model FinanceManagerAspNet.Models.StatisticsViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Statistics";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var remainingOutsideHouse = Math.Max(0, Model.HouseGoal.ExternalTotalValue - Model.HouseGoal.MoneyboxFundAmount);
+}
+
+<section class="hero card">
+  <div>
+    <p class="eyebrow">Statistics</p>
+    <h1>Goal forecast</h1>
+    <p class="muted">Normal goal view first, then the interest-adjusted forecast underneath.</p>
+  </div>
+</section>
+
+<section class="grid cards-4">
+  <article class="card">
+    <p class="eyebrow">Current total</p>
+    <h2>@Model.TotalNow.ToString("C", gb)</h2>
+    <p>@Model.Remaining.ToString("C", gb) left to £20k today</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">By @Model.AprilTarget.ToString("MMM yyyy") normal money</p>
+    <h2>@Model.ProjectedByAprilWithoutInterest.ToString("C", gb)</h2>
+    <p>@Model.RemainingByAprilWithoutInterest.ToString("C", gb) still left. Includes @Model.ProjectedSalarySavingsByApril.ToString("C", gb) planned salary savings.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">By @Model.AprilTarget.ToString("MMM yyyy") with interest</p>
+    <h2>@Model.ProjectedByAprilWithInterest.ToString("C", gb)</h2>
+    <p class="good">+@Model.ProjectedInterestEarned.ToString("C", gb) estimated interest, plus @Model.ProjectedSalarySavingsByApril.ToString("C", gb) planned salary savings</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">Goal date estimate</p>
+    <h2>@(Model.EstimatedGoalDate is null ? "N/A" : Model.EstimatedGoalDate.Value.ToString("MMM yyyy"))</h2>
+    <p>@(Model.EstimatedMonthsToGoal < 0 ? "Not enough monthly contributions recorded" : Model.EstimatedMonthsToGoal + " months using interest + contributions")</p>
+  </article>
+</section>
+
+<section class="card">
+  <p class="eyebrow">Emergency fund calculator</p>
+  <h2>Take the house target off your total</h2>
+  <p class="muted">This now does one simple job: Total value minus the £30,000 house target, minus Moneybox interest made, minus the Moneybox bonus. The result is your estimated emergency fund.</p>
+
+  <form method="get" class="planner-form">
+    <label>Total value of everything
+      <input type="number" step="0.01" name="externalTotalValue" value="@Model.HouseGoal.ExternalTotalValue" />
+    </label>
+    <label>House target/value
+      <input type="number" step="0.01" name="houseGoal" value="@Model.HouseGoal.HouseGoal" />
+    </label>
+    <label>Moneybox fund amount
+      <input type="number" step="0.01" name="moneyboxFundAmount" value="@Model.HouseGoal.MoneyboxFundAmount" />
+    </label>
+    <label>Moneybox interest rate %
+      <input type="number" step="0.01" name="moneyboxInterestRate" value="@Model.HouseGoal.MoneyboxInterestRate" />
+    </label>
+    <label>Moneybox bonus
+      <input type="number" step="0.01" name="moneyboxBonus" value="@Model.HouseGoal.MoneyboxBonus" />
+    </label>
+    <label>Forecast months
+      <input type="number" name="forecastMonths" value="@Model.HouseGoal.ForecastMonths" />
+    </label>
+    <button class="primary" type="submit">Update emergency fund estimate</button>
+  </form>
+</section>
+
+<section class="grid cards-4">
+  <article class="card">
+    <p class="eyebrow">Total value</p>
+    <h2>@Model.HouseGoal.ExternalTotalValue.ToString("C", gb)</h2>
+    <p>The full amount you enter across everything.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">Amount taken off</p>
+    <h2>@Model.HouseGoal.HouseWithInterestTotal.ToString("C", gb)</h2>
+    <p>House target + Moneybox interest + Moneybox bonus.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">Estimated emergency fund</p>
+    <h2 class="@(Model.HouseGoal.EmergencyFundStillNeededWithInterest >= 0 ? "good" : "bad")">@Model.HouseGoal.EmergencyFundStillNeededWithInterest.ToString("C", gb)</h2>
+    <p>Total value after the house target, Moneybox interest and bonus have been removed.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">Without interest</p>
+    <h2>@Model.HouseGoal.EmergencyFundStillNeededNormal.ToString("C", gb)</h2>
+    <p>This removes only the house target and bonus.</p>
+  </article>
+</section>
+
+<section class="grid two">
+  <article class="card">
+    <h2>Emergency fund breakdown</h2>
+    <p>Total value of everything: <strong>@Model.HouseGoal.ExternalTotalValue.ToString("C", gb)</strong></p>
+    <p>House target/value removed: <strong>@Model.HouseGoal.HouseGoal.ToString("C", gb)</strong></p>
+    <p>Moneybox bonus removed: <strong>@Model.HouseGoal.MoneyboxBonus.ToString("C", gb)</strong></p>
+    <p>Moneybox interest made removed: <strong class="good">@Model.HouseGoal.MoneyboxInterestOnly.ToString("C", gb)</strong></p>
+    <p>Total removed with interest: <strong>@Model.HouseGoal.HouseWithInterestTotal.ToString("C", gb)</strong></p>
+    <p>Estimated emergency fund: <strong class="@(Model.HouseGoal.EmergencyFundStillNeededWithInterest >= 0 ? "good" : "bad")">@Model.HouseGoal.EmergencyFundStillNeededWithInterest.ToString("C", gb)</strong></p>
+    <p class="muted">Moneybox interest uses the Moneybox amount, the interest rate, the forecast months and your @Model.HouseGoal.MonthlyHouseSaving.ToString("C", gb) monthly saving target.</p>
+  </article>
+
+  <article class="card">
+    <h2>Interest-only calculator</h2>
+    <form method="get" class="planner-form compact">
+      <input type="hidden" name="externalTotalValue" value="@Model.HouseGoal.ExternalTotalValue" />
+      <input type="hidden" name="houseGoal" value="@Model.HouseGoal.HouseGoal" />
+      <input type="hidden" name="moneyboxFundAmount" value="@Model.HouseGoal.MoneyboxFundAmount" />
+      <input type="hidden" name="moneyboxInterestRate" value="@Model.HouseGoal.MoneyboxInterestRate" />
+      <input type="hidden" name="moneyboxBonus" value="@Model.HouseGoal.MoneyboxBonus" />
+      <input type="hidden" name="forecastMonths" value="@Model.HouseGoal.ForecastMonths" />
+      <label>Amount
+        <input type="number" step="0.01" name="standaloneInterestAmount" value="@Model.HouseGoal.StandaloneInterestAmount" />
+      </label>
+      <label>Rate %
+        <input type="number" step="0.01" name="standaloneInterestRate" value="@Model.HouseGoal.StandaloneInterestRate" />
+      </label>
+      <label>Monthly in
+        <input type="number" step="0.01" name="standaloneMonthlyContribution" value="@Model.HouseGoal.StandaloneMonthlyContribution" />
+      </label>
+      <label>Months
+        <input type="number" name="standaloneMonths" value="@Model.HouseGoal.StandaloneMonths" />
+      </label>
+      <button type="submit">Calculate interest</button>
+    </form>
+    <p>Interest made only: <strong class="good">@Model.HouseGoal.StandaloneInterestMade.ToString("C", gb)</strong></p>
+    <p>Projected total: <strong>@Model.HouseGoal.StandaloneProjectedTotal.ToString("C", gb)</strong></p>
+  </article>
+</section>
+
+<section class="grid two">
+  <article class="card">
+    <h2>Income pattern</h2>
+    <p>Manual average from saved months: <strong>@Model.ManualAverageIncome.ToString("C", gb)</strong></p>
+    <p>Calculated salary estimate from £26,000 + £26,250: <strong>@Model.CalculatedSalaryEstimate.ToString("C", gb)</strong></p>
+    <p>Monthly account contributions recorded: <strong>@Model.AverageSavingPace.ToString("C", gb)</strong></p>
+    <p>Planned salary saving target added to goal forecast: <strong>@Model.MonthlySavingTarget.ToString("C", gb)</strong> per month</p>
+  </article>
+  <article class="card">
+    <h2>Update pattern</h2>
+    <p>@Model.PatternMessage</p>
+    <div class="chips">
+      @foreach(var item in Model.UpdatePattern)
+      {
+        <span>@item.KeyName: @(item.UpdatedAt?.ToString("dd MMM yyyy HH:mm") ?? "not recorded")</span>
+      }
+    </div>
+  </article>
+</section>
+
+<section class="card table-card">
+  <h2>Interest forecast by account</h2>
+  <p class="muted">This uses monthly compounding: current balance + monthly contribution, then interest each month until @Model.AprilTarget.ToString("dd MMM yyyy").</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Now</th><th>Rate</th><th>Monthly in</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead>
+      <tbody>
+      @foreach(var p in Model.InterestProjections)
+      {
+        <tr>
+          <td>@p.Name</td>
+          <td>@p.CurrentBalance.ToString("C", gb)</td>
+          <td>@p.AnnualInterestRate.ToString("0.##")%</td>
+          <td>@p.MonthlyContribution.ToString("C", gb)</td>
+          <td>@p.ContributionsAdded.ToString("C", gb)</td>
+          <td class="good">@p.InterestEarned.ToString("C", gb)</td>
+          <td><strong>@p.ProjectedBalance.ToString("C", gb)</strong></td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card table-card">
+  <h2>Money coming in history</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Month</th><th>Amount</th><th>Sick days</th><th>Updated</th></tr></thead>
+      <tbody>
+      @foreach(var i in Model.IncomeHistory)
+      {
+        <tr>
+          <td>@(new DateTime(i.Year, i.Month, 1).ToString("MMM yyyy"))</td>
+          <td>@i.Amount.ToString("C", gb)</td>
+          <td>@i.SickDays</td>
+          <td>@i.UpdatedAt.ToString("dd MMM yyyy")</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </div>
+</section>

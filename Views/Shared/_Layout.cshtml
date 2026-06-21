@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>@ViewData["Title"] - Finance Manager</title>
+  <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" asp-controller="Dashboard" asp-action="Index">Finance Manager</a>
+    <nav><a asp-controller="Dashboard" asp-action="Index">Dashboard</a><a asp-controller="Statistics" asp-action="Index">Statistics</a></nav>
+  </header>
+  <main class="shell">@RenderBody()</main>
+  <script src="~/js/site.js"></script>
+  @await RenderSectionAsync("Scripts", false)
+</body>
+</html>

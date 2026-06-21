@@ -1,0 +1,178 @@
+using FinanceManagerAspNet.Models;
+using Microsoft.Data.SqlClient;
+using System.Data;
+
+namespace FinanceManagerAspNet.Services;
+
+public sealed class FinanceRepository(IConfiguration config)
+{
+    private string ConnStr => Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
+        ?? config.GetConnectionString("FinanceManager")
+        ?? throw new InvalidOperationException("Missing FinanceManager connection string.");
+
+    public async Task EnsureModernTablesAsync()
+    {
+        const string sql = @"
+IF OBJECT_ID('dbo.finance_settings','U') IS NULL
+CREATE TABLE dbo.finance_settings([key] nvarchar(120) NOT NULL PRIMARY KEY, [value] nvarchar(300) NOT NULL, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('dbo.account_balances','U') IS NULL
+CREATE TABLE dbo.account_balances(account_balance_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, include_in_global_goal bit NOT NULL DEFAULT 1, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('dbo.account_balance_history','U') IS NULL
+CREATE TABLE dbo.account_balance_history(history_id int IDENTITY(1,1) PRIMARY KEY, account_balance_id int NULL, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('dbo.monthly_income_stats','U') IS NULL
+CREATE TABLE dbo.monthly_income_stats(income_id int IDENTITY(1,1) PRIMARY KEY, [year] int NOT NULL, [month] int NOT NULL, amount decimal(18,2) NOT NULL, sick_days int NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT UQ_monthly_income_stats UNIQUE([year],[month]));
+IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Lucy''s ISA') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Lucy''s ISA',4000,3.8,0,1);
+IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Monzo Pots',1370,2.75,0,1);";
+        await ExecuteAsync(sql);
+    }
+
+    public async Task<List<PaymentRow>> GetRowsAsync(string source, int month, int year)
+    {
+        var map = source switch
+        {
+            "bills" => (Table:"dbo.bills", Id:"billid", Date:"[date]", Category:"NULL", Type:"type", Length:"length", Notes:"description"),
+            "extra_expenses" => (Table:"dbo.extra_expenses", Id:"extra_expense_id", Date:"duedate", Category:"category", Type:"type", Length:"length", Notes:"description"),
+            "investments" => (Table:"dbo.investments", Id:"investments_id", Date:"[date]", Category:"category", Type:"NULL", Length:"length", Notes:"notes"),
+            "savings" => (Table:"dbo.savings", Id:"savings_id", Date:"[date]", Category:"NULL", Type:"NULL", Length:"length", Notes:"notes"),
+            _ => throw new ArgumentOutOfRangeException(nameof(source))
+        };
+        string sql = $@"SELECT {map.Id} AS id, [name], amount, {map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], {map.Length} AS [length], {map.Notes} AS notes
+FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER BY {map.Date} DESC";
+        var rows = new List<PaymentRow>();
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand(sql, con); cmd.Parameters.AddWithValue("@month", month); cmd.Parameters.AddWithValue("@year", year);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) rows.Add(new PaymentRow(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDateTime(3), r.IsDBNull(4)?null:r.GetString(4), r.IsDBNull(5)?null:r.GetString(5), r.IsDBNull(6)?null:r.GetString(6), r.IsDBNull(7)?null:r.GetString(7), source));
+        return rows;
+    }
+
+    public async Task<decimal> GetEmergencyFundAsync()
+    {
+        var value = await ScalarAsync("SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC");
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    public async Task<DateTime?> GetEmergencyFundUpdatedAsync()
+    {
+        var value = await ScalarAsync("SELECT TOP 1 updated_at FROM dbo.emergency_fund ORDER BY updated_at DESC");
+        return value is null or DBNull ? null : Convert.ToDateTime(value);
+    }
+
+    public async Task<decimal> GetMonthlyAllowanceAsync(int month, decimal fallback)
+    {
+        var value = await ScalarAsync("SELECT TOP 1 amount FROM dbo.monthly_allowance WHERE month_id=@month", ("@month", month));
+        return value is null or DBNull ? fallback : Convert.ToDecimal(value);
+    }
+
+    public async Task<IncomeSnapshot?> GetIncomeAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT [year],[month],amount,sick_days,updated_at FROM dbo.monthly_income_stats WHERE [year]=@year AND [month]=@month", con);
+        cmd.Parameters.AddWithValue("@year", year); cmd.Parameters.AddWithValue("@month", month);
+        await using var r = await cmd.ExecuteReaderAsync();
+        return await r.ReadAsync() ? new IncomeSnapshot(r.GetInt32(0), r.GetInt32(1), r.GetDecimal(2), r.GetInt32(3), r.GetDateTime(4)) : null;
+    }
+
+    public async Task<List<AccountBalance>> GetAccountsAsync(decimal emergencyFund)
+    {
+        await EnsureModernTablesAsync();
+        var accounts = new List<AccountBalance> { new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate",3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue) };
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at FROM dbo.account_balances ORDER BY [name]", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) accounts.Add(new AccountBalance(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetBoolean(5), r.GetDateTime(6)));
+        return accounts;
+    }
+
+    public async Task<List<IncomeSnapshot>> GetIncomeHistoryAsync()
+    {
+        await EnsureModernTablesAsync(); var list = new List<IncomeSnapshot>();
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT TOP 24 [year],[month],amount,sick_days,updated_at FROM dbo.monthly_income_stats ORDER BY [year] DESC,[month] DESC", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) list.Add(new IncomeSnapshot(r.GetInt32(0), r.GetInt32(1), r.GetDecimal(2), r.GetInt32(3), r.GetDateTime(4)));
+        return list;
+    }
+
+    public async Task SaveIncomeAsync(int year,int month,decimal amount,int sickDays)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"MERGE dbo.monthly_income_stats AS t USING (SELECT @year y,@month m) AS s ON t.[year]=s.y AND t.[month]=s.m WHEN MATCHED THEN UPDATE SET amount=@amount,sick_days=@sick,updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([year],[month],amount,sick_days) VALUES(@year,@month,@amount,@sick);", ("@year",year),("@month",month),("@amount",amount),("@sick",sickDays));
+        await ExecuteAsync(@"MERGE dbo.monthly_allowance AS t USING (SELECT @month m) AS s ON t.month_id=s.m WHEN MATCHED THEN UPDATE SET amount=@amount WHEN NOT MATCHED THEN INSERT(month_id, amount) VALUES(@month,@amount);", ("@month",month),("@amount",amount));
+    }
+
+    public async Task SaveAccountAsync(int id,string name,decimal amount,decimal rate,decimal monthly,bool include)
+    {
+        await EnsureModernTablesAsync();
+        if (id == 0 && name == "Emergency Fund") { await ExecuteAsync("IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount,updated_at=GETDATE() ELSE INSERT INTO dbo.emergency_fund(amount,updated_at) VALUES(@amount,GETDATE())", ("@amount",amount)); await ExecuteAsync("MERGE dbo.finance_settings AS t USING (SELECT @key AS [key]) AS s ON t.[key]=s.[key] WHEN MATCHED THEN UPDATE SET [value]=@value, updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([key],[value]) VALUES(@key,@value);", ("@key","EmergencyFundInterestRate"),("@value",rate)); return; }
+        if (id == 0) await ExecuteAsync("INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal) VALUES(@name,@amount,@rate,@monthly,@include)", ("@name",name),("@amount",amount),("@rate",rate),("@monthly",monthly),("@include",include));
+        else await ExecuteAsync("UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id", ("@id",id),("@name",name),("@amount",amount),("@rate",rate),("@monthly",monthly),("@include",include));
+        await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)", ("@id",id),("@name",name),("@amount",amount),("@rate",rate),("@monthly",monthly));
+    }
+
+
+
+    public async Task AddPaymentAsync(string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name is required.", nameof(name));
+
+        switch (source)
+        {
+            case "bills":
+                await ExecuteAsync("INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description]) VALUES(@name,@amount,@date,@type,@length,@notes)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            case "extra_expenses":
+                await ExecuteAsync("INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description]) VALUES(@name,@amount,@date,@category,@type,@length,@notes)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            case "investments":
+                await ExecuteAsync("INSERT INTO dbo.investments([name], amount, [date], category, [length], notes) VALUES(@name,@amount,@date,@category,@length,@notes)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            case "savings":
+                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [length], notes) VALUES(@name,@amount,@date,@length,@notes)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
+        }
+    }
+
+    private static object DbValue(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+    public async Task CarryOverAsync(int year, int month, string[] sections)
+    {
+        var from = new DateTime(year, month, 1);
+        var to = from.AddMonths(1);
+
+        if (sections.Contains("bills"))
+            await ExecuteAsync("""
+                INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description])
+                SELECT [name], amount, @toDate, [type], [length], [description]
+                FROM dbo.bills
+                WHERE MONTH([date])=@month AND YEAR([date])=@year
+                """, ("@toDate", to), ("@month", month), ("@year", year));
+
+        if (sections.Contains("investments"))
+            await ExecuteAsync("""
+                INSERT INTO dbo.investments([name], amount, [date], category, [length], notes)
+                SELECT [name], amount, @toDate, category, [length], notes
+                FROM dbo.investments
+                WHERE MONTH([date])=@month AND YEAR([date])=@year
+                """, ("@toDate", to), ("@month", month), ("@year", year));
+
+        if (sections.Contains("extra_expenses"))
+            await ExecuteAsync("""
+                INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description])
+                SELECT [name], amount, @toDate, category, [type], [length], [description]
+                FROM dbo.extra_expenses
+                WHERE MONTH(duedate)=@month AND YEAR(duedate)=@year
+                """, ("@toDate", to), ("@month", month), ("@year", year));
+    }
+
+    public async Task<decimal> GetDecimalSettingAsync(string key, decimal fallback) { var db = await ScalarAsync("IF OBJECT_ID('dbo.finance_settings','U') IS NOT NULL SELECT [value] FROM dbo.finance_settings WHERE [key]=@key", ("@key", key)); return decimal.TryParse(Convert.ToString(db), out var v) ? v : (decimal.TryParse(config[$"FinanceSettings:{key}"], out var c) ? c : fallback); }
+    private async Task<object?> ScalarAsync(string sql, params (string, object)[] ps) { await using var con = new SqlConnection(ConnStr); await con.OpenAsync(); await using var cmd = new SqlCommand(sql, con); foreach(var p in ps) cmd.Parameters.AddWithValue(p.Item1,p.Item2); return await cmd.ExecuteScalarAsync(); }
+    private async Task ExecuteAsync(string sql, params (string, object)[] ps) { await using var con = new SqlConnection(ConnStr); await con.OpenAsync(); await using var cmd = new SqlCommand(sql, con); foreach(var p in ps) cmd.Parameters.AddWithValue(p.Item1,p.Item2); await cmd.ExecuteNonQueryAsync(); }
+}
