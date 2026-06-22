@@ -1,6 +1,5 @@
 namespace FinanceManagerAspNet.Models;
 
-public sealed record PaymentRow(int Id, string Name, decimal Amount, DateTime Date, string? Category, string? Type, string? Length, string? Notes, string Source);
 public sealed record AccountBalance(int Id, string Name, decimal Amount, decimal InterestRate, decimal MonthlyContribution, bool IncludeInGlobalGoal, DateTime UpdatedAt);
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);
 public sealed record IncomeSnapshot(int Year, int Month, decimal Amount, int SickDays, DateTime UpdatedAt);

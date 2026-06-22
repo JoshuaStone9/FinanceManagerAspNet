@@ -1,20 +1,34 @@
 @model FinanceManagerAspNet.Models.PaymentRow
 @using System.Globalization
-@{ ViewData["Title"] = "Edit Payment"; var gb = CultureInfo.GetCultureInfo("en-GB"); }
+@{
+    ViewData["Title"] = "Edit Payment"; var gb = CultureInfo.GetCultureInfo("en-GB");
+}
+
 <section class="card">
-  <h1>Edit @Model.Source.Replace("_"," ")</h1>
-  <form asp-action="EditPayment" method="post" class="account-form">
-	<input type="hidden" name="year" value="@Model.Date.Year" />
-	<input type="hidden" name="month" value="@Model.Date.Month" />
-	<input type="hidden" name="source" value="@Model.Source" />
-	<input type="hidden" name="id" value="@Model.Id" />
-	<label>Name<input name="name" value="@Model.Name" required /></label>
-	<label>Amount<input name="amount" type="number" step="0.01" value="@Model.Amount" required /></label>
-	<label>Date<input name="date" type="date" value="@Model.Date.ToString("yyyy-MM-dd")" required /></label>
-	<label>Category<input name="category" value="@Model.Category" /></label>
-	<label>Type<input name="type" value="@Model.Type" /></label>
-	<label>Length<input name="length" value="@Model.Length" /></label>
-	<label>Notes<input name="notes" value="@Model.Notes" /></label>
-	<button class="primary">Save</button>
-  </form>
+    <h1>Edit @Model.Source.Replace("_", " ")</h1>
+
+    <form asp-action="EditPayment" method="post" class="account-form">
+        <input type="hidden" name="year" value="@Model.Date.Year" />
+        <input type="hidden" name="month" value="@Model.Date.Month" />
+        <input type="hidden" name="source" value="@Model.Source" />
+        <input type="hidden" name="id" value="@Model.Id" />
+
+        <label>Name<input name="name" value="@Model.Name" required /></label>
+        <label>Amount<input name="amount" type="number" step="0.01" value="@Model.Amount" required /></label>
+        <label>Date<input name="date" type="date" value="@Model.Date.ToString("yyyy-MM-dd")" required /></label>
+        <label>Category<input name="category" value="@Model.Category" /></label>
+        <label>Type<input name="type" value="@Model.Type" /></label>
+        <label>Length in months<input name="length" type="number" min="1" step="1" value="@Model.Length" placeholder="Example: 12, 36, 420" /></label>
+        <label>Notes<input name="notes" value="@Model.Notes" /></label>
+
+        @if (Model.ProgressPercent.HasValue)
+        {
+            <div class="payment-progress">
+                <div class="progress"><div class="progress-bar" role="progressbar" style="width:@Model.ProgressPercent%">@Model.ProgressPercent%</div></div>
+                <small class="muted">Ends: @Model.EndDate?.ToString("dd MMM yyyy", gb) — @Model.MonthsRemaining months left</small>
+            </div>
+        }
+
+        <button class="primary">Save</button>
+    </form>
 </section>
