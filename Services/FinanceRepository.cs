@@ -147,50 +147,120 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
         var from = new DateTime(year, month, 1);
         var to = from.AddMonths(1);
 
+        const string autoNote = "Automatically carried from previous month";
+
+        await ExecuteAsync("""
+        DELETE FROM dbo.extra_expenses
+        WHERE MONTH(duedate) = @toMonth
+          AND YEAR(duedate) = @toYear
+          AND [name] = 'Shortfall carried forward'
+    """, ("@toMonth", to.Month), ("@toYear", to.Year));
+
+        await ExecuteAsync("""
+        DELETE FROM dbo.savings
+        WHERE MONTH([date]) = @toMonth
+          AND YEAR([date]) = @toYear
+          AND [name] = 'Carried forward surplus'
+    """, ("@toMonth", to.Month), ("@toYear", to.Year));
+
         if (sections.Contains("bills"))
+        {
             await ExecuteAsync("""
-                INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description])
-                SELECT [name], amount, @toDate, [type], [length], [description]
-                FROM dbo.bills
-                WHERE MONTH([date])=@month AND YEAR([date])=@year
-                """, ("@toDate", to), ("@month", month), ("@year", year));
+            DELETE target
+            FROM dbo.bills target
+            INNER JOIN dbo.bills source ON source.[name] = target.[name]
+            WHERE MONTH(source.[date]) = @month
+              AND YEAR(source.[date]) = @year
+              AND MONTH(target.[date]) = @toMonth
+              AND YEAR(target.[date]) = @toYear
+        """, ("@month", month), ("@year", year), ("@toMonth", to.Month), ("@toYear", to.Year));
+
+            await ExecuteAsync("""
+            INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description])
+            SELECT [name], amount, @toDate, [type], [length], @autoNote
+            FROM dbo.bills
+            WHERE MONTH([date]) = @month
+              AND YEAR([date]) = @year
+        """, ("@toDate", to), ("@month", month), ("@year", year), ("@autoNote", autoNote));
+        }
 
         if (sections.Contains("investments"))
+        {
             await ExecuteAsync("""
-                INSERT INTO dbo.investments([name], amount, [date], category, [length], notes)
-                SELECT [name], amount, @toDate, category, [length], notes
-                FROM dbo.investments
-                WHERE MONTH([date])=@month AND YEAR([date])=@year
-                """, ("@toDate", to), ("@month", month), ("@year", year));
+            DELETE target
+            FROM dbo.investments target
+            INNER JOIN dbo.investments source ON source.[name] = target.[name]
+            WHERE MONTH(source.[date]) = @month
+              AND YEAR(source.[date]) = @year
+              AND MONTH(target.[date]) = @toMonth
+              AND YEAR(target.[date]) = @toYear
+        """, ("@month", month), ("@year", year), ("@toMonth", to.Month), ("@toYear", to.Year));
+
+            await ExecuteAsync("""
+            INSERT INTO dbo.investments([name], amount, [date], category, [length], notes)
+            SELECT [name], amount, @toDate, category, [length], @autoNote
+            FROM dbo.investments
+            WHERE MONTH([date]) = @month
+              AND YEAR([date]) = @year
+        """, ("@toDate", to), ("@month", month), ("@year", year), ("@autoNote", autoNote));
+        }
 
         if (sections.Contains("extra_expenses"))
+        {
             await ExecuteAsync("""
-                INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description])
-                SELECT [name], amount, @toDate, category, [type], [length], [description]
-                FROM dbo.extra_expenses
-                WHERE MONTH(duedate)=@month AND YEAR(duedate)=@year
-                """, ("@toDate", to), ("@month", month), ("@year", year));
+            DELETE target
+            FROM dbo.extra_expenses target
+            INNER JOIN dbo.extra_expenses source ON source.[name] = target.[name]
+            WHERE MONTH(source.duedate) = @month
+              AND YEAR(source.duedate) = @year
+              AND MONTH(target.duedate) = @toMonth
+              AND YEAR(target.duedate) = @toYear
+        """, ("@month", month), ("@year", year), ("@toMonth", to.Month), ("@toYear", to.Year));
 
-        // Automatically carry shortfall/surplus into the next month as a bill (shortfall) or a saving (surplus)
-        // Calculate totals for the month
-        // Monthly income (use monthly_income_stats if present, otherwise monthly_allowance or fallback from config)
-        var monthlyIncomeObj = await ScalarAsync("SELECT TOP 1 amount FROM dbo.monthly_income_stats WHERE [year]=@year AND [month]=@month", ("@year", year), ("@month", month));
-        decimal monthlyIncome;
-        if (monthlyIncomeObj is null || monthlyIncomeObj is DBNull)
-        {
-            // try monthly_allowance then fallback to config default
-            monthlyIncome = await GetMonthlyAllowanceAsync(month, decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var d) ? d : 3500m);
-        }
-        else
-        {
-            monthlyIncome = Convert.ToDecimal(monthlyIncomeObj);
+            await ExecuteAsync("""
+            INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description])
+            SELECT [name], amount, @toDate, category, [type], [length], @autoNote
+            FROM dbo.extra_expenses
+            WHERE MONTH(duedate) = @month
+              AND YEAR(duedate) = @year
+        """, ("@toDate", to), ("@month", month), ("@year", year), ("@autoNote", autoNote));
         }
 
-        // Sums of outgoings for the month
-        var billsTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.bills WHERE MONTH([date])=@month AND YEAR([date])=@year", ("@month", month), ("@year", year));
-        var expensesTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.extra_expenses WHERE MONTH(duedate)=@month AND YEAR(duedate)=@year", ("@month", month), ("@year", year));
-        var investmentsTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.investments WHERE MONTH([date])=@month AND YEAR([date])=@year", ("@month", month), ("@year", year));
-        var savingsTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.savings WHERE MONTH([date])=@month AND YEAR([date])=@year", ("@month", month), ("@year", year));
+        var monthlyIncomeObj = await ScalarAsync("""
+        SELECT TOP 1 amount
+        FROM dbo.monthly_income_stats
+        WHERE [year] = @year AND [month] = @month
+    """, ("@year", year), ("@month", month));
+
+        decimal monthlyIncome = monthlyIncomeObj is null || monthlyIncomeObj is DBNull
+            ? await GetMonthlyAllowanceAsync(
+                month,
+                decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var d) ? d : 3500m)
+            : Convert.ToDecimal(monthlyIncomeObj);
+
+        var billsTotalObj = await ScalarAsync("""
+        SELECT SUM(amount)
+        FROM dbo.bills
+        WHERE MONTH([date]) = @month AND YEAR([date]) = @year
+    """, ("@month", month), ("@year", year));
+
+        var expensesTotalObj = await ScalarAsync("""
+        SELECT SUM(amount)
+        FROM dbo.extra_expenses
+        WHERE MONTH(duedate) = @month AND YEAR(duedate) = @year
+    """, ("@month", month), ("@year", year));
+
+        var investmentsTotalObj = await ScalarAsync("""
+        SELECT SUM(amount)
+        FROM dbo.investments
+        WHERE MONTH([date]) = @month AND YEAR([date]) = @year
+    """, ("@month", month), ("@year", year));
+
+        var savingsTotalObj = await ScalarAsync("""
+        SELECT SUM(amount)
+        FROM dbo.savings
+        WHERE MONTH([date]) = @month AND YEAR([date]) = @year
+    """, ("@month", month), ("@year", year));
 
         decimal billsTotal = billsTotalObj is null || billsTotalObj is DBNull ? 0m : Convert.ToDecimal(billsTotalObj);
         decimal expensesTotal = expensesTotalObj is null || expensesTotalObj is DBNull ? 0m : Convert.ToDecimal(expensesTotalObj);
@@ -200,19 +270,37 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
         var grandOutgoings = billsTotal + expensesTotal + investmentsTotal;
         var remainingFund = monthlyIncome - grandOutgoings + savingsTotal;
 
-        var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt) ? mt : 1200m;
+        var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt)
+            ? mt
+            : 1200m;
 
         var carryAmount = Math.Round(remainingFund - monthlyTarget, 2);
 
         if (carryAmount < 0)
         {
-            // shortfall: create a bill in the next month representing the shortfall amount
-            await ExecuteAsync("INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description]) VALUES(@name,@amount,@date,@type,@length,@notes)", ("@name", "Shortfall carried forward"), ("@amount", Math.Abs(carryAmount)), ("@date", to), ("@type", DBNull.Value), ("@length", DBNull.Value), ("@notes", "Automatically carried from previous month"));
+            await ExecuteAsync("""
+            INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description])
+            VALUES(@name, @amount, @date, @category, @type, @length, @notes)
+        """,
+            ("@name", "Shortfall carried forward"),
+            ("@amount", Math.Abs(carryAmount)),
+            ("@date", to),
+            ("@category", "Shortfall"),
+            ("@type", DBNull.Value),
+            ("@length", DBNull.Value),
+            ("@notes", autoNote));
         }
         else if (carryAmount > 0)
         {
-            // surplus: create a savings entry in the next month
-            await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [length], notes) VALUES(@name,@amount,@date,@length,@notes)", ("@name", "Carried forward surplus"), ("@amount", carryAmount), ("@date", to), ("@length", DBNull.Value), ("@notes", "Automatically carried from previous month"));
+            await ExecuteAsync("""
+            INSERT INTO dbo.savings([name], amount, [date], [length], notes)
+            VALUES(@name, @amount, @date, @length, @notes)
+        """,
+            ("@name", "Carried forward surplus"),
+            ("@amount", carryAmount),
+            ("@date", to),
+            ("@length", DBNull.Value),
+            ("@notes", autoNote));
         }
 
         return carryAmount;
