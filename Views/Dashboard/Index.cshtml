@@ -7,6 +7,13 @@
   <a class="arrow" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month">›</a>
 </section>
 
+@if (TempData["CarryMessage"] != null)
+{
+  <section class="card" style="border-left:4px solid #2b8a3e;padding:12px;margin:12px 0;background:#eef9f0;">
+    <strong>@TempData["CarryMessage"]</strong>
+  </section>
+}
+
 <section class="grid cards-4">
   <article class="card"><p class="eyebrow">Month result</p><h2 class="@(Model.IsAhead ? "good" : "bad")">@(Model.IsAhead ? "+" : "-")@Model.CarryOverAmount.ToString("C", gb)</h2><p>@(Model.IsAhead ? "Carrying forward as excess" : "Shortfall / debt carried forward")</p></article>
   <article class="card"><p class="eyebrow">Global goal</p><h2>@Model.TotalGoalBalance.ToString("C", gb)</h2><p>@Model.GlobalGoalRemaining.ToString("C", gb) left to £20k</p></article>
@@ -39,7 +46,20 @@
 
 @foreach (var group in new[]{("Bills",Model.Bills),("Extra Expenses",Model.Expenses),("Investments",Model.Investments),("Savings",Model.Savings)})
 {
-  <section class="card table-card"><h2>@group.Item1</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Amount</th><th>Date</th><th>Category</th><th>Notes</th></tr></thead><tbody>@foreach(var r in group.Item2){<tr><td>@r.Name</td><td>@r.Amount.ToString("C", gb)</td><td>@r.Date.ToString("dd MMM")</td><td>@r.Category</td><td>@r.Notes</td></tr>}</tbody></table></div></section>
+  <section class="card table-card"><h2>@group.Item1</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Amount</th><th>Date</th><th>Category</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+    @foreach(var r in group.Item2){
+      <tr>
+        <td>@r.Name</td>
+        <td>@r.Amount.ToString("C", gb)</td>
+        <td>@r.Date.ToString("dd MMM")</td>
+        <td>@r.Category</td>
+        <td>@r.Notes</td>
+        <td>
+          <a class="button" asp-action="EditPayment" asp-route-source="@r.Source" asp-route-id="@r.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a>
+        </td>
+      </tr>
+    }
+  </tbody></table></div></section>
 }
 
 <section class="card"><h2>Last updated</h2><div class="chips">@foreach(var item in Model.LastModified){<span>@item.KeyName: @(item.UpdatedAt?.ToString("dd MMM yyyy HH:mm") ?? "not recorded")</span>}</div></section>

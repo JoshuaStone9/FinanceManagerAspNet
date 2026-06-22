@@ -60,7 +60,27 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
         return RedirectToAction(nameof(Index), new { year, month });
     }
 
+    [HttpGet]
+    public async Task<IActionResult> EditPayment(string source, int id, int year, int month)
+    {
+        var item = await repo.GetPaymentAsync(source, id);
+        if (item is null) return NotFound();
+        return View(item);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> EditPayment(int year, int month, string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    {
+        await repo.UpdatePaymentAsync(source, id, name, amount, date, category, type, length, notes);
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
+
     [HttpPost]
     public async Task<IActionResult> CarryOver(int year, int month, string[] sections)
-    { await repo.CarryOverAsync(year, month, sections); var next = new DateTime(year, month, 1).AddMonths(1); return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month }); }
+    {
+        var carryAmount = await repo.CarryOverAsync(year, month, sections);
+        var next = new DateTime(year, month, 1).AddMonths(1);
+        TempData["CarryMessage"] = carryAmount == 0 ? "No carry amount generated." : (carryAmount < 0 ? $"Shortfall carried: {Math.Abs(carryAmount):C}" : $"Surplus carried: {carryAmount:C}");
+        return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month });
+    }
 }

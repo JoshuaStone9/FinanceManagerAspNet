@@ -142,7 +142,7 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
 
     private static object DbValue(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 
-    public async Task CarryOverAsync(int year, int month, string[] sections)
+    public async Task<decimal> CarryOverAsync(int year, int month, string[] sections)
     {
         var from = new DateTime(year, month, 1);
         var to = from.AddMonths(1);
@@ -170,6 +170,94 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
                 FROM dbo.extra_expenses
                 WHERE MONTH(duedate)=@month AND YEAR(duedate)=@year
                 """, ("@toDate", to), ("@month", month), ("@year", year));
+
+        // Automatically carry shortfall/surplus into the next month as a bill (shortfall) or a saving (surplus)
+        // Calculate totals for the month
+        // Monthly income (use monthly_income_stats if present, otherwise monthly_allowance or fallback from config)
+        var monthlyIncomeObj = await ScalarAsync("SELECT TOP 1 amount FROM dbo.monthly_income_stats WHERE [year]=@year AND [month]=@month", ("@year", year), ("@month", month));
+        decimal monthlyIncome;
+        if (monthlyIncomeObj is null || monthlyIncomeObj is DBNull)
+        {
+            // try monthly_allowance then fallback to config default
+            monthlyIncome = await GetMonthlyAllowanceAsync(month, decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var d) ? d : 3500m);
+        }
+        else
+        {
+            monthlyIncome = Convert.ToDecimal(monthlyIncomeObj);
+        }
+
+        // Sums of outgoings for the month
+        var billsTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.bills WHERE MONTH([date])=@month AND YEAR([date])=@year", ("@month", month), ("@year", year));
+        var expensesTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.extra_expenses WHERE MONTH(duedate)=@month AND YEAR(duedate)=@year", ("@month", month), ("@year", year));
+        var investmentsTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.investments WHERE MONTH([date])=@month AND YEAR([date])=@year", ("@month", month), ("@year", year));
+        var savingsTotalObj = await ScalarAsync("SELECT SUM(amount) FROM dbo.savings WHERE MONTH([date])=@month AND YEAR([date])=@year", ("@month", month), ("@year", year));
+
+        decimal billsTotal = billsTotalObj is null || billsTotalObj is DBNull ? 0m : Convert.ToDecimal(billsTotalObj);
+        decimal expensesTotal = expensesTotalObj is null || expensesTotalObj is DBNull ? 0m : Convert.ToDecimal(expensesTotalObj);
+        decimal investmentsTotal = investmentsTotalObj is null || investmentsTotalObj is DBNull ? 0m : Convert.ToDecimal(investmentsTotalObj);
+        decimal savingsTotal = savingsTotalObj is null || savingsTotalObj is DBNull ? 0m : Convert.ToDecimal(savingsTotalObj);
+
+        var grandOutgoings = billsTotal + expensesTotal + investmentsTotal;
+        var remainingFund = monthlyIncome - grandOutgoings + savingsTotal;
+
+        var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt) ? mt : 1200m;
+
+        var carryAmount = Math.Round(remainingFund - monthlyTarget, 2);
+
+        if (carryAmount < 0)
+        {
+            // shortfall: create a bill in the next month representing the shortfall amount
+            await ExecuteAsync("INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description]) VALUES(@name,@amount,@date,@type,@length,@notes)", ("@name", "Shortfall carried forward"), ("@amount", Math.Abs(carryAmount)), ("@date", to), ("@type", DBNull.Value), ("@length", DBNull.Value), ("@notes", "Automatically carried from previous month"));
+        }
+        else if (carryAmount > 0)
+        {
+            // surplus: create a savings entry in the next month
+            await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [length], notes) VALUES(@name,@amount,@date,@length,@notes)", ("@name", "Carried forward surplus"), ("@amount", carryAmount), ("@date", to), ("@length", DBNull.Value), ("@notes", "Automatically carried from previous month"));
+        }
+
+        return carryAmount;
+    }
+
+    public async Task<PaymentRow?> GetPaymentAsync(string source, int id)
+    {
+        var map = source switch
+        {
+            "bills" => (Table:"dbo.bills", Id:"billid", Date:"[date]", Category:"NULL", Type:"type", Length:"length", Notes:"description", IdParam:"@id"),
+            "extra_expenses" => (Table:"dbo.extra_expenses", Id:"extra_expense_id", Date:"duedate", Category:"category", Type:"type", Length:"length", Notes:"description", IdParam:"@id"),
+            "investments" => (Table:"dbo.investments", Id:"investments_id", Date:"[date]", Category:"category", Type:"NULL", Length:"length", Notes:"notes", IdParam:"@id"),
+            "savings" => (Table:"dbo.savings", Id:"savings_id", Date:"[date]", Category:"NULL", Type:"NULL", Length:"length", Notes:"notes", IdParam:"@id"),
+            _ => throw new ArgumentOutOfRangeException(nameof(source))
+        };
+
+        var sql = $"SELECT {map.Id} AS id, [name], amount, {map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], {map.Length} AS [length], {map.Notes} AS notes FROM {map.Table} WHERE {map.Id}=@id";
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand(sql, con); cmd.Parameters.AddWithValue("@id", id);
+        await using var r = await cmd.ExecuteReaderAsync();
+        if (await r.ReadAsync()) return new PaymentRow(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDateTime(3), r.IsDBNull(4)?null:r.GetString(4), r.IsDBNull(5)?null:r.GetString(5), r.IsDBNull(6)?null:r.GetString(6), r.IsDBNull(7)?null:r.GetString(7), source);
+        return null;
+    }
+
+    public async Task UpdatePaymentAsync(string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name is required.", nameof(name));
+
+        switch (source)
+        {
+            case "bills":
+                await ExecuteAsync("UPDATE dbo.bills SET [name]=@name, amount=@amount, [date]=@date, [type]=@type, [length]=@length, [description]=@notes WHERE billid=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            case "extra_expenses":
+                await ExecuteAsync("UPDATE dbo.extra_expenses SET [name]=@name, amount=@amount, duedate=@date, category=@category, [type]=@type, [length]=@length, [description]=@notes WHERE extra_expense_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            case "investments":
+                await ExecuteAsync("UPDATE dbo.investments SET [name]=@name, amount=@amount, [date]=@date, category=@category, [length]=@length, notes=@notes WHERE investments_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            case "savings":
+                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [length]=@length, notes=@notes WHERE savings_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
+        }
     }
 
     public async Task<decimal> GetDecimalSettingAsync(string key, decimal fallback) { var db = await ScalarAsync("IF OBJECT_ID('dbo.finance_settings','U') IS NOT NULL SELECT [value] FROM dbo.finance_settings WHERE [key]=@key", ("@key", key)); return decimal.TryParse(Convert.ToString(db), out var v) ? v : (decimal.TryParse(config[$"FinanceSettings:{key}"], out var c) ? c : fallback); }
