@@ -82,6 +82,11 @@
     <p>Total value after the house target, Moneybox interest and bonus have been removed.</p>
   </article>
   <article class="card">
+    <p class="eyebrow">Available after pots</p>
+    <h2 class="@(Model.AvailableEmergencyFundAfterPots >= 0 ? "good" : "bad")">@Model.AvailableEmergencyFundAfterPots.ToString("C", gb)</h2>
+    <p>@Model.AllocatedToSavingPots.ToString("C", gb) is ring-fenced in Saving Pots.</p>
+  </article>
+  <article class="card">
     <p class="eyebrow">Without interest</p>
     <h2>@Model.HouseGoal.EmergencyFundStillNeededNormal.ToString("C", gb)</h2>
     <p>This removes only the house target and bonus.</p>
@@ -97,6 +102,8 @@
     <p>Moneybox interest made removed: <strong class="good">@Model.HouseGoal.MoneyboxInterestOnly.ToString("C", gb)</strong></p>
     <p>Total removed with interest: <strong>@Model.HouseGoal.HouseWithInterestTotal.ToString("C", gb)</strong></p>
     <p>Estimated emergency fund: <strong class="@(Model.HouseGoal.EmergencyFundStillNeededWithInterest >= 0 ? "good" : "bad")">@Model.HouseGoal.EmergencyFundStillNeededWithInterest.ToString("C", gb)</strong></p>
+    <p>Allocated to Saving Pots: <strong>@Model.AllocatedToSavingPots.ToString("C", gb)</strong></p>
+    <p>Available emergency fund after pots: <strong class="@(Model.AvailableEmergencyFundAfterPots >= 0 ? "good" : "bad")">@Model.AvailableEmergencyFundAfterPots.ToString("C", gb)</strong></p>
     <p class="muted">Moneybox interest uses the Moneybox amount, the interest rate, the forecast months and your @Model.HouseGoal.MonthlyHouseSaving.ToString("C", gb) monthly saving target.</p>
   </article>
 

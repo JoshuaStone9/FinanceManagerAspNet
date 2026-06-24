@@ -39,6 +39,8 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var projectedWithInterest = calc.ProjectAccounts(included, months, monthlyTarget);
         var monthsToGoalWithInterest = calc.MonthsToGoalWithInterest(included, goal, monthlyTarget);
 
+        var allocatedToSavingPots = await repo.GetTotalAllocatedToSavingPotsAsync();
+
         var house = BuildHouseGoalModel(
             calc,
             externalTotalValue,
@@ -52,6 +54,11 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             standaloneInterestRate,
             standaloneMonthlyContribution,
             standaloneMonths ?? months);
+
+        if (externalTotalValue.HasValue)
+        {
+            await repo.SaveDecimalSettingAsync("LastCalculatedEmergencyFund", house.EmergencyFundStillNeededWithInterest);
+        }
 
         var recentUpdates = accounts
             .Where(a => a.UpdatedAt > DateTime.MinValue)
@@ -87,7 +94,8 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             InterestProjections = projections,
             UpdatePattern = accounts.Select(a => new LastModifiedInfo(a.Name, a.UpdatedAt == DateTime.MinValue ? null : a.UpdatedAt)).ToList(),
             PatternMessage = pattern,
-            HouseGoal = house
+            HouseGoal = house,
+            AllocatedToSavingPots = allocatedToSavingPots
         };
 
         return View(vm);

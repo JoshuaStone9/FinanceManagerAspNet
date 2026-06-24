@@ -77,6 +77,27 @@ public sealed class HouseGoalViewModel
     public decimal StandaloneProjectedTotal { get; set; }
 }
 
+
+public sealed record SavingPot(int Id, string Name, decimal TargetAmount, decimal MonthlyAmount, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record SavingPotMonth(int Id, int SavingPotId, int Year, int Month, bool IsSaved, DateTime UpdatedAt);
+
+public sealed class SavingPotRowViewModel
+{
+    public SavingPot Pot { get; set; } = new(0, string.Empty, 0, 0, DateTime.MinValue, DateTime.MinValue);
+    public List<SavingPotMonth> Months { get; set; } = [];
+    public decimal SavedBalance => Months.Count(m => m.IsSaved) * Pot.MonthlyAmount;
+    public decimal Remaining => Math.Max(0, Pot.TargetAmount - SavedBalance);
+}
+
+public sealed class SavingPotsViewModel
+{
+    public int Year { get; set; }
+    public decimal EmergencyFundTotal { get; set; }
+    public decimal AllocatedToPots { get; set; }
+    public decimal AvailableEmergencyFund => Math.Round(EmergencyFundTotal - AllocatedToPots, 2);
+    public List<SavingPotRowViewModel> Pots { get; set; } = [];
+}
+
 public sealed class StatisticsViewModel
 {
     public decimal ManualAverageIncome { get; set; }
@@ -102,4 +123,6 @@ public sealed class StatisticsViewModel
     public List<IncomeSnapshot> IncomeHistory { get; set; } = [];
     public List<LastModifiedInfo> UpdatePattern { get; set; } = [];
     public HouseGoalViewModel HouseGoal { get; set; } = new();
+    public decimal AllocatedToSavingPots { get; set; }
+    public decimal AvailableEmergencyFundAfterPots => Math.Round(HouseGoal.EmergencyFundStillNeededWithInterest - AllocatedToSavingPots, 2);
 }

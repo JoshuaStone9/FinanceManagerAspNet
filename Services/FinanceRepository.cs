@@ -21,6 +21,10 @@ IF OBJECT_ID('dbo.account_balance_history','U') IS NULL
 CREATE TABLE dbo.account_balance_history(history_id int IDENTITY(1,1) PRIMARY KEY, account_balance_id int NULL, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 IF OBJECT_ID('dbo.monthly_income_stats','U') IS NULL
 CREATE TABLE dbo.monthly_income_stats(income_id int IDENTITY(1,1) PRIMARY KEY, [year] int NOT NULL, [month] int NOT NULL, amount decimal(18,2) NOT NULL, sick_days int NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT UQ_monthly_income_stats UNIQUE([year],[month]));
+IF OBJECT_ID('dbo.saving_pots','U') IS NULL
+CREATE TABLE dbo.saving_pots(saving_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, target_amount decimal(18,2) NOT NULL, monthly_amount decimal(18,2) NOT NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+IF OBJECT_ID('dbo.saving_pot_months','U') IS NULL
+CREATE TABLE dbo.saving_pot_months(saving_pot_month_id int IDENTITY(1,1) PRIMARY KEY, saving_pot_id int NOT NULL, [year] int NOT NULL, [month] int NOT NULL, is_saved bit NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT FK_saving_pot_months_pots FOREIGN KEY(saving_pot_id) REFERENCES dbo.saving_pots(saving_pot_id) ON DELETE CASCADE, CONSTRAINT UQ_saving_pot_months UNIQUE(saving_pot_id,[year],[month]));
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Lucy''s ISA') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Lucy''s ISA',4000,3.8,0,1);
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Monzo Pots',1370,2.75,0,1);";
         await ExecuteAsync(sql);
@@ -367,6 +371,77 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
     }
 
     public async Task<decimal> GetDecimalSettingAsync(string key, decimal fallback) { var db = await ScalarAsync("IF OBJECT_ID('dbo.finance_settings','U') IS NOT NULL SELECT [value] FROM dbo.finance_settings WHERE [key]=@key", ("@key", key)); return decimal.TryParse(Convert.ToString(db), out var v) ? v : (decimal.TryParse(config[$"FinanceSettings:{key}"], out var c) ? c : fallback); }
+    public async Task SaveDecimalSettingAsync(string key, decimal value) { await EnsureModernTablesAsync(); await ExecuteAsync("MERGE dbo.finance_settings AS t USING (SELECT @key AS [key]) AS s ON t.[key]=s.[key] WHEN MATCHED THEN UPDATE SET [value]=@value, updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([key],[value]) VALUES(@key,@value);", ("@key", key), ("@value", value)); }
     private async Task<object?> ScalarAsync(string sql, params (string, object)[] ps) { await using var con = new SqlConnection(ConnStr); await con.OpenAsync(); await using var cmd = new SqlCommand(sql, con); foreach(var p in ps) cmd.Parameters.AddWithValue(p.Item1,p.Item2); return await cmd.ExecuteScalarAsync(); }
     private async Task ExecuteAsync(string sql, params (string, object)[] ps) { await using var con = new SqlConnection(ConnStr); await con.OpenAsync(); await using var cmd = new SqlCommand(sql, con); foreach(var p in ps) cmd.Parameters.AddWithValue(p.Item1,p.Item2); await cmd.ExecuteNonQueryAsync(); }
+
+    public async Task<List<SavingPot>> GetSavingPotsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<SavingPot>();
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT saving_pot_id,[name],target_amount,monthly_amount,created_at,updated_at FROM dbo.saving_pots ORDER BY [name]", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new SavingPot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDateTime(4), r.GetDateTime(5)));
+        }
+        return list;
+    }
+
+    public async Task<List<SavingPotMonth>> GetSavingPotMonthsAsync(int year)
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<SavingPotMonth>();
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT saving_pot_month_id,saving_pot_id,[year],[month],is_saved,updated_at FROM dbo.saving_pot_months WHERE [year]=@year ORDER BY saving_pot_id,[month]", con);
+        cmd.Parameters.AddWithValue("@year", year);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new SavingPotMonth(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetInt32(3), r.GetBoolean(4), r.GetDateTime(5)));
+        }
+        return list;
+    }
+
+    public async Task<decimal> GetTotalAllocatedToSavingPotsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync(@"SELECT COALESCE(SUM(p.monthly_amount),0)
+            FROM dbo.saving_pot_months m
+            INNER JOIN dbo.saving_pots p ON p.saving_pot_id=m.saving_pot_id
+            WHERE m.is_saved=1");
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    public async Task SaveSavingPotAsync(int id, string name, decimal targetAmount, decimal monthlyAmount)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
+        await EnsureModernTablesAsync();
+        if (id == 0)
+        {
+            await ExecuteAsync("INSERT INTO dbo.saving_pots([name],target_amount,monthly_amount) VALUES(@name,@target,@monthly)", ("@name", name.Trim()), ("@target", targetAmount), ("@monthly", monthlyAmount));
+        }
+        else
+        {
+            await ExecuteAsync("UPDATE dbo.saving_pots SET [name]=@name,target_amount=@target,monthly_amount=@monthly,updated_at=SYSUTCDATETIME() WHERE saving_pot_id=@id", ("@id", id), ("@name", name.Trim()), ("@target", targetAmount), ("@monthly", monthlyAmount));
+        }
+    }
+
+    public async Task DeleteSavingPotAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("DELETE FROM dbo.saving_pots WHERE saving_pot_id=@id", ("@id", id));
+    }
+
+    public async Task ToggleSavingPotMonthAsync(int potId, int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"MERGE dbo.saving_pot_months AS t
+USING (SELECT @potId AS pot_id, @year AS y, @month AS m) AS s
+ON t.saving_pot_id=s.pot_id AND t.[year]=s.y AND t.[month]=s.m
+WHEN MATCHED THEN UPDATE SET is_saved = CASE WHEN is_saved=1 THEN 0 ELSE 1 END, updated_at=SYSUTCDATETIME()
+WHEN NOT MATCHED THEN INSERT(saving_pot_id,[year],[month],is_saved) VALUES(@potId,@year,@month,1);", ("@potId", potId), ("@year", year), ("@month", month));
+    }
+
 }
