@@ -7,67 +7,51 @@
 }
 
 <section class="hero card">
-  <div>
-    <p class="eyebrow">Saving Pots</p>
-    <h1>Monthly pot tracker</h1>
-    <p class="muted">Mark each month green when you have saved it. Saved pot money is deducted from your available emergency fund.</p>
-  </div>
+    <div>
+        <p class="eyebrow">Saving Pots</p>
+        <h1>Monthly pot tracker</h1>
+        <p class="muted">Mark each month green when you have saved it. Saved pot money and extras are deducted from your available emergency fund.</p>
+    </div>
 </section>
 
 <section class="grid cards-4">
-  <article class="card">
-    <p class="eyebrow">Emergency fund total</p>
-    <h2>@Model.EmergencyFundTotal.ToString("C", gb)</h2>
-    <p>Original emergency fund amount.</p>
-  </article>
-  <article class="card">
-    <p class="eyebrow">Allocated to pots</p>
-    <h2>@Model.AllocatedToPots.ToString("C", gb)</h2>
-    <p>Total saved months across all pots.</p>
-  </article>
-  <article class="card">
-    <p class="eyebrow">Available emergency fund</p>
-    <h2 class="@(Model.AvailableEmergencyFund >= 0 ? "good" : "bad")">@Model.AvailableEmergencyFund.ToString("C", gb)</h2>
-    <p>Emergency fund after pot savings are ring-fenced.</p>
-  </article>
-  <article class="card">
-    <p class="eyebrow">Selected year</p>
-    <h2>@Model.Year</h2>
-    <form method="get" class="year-form">
-      <select name="year" onchange="this.form.submit()">
-        @for (var y = DateTime.Today.Year - 2; y <= DateTime.Today.Year + 3; y++)
-        {
-          if (y == Model.Year)
-          {
-            <option value="@y" selected>@y</option>
-          }
-          else
-          {
-            <option value="@y">@y</option>
-          }
-        }
-      </select>
-    </form>
-  </article>
-</section>
+    <article class="card">
+        <p class="eyebrow">Emergency fund total</p>
+        <h2>@Model.EmergencyFundTotal.ToString("C", gb)</h2>
+        <p>Original emergency fund amount.</p>
+    </article>
 
-<section class="card">
-  <p class="eyebrow">Add new pot</p>
-  <form asp-action="SavePot" method="post" class="planner-form">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="id" value="0" />
-    <input type="hidden" name="year" value="@Model.Year" />
-    <label>Pot name
-      <input name="name" placeholder="Car insurance" required />
-    </label>
-    <label>Target amount
-      <input type="number" step="0.01" name="targetAmount" value="0" />
-    </label>
-    <label>Monthly amount
-      <input type="number" step="0.01" name="monthlyAmount" value="0" />
-    </label>
-    <button class="primary" type="submit">Add pot</button>
-  </form>
+    <article class="card">
+        <p class="eyebrow">Allocated to pots</p>
+        <h2>@Model.AllocatedToPots.ToString("C", gb)</h2>
+        <p>Total saved months and one-off extras across all pots.</p>
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">Available emergency fund</p>
+        <h2 class="@(Model.AvailableEmergencyFund >= 0 ? "good" : "bad")">@Model.AvailableEmergencyFund.ToString("C", gb)</h2>
+        <p>Emergency fund after pot savings are ring-fenced.</p>
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">Selected year</p>
+        <h2>@Model.Year</h2>
+        <form method="get" class="year-form">
+            <select name="year" onchange="this.form.submit()">
+                @for (var y = DateTime.Today.Year - 2; y <= DateTime.Today.Year + 3; y++)
+                {
+                    if (y == Model.Year)
+                    {
+                        <option value="@y" selected>@y</option>
+                    }
+                    else
+                    {
+                        <option value="@y">@y</option>
+                    }
+                }
+            </select>
+        </form>
+    </article>
 </section>
 
 <section class="card">
@@ -76,86 +60,141 @@
         @Html.AntiForgeryToken()
         <input type="hidden" name="id" value="0" />
         <input type="hidden" name="year" value="@Model.Year" />
+
         <label>
             Pot name
             <input name="name" placeholder="Florida Holiday" required />
         </label>
+
         <label>
             Target amount
             <input type="number" step="0.01" name="targetAmount" value="0" />
         </label>
+
         <label>
             Monthly amount
             <input type="number" step="0.01" name="monthlyAmount" value="0" />
         </label>
+
         <button class="primary" type="submit">Add pot</button>
     </form>
 </section>
 
 <section class="card table-card">
-  <h2>Pots and monthly status</h2>
-  <p class="muted">Green means saved. Red means not yet saved. Tap a blob to toggle it.</p>
-  <div class="table-wrap">
-    <table class="pots-table">
-      <thead>
-        <tr>
-          <th>Pot</th>
-          <th>Monthly</th>
-          <th>Target</th>
-          <th>Saved</th>
-          <th>Remaining</th>
-          @foreach (var name in monthNames)
-          {
-            <th>@name</th>
-          }
-          <th>Edit</th>
-        </tr>
-      </thead>
-      <tbody>
-      @foreach (var row in Model.Pots)
-      {
-        <tr>
-          <td><strong>@row.Pot.Name</strong></td>
-          <td>@row.Pot.MonthlyAmount.ToString("C", gb)</td>
-          <td>@row.Pot.TargetAmount.ToString("C", gb)</td>
-          <td class="good">@row.SavedBalance.ToString("C", gb)</td>
-          <td>@row.Remaining.ToString("C", gb)</td>
-          @for (var m = 1; m <= 12; m++)
-          {
-            var isSaved = row.Months.Any(x => x.Month == m && x.IsSaved);
-            <td>
-              <form asp-action="ToggleMonth" method="post" class="blob-form">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="potId" value="@row.Pot.Id" />
-                <input type="hidden" name="year" value="@Model.Year" />
-                <input type="hidden" name="month" value="@m" />
-                <button type="submit" class="status-blob @(isSaved ? "saved" : "missed")" title="@(isSaved ? "Saved" : "Not saved")"></button>
-              </form>
-            </td>
-          }
-          <td>
-            <details>
-              <summary>Edit</summary>
-              <form asp-action="SavePot" method="post" class="stack-form">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@row.Pot.Id" />
-                <input type="hidden" name="year" value="@Model.Year" />
-                <label>Name <input name="name" value="@row.Pot.Name" required /></label>
-                <label>Target <input type="number" step="0.01" name="targetAmount" value="@row.Pot.TargetAmount" /></label>
-                <label>Monthly <input type="number" step="0.01" name="monthlyAmount" value="@row.Pot.MonthlyAmount" /></label>
-                <button type="submit">Save</button>
-              </form>
-              <form asp-action="DeletePot" method="post" onsubmit="return confirm('Delete this saving pot?');">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@row.Pot.Id" />
-                <input type="hidden" name="year" value="@Model.Year" />
-                <button type="submit" class="danger">Delete</button>
-              </form>
-            </details>
-          </td>
-        </tr>
-      }
-      </tbody>
-    </table>
-  </div>
+    <h2>Pots and monthly status</h2>
+    <p class="muted">Green means saved. Red means not yet saved. Tap a blob to toggle it.</p>
+
+    <div class="table-wrap">
+        <table class="pots-table">
+            <thead>
+                <tr>
+                    <th>Pot</th>
+                    <th>Monthly</th>
+                    <th>Target</th>
+                    <th>Saved</th>
+                    <th>Remaining</th>
+                    @foreach (var name in monthNames)
+                    {
+                        <th>@name</th>
+                    }
+                    <th>Edit / Extras</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var row in Model.Pots)
+                {
+                    <tr>
+                        <td><strong>@row.Pot.Name</strong></td>
+                        <td>@row.Pot.MonthlyAmount.ToString("C", gb)</td>
+                        <td>@row.Pot.TargetAmount.ToString("C", gb)</td>
+                        <td class="good">@row.SavedBalance.ToString("C", gb)</td>
+                        <td>@row.Remaining.ToString("C", gb)</td>
+
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var month = row.Months.FirstOrDefault(x => x.Month == m);
+                            var isSaved = month?.IsSaved == true;
+
+                            <td>
+                                <form asp-action="ToggleMonth" method="post" class="blob-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="potId" value="@row.Pot.Id" />
+                                    <input type="hidden" name="year" value="@Model.Year" />
+                                    <input type="hidden" name="month" value="@m" />
+                                    <button type="submit"
+                                            class="status-blob @(isSaved ? "saved" : "missed")"
+                                            title="@(isSaved ? "Saved" : "Not saved")">
+                                    </button>
+                                </form>
+                            </td>
+                        }
+
+                        <td>
+                            <details>
+                                <summary>Edit / Add Extra</summary>
+
+                                <form asp-action="SavePot" method="post" class="stack-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@row.Pot.Id" />
+                                    <input type="hidden" name="year" value="@Model.Year" />
+
+                                    <label>
+                                        Name
+                                        <input name="name" value="@row.Pot.Name" required />
+                                    </label>
+
+                                    <label>
+                                        Target
+                                        <input type="number" step="0.01" name="targetAmount" value="@row.Pot.TargetAmount" />
+                                    </label>
+
+                                    <label>
+                                        Monthly
+                                        <input type="number" step="0.01" name="monthlyAmount" value="@row.Pot.MonthlyAmount" />
+                                    </label>
+
+                                    <button type="submit">Save</button>
+                                </form>
+
+                                <hr />
+
+                                <form asp-action="AddExtra" method="post" class="stack-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="potId" value="@row.Pot.Id" />
+                                    <input type="hidden" name="year" value="@Model.Year" />
+
+                                    <label>
+                                        Extra amount
+                                        <input type="number" step="0.01" min="0.01" name="amount" placeholder="100.00" required />
+                                    </label>
+
+                                    <label>
+                                        Date
+                                        <input type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                                    </label>
+
+                                    <label>
+                                        Note
+                                        <input type="text" name="note" placeholder="Bonus, overtime, spare cash..." />
+                                    </label>
+
+                                    <button type="submit" class="primary">Add extra</button>
+                                </form>
+
+                                <hr />
+
+                                <form asp-action="DeletePot" method="post" onsubmit="return confirm('Delete this saving pot?');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@row.Pot.Id" />
+                                    <input type="hidden" name="year" value="@Model.Year" />
+                                    <button type="submit" class="danger">Delete</button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </section>

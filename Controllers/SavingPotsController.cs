@@ -53,4 +53,12 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
         await repo.ToggleSavingPotMonthAsync(potId, year, month);
         return RedirectToAction(nameof(Index), new { year });
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddExtra(int potId, decimal amount, DateTime date, string? note, int year)
+    {
+        await repo.AddSavingPotExtraAsync(potId, Math.Max(0, amount), date, note);
+        return RedirectToAction(nameof(Index), new { year });
+    }
 }

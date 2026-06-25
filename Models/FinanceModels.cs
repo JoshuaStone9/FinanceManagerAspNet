@@ -50,7 +50,6 @@ public sealed class DashboardViewModel
     public List<LastModifiedInfo> LastModified { get; set; } = [];
 }
 
-
 public sealed class HouseGoalViewModel
 {
     public decimal ExternalTotalValue { get; set; }
@@ -77,15 +76,30 @@ public sealed class HouseGoalViewModel
     public decimal StandaloneProjectedTotal { get; set; }
 }
 
+public sealed record SavingPot(
+    int Id,
+    string Name,
+    decimal TargetAmount,
+    decimal MonthlyAmount,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
 
-public sealed record SavingPot(int Id, string Name, decimal TargetAmount, decimal MonthlyAmount, DateTime CreatedAt, DateTime UpdatedAt);
-public sealed record SavingPotMonth(int Id, int SavingPotId, int Year, int Month, bool IsSaved, DateTime UpdatedAt);
+public sealed record SavingPotMonth(
+    int Id,
+    int SavingPotId,
+    int Year,
+    int Month,
+    bool IsSaved,
+    decimal SavedAmount,
+    DateTime UpdatedAt);
 
 public sealed class SavingPotRowViewModel
 {
     public SavingPot Pot { get; set; } = new(0, string.Empty, 0, 0, DateTime.MinValue, DateTime.MinValue);
     public List<SavingPotMonth> Months { get; set; } = [];
-    public decimal SavedBalance => Months.Count(m => m.IsSaved) * Pot.MonthlyAmount;
+
+    public decimal SavedBalance => Months.Where(m => m.IsSaved).Sum(m => m.SavedAmount);
+
     public decimal Remaining => Math.Max(0, Pot.TargetAmount - SavedBalance);
 }
 
