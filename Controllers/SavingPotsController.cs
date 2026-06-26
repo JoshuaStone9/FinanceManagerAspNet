@@ -34,6 +34,7 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SavePot(int id, string name, decimal targetAmount, decimal monthlyAmount, int year)
     {
+        if (!CanEdit()) return LoginRedirect();
         await repo.SaveSavingPotAsync(id, name, Math.Max(0, targetAmount), Math.Max(0, monthlyAmount));
         return RedirectToAction(nameof(Index), new { year });
     }
@@ -42,6 +43,7 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeletePot(int id, int year)
     {
+        if (!CanEdit()) return LoginRedirect();
         await repo.DeleteSavingPotAsync(id);
         return RedirectToAction(nameof(Index), new { year });
     }
@@ -50,6 +52,7 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ToggleMonth(int potId, int year, int month)
     {
+        if (!CanEdit()) return LoginRedirect();
         await repo.ToggleSavingPotMonthAsync(potId, year, month);
         return RedirectToAction(nameof(Index), new { year });
     }
@@ -58,7 +61,13 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddExtra(int potId, decimal amount, DateTime date, string? note, int year)
     {
+        if (!CanEdit()) return LoginRedirect();
         await repo.AddSavingPotExtraAsync(potId, Math.Max(0, amount), date, note);
         return RedirectToAction(nameof(Index), new { year });
     }
+
+    private bool CanEdit() => User.Identity?.IsAuthenticated == true;
+
+    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+
 }

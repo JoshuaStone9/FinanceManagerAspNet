@@ -8,9 +8,28 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" asp-controller="Dashboard" asp-action="Index">Finance Manager</a>
-    <nav><a asp-controller="Dashboard" asp-action="Index">Dashboard</a><a asp-controller="Statistics" asp-action="Index">Statistics</a><a asp-controller="SavingPots" asp-action="Index">Saving Pots</a></nav>
+    <a class="brand" asp-controller="Auth" asp-action="Start">Finance Manager</a>
+    <nav>
+      <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+      <a asp-controller="Statistics" asp-action="Index">Statistics</a>
+      <a asp-controller="SavingPots" asp-action="Index">Saving Pots</a>
+      @if (User.Identity?.IsAuthenticated == true)
+      {
+        <form asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">
+          @Html.AntiForgeryToken()
+          <button type="submit" class="nav-button">Logout</button>
+        </form>
+      }
+      else
+      {
+        <a asp-controller="Auth" asp-action="Login">Login</a>
+      }
+    </nav>
   </header>
+  @if (User.Identity?.IsAuthenticated != true)
+  {
+    <div class="readonly-banner">Read-only mode — login to unlock editing.</div>
+  }
   <main class="shell">@RenderBody()</main>
   <script src="~/js/site.js"></script>
   @await RenderSectionAsync("Scripts", false)

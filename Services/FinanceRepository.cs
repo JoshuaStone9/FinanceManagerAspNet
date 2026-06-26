@@ -16,6 +16,9 @@ public sealed class FinanceRepository(IConfiguration config)
 IF OBJECT_ID('dbo.finance_settings','U') IS NULL
 CREATE TABLE dbo.finance_settings([key] nvarchar(120) NOT NULL PRIMARY KEY, [value] nvarchar(300) NOT NULL, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
+IF OBJECT_ID('dbo.app_login','U') IS NULL
+CREATE TABLE dbo.app_login(app_login_id int NOT NULL CONSTRAINT PK_app_login PRIMARY KEY DEFAULT 1, password_hash nvarchar(500) NOT NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT CK_app_login_single_row CHECK (app_login_id = 1));
+
 IF OBJECT_ID('dbo.account_balances','U') IS NULL
 CREATE TABLE dbo.account_balances(account_balance_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, include_in_global_goal bit NOT NULL DEFAULT 1, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
@@ -393,6 +396,28 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
         }
+    }
+
+
+    public async Task<string?> GetLoginPasswordHashAsync()
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync("SELECT TOP 1 password_hash FROM dbo.app_login WHERE app_login_id = 1");
+        return value is null or DBNull ? null : Convert.ToString(value);
+    }
+
+    public async Task SaveLoginPasswordHashAsync(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash)) throw new ArgumentException("Password hash is required.", nameof(passwordHash));
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"
+MERGE dbo.app_login AS t
+USING (SELECT 1 AS app_login_id) AS s
+ON t.app_login_id = s.app_login_id
+WHEN MATCHED THEN
+    UPDATE SET password_hash = @hash, updated_at = SYSUTCDATETIME()
+WHEN NOT MATCHED THEN
+    INSERT(app_login_id, password_hash) VALUES(1, @hash);", ("@hash", passwordHash));
     }
 
     public async Task<decimal> GetDecimalSettingAsync(string key, decimal fallback) { var db = await ScalarAsync("IF OBJECT_ID('dbo.finance_settings','U') IS NOT NULL SELECT [value] FROM dbo.finance_settings WHERE [key]=@key", ("@key", key)); return decimal.TryParse(Convert.ToString(db), out var v) ? v : (decimal.TryParse(config[$"FinanceSettings:{key}"], out var c) ? c : fallback); }

@@ -45,17 +45,20 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
 
     [HttpPost]
     public async Task<IActionResult> SaveIncome(int year, int month, decimal amount, int sickDays)
-    { await repo.SaveIncomeAsync(year, month, amount, sickDays); return RedirectToAction(nameof(Index), new { year, month }); }
+    {
+        if (!CanEdit()) return LoginRedirect(); await repo.SaveIncomeAsync(year, month, amount, sickDays); return RedirectToAction(nameof(Index), new { year, month }); }
 
     [HttpPost]
     public async Task<IActionResult> SaveAccount(int year, int month, int id, string name, decimal amount, decimal interestRate, decimal monthlyContribution, bool includeInGlobalGoal = true)
-    { await repo.SaveAccountAsync(id, name, amount, interestRate, monthlyContribution, includeInGlobalGoal); return RedirectToAction(nameof(Index), new { year, month }); }
+    {
+        if (!CanEdit()) return LoginRedirect(); await repo.SaveAccountAsync(id, name, amount, interestRate, monthlyContribution, includeInGlobalGoal); return RedirectToAction(nameof(Index), new { year, month }); }
 
 
 
     [HttpPost]
     public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
     {
+        if (!CanEdit()) return LoginRedirect();
         await repo.AddPaymentAsync(source, name, amount, date, category, type, length, notes);
         return RedirectToAction(nameof(Index), new { year, month });
     }
@@ -63,6 +66,7 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
     [HttpGet]
     public async Task<IActionResult> EditPayment(string source, int id, int year, int month)
     {
+        if (!CanEdit()) return LoginRedirect();
         var item = await repo.GetPaymentAsync(source, id);
         if (item is null) return NotFound();
         return View(item);
@@ -71,6 +75,7 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
     [HttpPost]
     public async Task<IActionResult> EditPayment(int year, int month, string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
     {
+        if (!CanEdit()) return LoginRedirect();
         await repo.UpdatePaymentAsync(source, id, name, amount, date, category, type, length, notes);
         return RedirectToAction(nameof(Index), new { year, month });
     }
@@ -78,9 +83,15 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
     [HttpPost]
     public async Task<IActionResult> CarryOver(int year, int month, string[] sections)
     {
+        if (!CanEdit()) return LoginRedirect();
         var carryAmount = await repo.CarryOverAsync(year, month, sections);
         var next = new DateTime(year, month, 1).AddMonths(1);
         TempData["CarryMessage"] = carryAmount == 0 ? "No carry amount generated." : (carryAmount < 0 ? $"Shortfall carried: {Math.Abs(carryAmount):C}" : $"Surplus carried: {carryAmount:C}");
         return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month });
     }
+
+    private bool CanEdit() => User.Identity?.IsAuthenticated == true;
+
+    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+
 }

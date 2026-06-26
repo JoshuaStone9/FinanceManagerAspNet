@@ -55,7 +55,7 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             standaloneMonthlyContribution,
             standaloneMonths ?? months);
 
-        if (externalTotalValue.HasValue)
+        if (externalTotalValue.HasValue && User.Identity?.IsAuthenticated == true)
         {
             await repo.SaveDecimalSettingAsync("LastCalculatedEmergencyFund", house.EmergencyFundStillNeededWithInterest);
         }

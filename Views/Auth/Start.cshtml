@@ -1,0 +1,147 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "Finance Manager";
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Finance Manager</title>
+
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body.login-body {
+            min-height: 100vh;
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            color: white;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 18% 18%, rgba(255, 99, 71, .95), transparent 28%),
+                radial-gradient(circle at 88% 8%, rgba(255, 168, 0, .82), transparent 28%),
+                radial-gradient(circle at 70% 70%, rgba(255, 85, 0, .35), transparent 26%),
+                linear-gradient(135deg, #21060a 0%, #4a0f12 42%, #120918 100%);
+        }
+        body.login-body::before {
+            content: "";
+            position: fixed;
+            inset: -25%;
+            background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.12), transparent 28%);
+            filter: blur(30px);
+            pointer-events: none;
+        }
+        .login-shell {
+            position: relative;
+            width: min(94vw, 540px);
+            padding: 24px;
+        }
+        .login-card {
+            background: rgba(255,255,255,.13);
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 34px;
+            box-shadow: 0 32px 90px rgba(0,0,0,.42);
+            backdrop-filter: blur(20px);
+            padding: 34px;
+        }
+        .eyebrow {
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: .16em;
+            font-size: .76rem;
+            color: rgba(255,255,255,.76);
+            font-weight: 900;
+        }
+        h1 {
+            margin: .3rem 0 1rem;
+            font-size: clamp(2.35rem, 8vw, 4rem);
+            line-height: .95;
+            letter-spacing: -.04em;
+        }
+        .muted { color: rgba(255,255,255,.78); line-height: 1.55; }
+        .small-note { font-size: .9rem; }
+        .start-actions, .login-form { display: grid; gap: 13px; margin-top: 24px; }
+        .start-button, .login-form button {
+            width: 100%;
+            text-align: center;
+            text-decoration: none;
+            border: 0;
+            border-radius: 18px;
+            padding: 15px 18px;
+            font-weight: 900;
+            font-size: 1rem;
+            cursor: pointer;
+            background: rgba(255,255,255,.94);
+            color: #351018;
+            box-shadow: 0 12px 28px rgba(0,0,0,.2);
+            display: block;
+        }
+        .start-button.primary, .login-form button.primary {
+            background: linear-gradient(135deg, #ff7a18, #ff3d2e);
+            color: white;
+        }
+        .login-cta { background: #111827; color: white; }
+        .danger { background: #fee2e2; color: #991b1b; }
+        .login-divider { display: flex; align-items: center; gap: 12px; margin: 25px 0; }
+        .login-divider::before, .login-divider::after {
+            content: "";
+            height: 1px;
+            background: rgba(255,255,255,.34);
+            flex: 1;
+        }
+        .login-divider span {
+            text-transform: uppercase;
+            font-size: .72rem;
+            letter-spacing: .16em;
+            color: rgba(255,255,255,.72);
+            font-weight: 900;
+        }
+        .login-form label { font-weight: 900; color: rgba(255,255,255,.9); }
+        .login-form input {
+            display: block;
+            width: 100%;
+            margin-top: 8px;
+            border: 1px solid rgba(255,255,255,.3);
+            border-radius: 16px;
+            padding: 14px 16px;
+            background: rgba(255,255,255,.94);
+            color: #1f2937;
+            font-size: 1rem;
+        }
+        .back-link { display: inline-block; margin-top: 20px; color: white; font-weight: 900; }
+        .bad { color: #fecaca; font-weight: 800; }
+        @@media (max-width: 520px) { .login-card { padding: 24px; border-radius: 26px; } }
+    </style>
+</head>
+<body class="login-body">
+    <main class="login-shell">
+        <section class="login-card start-card">
+            <p class="eyebrow">Welcome back</p>
+            <h1>Finance Manager</h1>
+            <p class="muted">Open the finance app in read-only mode, or log in to unlock editing.</p>
+
+            <div class="start-actions">
+                <a class="start-button primary" href="@Url.Action("Index", "Dashboard")">Finance Manager</a>
+                <a class="start-button" href="@Url.Action("Index", "SavingPots")">Inventory Database</a>
+            </div>
+
+            <div class="login-divider"><span>secure editing</span></div>
+
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form action="@Url.Action("Logout", "Auth")" method="post">
+                    @Html.AntiForgeryToken()
+                    <button class="start-button danger" type="submit">Logout</button>
+                </form>
+                <p class="muted small-note">This device is currently logged in and can edit records.</p>
+            }
+            else
+            {
+                <a class="start-button login-cta" href="@Url.Action("Login", "Auth")">Login</a>
+            }
+        </section>
+    </main>
+</body>
+</html>

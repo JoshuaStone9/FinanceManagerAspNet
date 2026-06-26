@@ -1,7 +1,7 @@
 @model FinanceManagerAspNet.Models.DashboardViewModel
 @using System.Globalization
 @{
-    ViewData["Title"] = "Dashboard"; var gb = CultureInfo.GetCultureInfo("en-GB");
+    ViewData["Title"] = "Dashboard"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentUrl = Context.Request.Path.ToString() + Context.Request.QueryString.ToString();
 }
 
 <section class="hero card">
@@ -22,6 +22,8 @@
     <article class="card"><p class="eyebrow">Estimated time</p><h2>@(Model.MonthsToGoalAtCurrentPace < 0 ? "N/A" : Model.MonthsToGoalAtCurrentPace + " months")</h2><p>Based on current month pace</p></article>
 </section>
 
+@if (canEdit)
+{
 <section class="card">
     <form asp-action="SaveIncome" method="post" class="inline-form">
         <input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" />
@@ -30,6 +32,7 @@
         <button>Save income</button>
     </form>
 </section>
+}
 
 <section class="grid cards-4 totals">
     <div class="card"><span>Bills</span><strong>@Model.BillsTotal.ToString("C", gb)</strong></div>
@@ -39,9 +42,16 @@
 </section>
 
 <section class="card actions">
-    <button type="button" class="primary" data-open="addPaymentModal">Add payment / bill</button>
-    <button type="button" class="primary" data-open="carryModal">Carry items into next month</button>
-    <button type="button" data-open="accountModal">Update ISA / pots / hidden interest</button>
+    @if (canEdit)
+    {
+        <button type="button" class="primary" data-open="addPaymentModal">Add payment / bill</button>
+        <button type="button" class="primary" data-open="carryModal">Carry items into next month</button>
+        <button type="button" data-open="accountModal">Update ISA / pots / hidden interest</button>
+    }
+    else
+    {
+        <a class="button primary" asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@currentUrl">Login to edit</a>
+    }
     <a class="button" asp-controller="Statistics" asp-action="Index">Open statistics</a>
 </section>
 
@@ -50,7 +60,7 @@
     <section class="card table-card">
         <h2>@group.Item1</h2><div class="table-wrap">
         <table>
-            <thead><tr><th>Name</th><th>Amount</th><th>Date</th><th>Category</th><th>Progress</th><th>Notes</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Amount</th><th>Date</th><th>Category</th><th>Progress</th><th>Notes</th>@if (canEdit) { <th>Actions</th> }</tr></thead>
             <tbody>
                 @foreach (var r in group.Item2)
                 {
@@ -72,7 +82,7 @@
                             }
                         </td>
                         <td>@r.Notes</td>
-                        <td><a class="button" asp-action="EditPayment" asp-route-source="@r.Source" asp-route-id="@r.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a></td>
+                        @if (canEdit) { <td><a class="button" asp-action="EditPayment" asp-route-source="@r.Source" asp-route-id="@r.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a></td> }
                     </tr>
                 }
             </tbody>
@@ -86,6 +96,8 @@
 }
 </div></section>
 
+@if (canEdit)
+{
 <div class="modal" id="addPaymentModal"><div class="modal-panel"><button class="x" data-close>×</button><h2>Add to dashboard</h2><form asp-action="AddPayment" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><label>Section<select name="source"><option value="bills">Bills</option><option value="extra_expenses">Extra expenses</option><option value="investments">Investments</option><option value="savings">Savings</option></select></label><label>Name<input name="name" placeholder="e.g. Mortgage, ISA, Car repair" required /></label><label>Amount<input name="amount" type="number" step="0.01" placeholder="0.00" required /></label><label>Date<input name="date" type="date" value="@Model.MonthStart.ToString("yyyy-MM-dd")" required /></label><label>Category<input name="category" placeholder="Optional" /></label><label>Type<input name="type" placeholder="Optional" /></label><label>Length in months<input name="length" type="number" min="1" step="1" placeholder="Example: 12, 36, 420" /></label><label>Notes<input name="notes" placeholder="Optional notes" /></label><button class="primary">Add item</button></form><p class="muted">This writes directly into your existing SQL tables using the same columns as the old app.</p></div></div>
 
 <div class="modal" id="carryModal"><div class="modal-panel"><button class="x" data-close>×</button><h2>Carry into @Model.NextMonth.ToString("MMMM yyyy")</h2><form asp-action="CarryOver" method="post"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><details open><summary><input type="checkbox" name="sections" value="bills" checked /> Bills</summary><p>Copies this month’s bills to next month.</p></details><details open><summary><input type="checkbox" name="sections" value="investments" checked /> Investments</summary><p>Copies your monthly investment records.</p></details><details><summary><input type="checkbox" name="sections" value="extra_expenses" /> Extra expenses</summary><p>Off by default so one-off spending does not accidentally repeat.</p></details><button class="primary">Carry selected items</button></form></div></div>
@@ -94,3 +106,4 @@
     <form asp-action="SaveAccount" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="id" value="@a.Id" /><label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "") /></label><label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label><label class="advanced">Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate" /></label><label class="advanced">Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label><label><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@(a.IncludeInGlobalGoal)" /> Include</label><button>Save</button></form>
 }
 <form asp-action="SaveAccount" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="id" value="0" /><input name="name" placeholder="New account name" /><input name="amount" type="number" step="0.01" placeholder="Amount" /><input name="interestRate" type="number" step="0.01" placeholder="Interest %" /><input name="monthlyContribution" type="number" step="0.01" placeholder="Monthly in" /><button>Add</button></form></div></div>
+}
