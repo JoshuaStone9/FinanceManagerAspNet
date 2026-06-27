@@ -1,0 +1,135 @@
+@model CreateItemDto
+@{
+    var categories = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.CategorySelectList;
+    var locations = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.LocationSelectList;
+    var conditions = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.Conditions;
+    var statuses = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.Statuses;
+    var tags = (IEnumerable<TagDto>)ViewBag.Tags;
+    var currentImage = ViewBag.CurrentImagePath as string;
+}
+
+<div asp-validation-summary="ModelOnly" class="field-error"></div>
+
+<div class="simple-item-form">
+    <section class="simple-main-fields">
+        <div class="section-heading">Quick item log</div>
+
+        <div class="field full photo-field">
+            <label>Photo</label>
+            @if (!string.IsNullOrEmpty(currentImage))
+            {
+                <img id="imgPreview" src="@currentImage" alt="Current item photo" class="item-photo-preview" />
+            }
+            else
+            {
+                <div id="imgPreview" class="item-photo-preview item-photo-preview--empty"><i data-lucide="image"></i></div>
+            }
+            <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp" data-preview="#imgPreview" />
+        </div>
+
+        <div class="form-grid">
+            <div class="field full">
+                <label asp-for="Name">Name *</label>
+                <input asp-for="Name" required />
+                <span asp-validation-for="Name" class="field-error"></span>
+            </div>
+
+            <div class="field full">
+                <label asp-for="Description">Description</label>
+                <textarea asp-for="Description" placeholder="What is it? Add any quick notes here."></textarea>
+            </div>
+
+            <div class="field">
+                <label asp-for="LocationId">Location</label>
+                <select asp-for="LocationId" asp-items="locations">
+                    <option value="">— Choose a location —</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label asp-for="CurrentValue">Current Value (£)</label>
+                <input asp-for="CurrentValue" type="number" step="0.01" min="0" />
+            </div>
+        </div>
+
+        <div class="field full status-field">
+            <label>Status *</label>
+            <div class="option-card-grid">
+                @foreach (var status in statuses)
+                {
+                    var id = $"status_{status.Value}";
+                    <label class="option-card" for="@id">
+                        <input id="@id" type="radio" asp-for="Status" value="@status.Value" required />
+                        <span>@status.Text</span>
+                    </label>
+                }
+            </div>
+            <span asp-validation-for="Status" class="field-error"></span>
+        </div>
+    </section>
+
+    <aside class="optional-fields-panel">
+        <div class="section-heading">Optional details</div>
+        <p class="optional-help">Add these only when you need them. They are kept separate so logging an item stays quick.</p>
+
+        <details open>
+            <summary>Organisation</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field">
+                    <label asp-for="CategoryId">Category</label>
+                    <select asp-for="CategoryId" asp-items="categories">
+                        <option value="">— None —</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label asp-for="Condition">Condition</label>
+                    <select asp-for="Condition" asp-items="conditions"></select>
+                </div>
+                <div class="field full">
+                    <label>Tags</label>
+                    <div class="checkbox-grid">
+                        @foreach (var t in tags)
+                        {
+                            <label class="checkbox-pill">
+                                <input type="checkbox" name="TagIds" value="@t.Id" checked="@(Model.TagIds.Contains(t.Id))" />
+                                @t.Name
+                            </label>
+                        }
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <details>
+            <summary>Item identifiers</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field"><label asp-for="Brand">Brand</label><input asp-for="Brand" /></div>
+                <div class="field"><label asp-for="Model">Model</label><input asp-for="Model" /></div>
+                <div class="field"><label asp-for="SerialNumber">Serial Number</label><input asp-for="SerialNumber" /></div>
+                <div class="field"><label asp-for="Barcode">Barcode</label><input asp-for="Barcode" /></div>
+                <div class="field"><label asp-for="Quantity">Quantity</label><input asp-for="Quantity" type="number" min="0" /></div>
+            </div>
+        </details>
+
+        <details>
+            <summary>Purchase & insurance</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field"><label asp-for="PurchasePrice">Purchase Price (£)</label><input asp-for="PurchasePrice" type="number" step="0.01" min="0" /></div>
+                <div class="field"><label asp-for="PurchaseDate">Purchase Date</label><input asp-for="PurchaseDate" type="date" /></div>
+                <div class="field full"><label asp-for="PurchasedFrom">Purchased From</label><input asp-for="PurchasedFrom" /></div>
+                <div class="field field-checkbox"><input asp-for="IsInsured" type="checkbox" /><label asp-for="IsInsured">Insured</label></div>
+                <div class="field full"><label asp-for="InsurancePolicy">Insurance Policy #</label><input asp-for="InsurancePolicy" /></div>
+            </div>
+        </details>
+
+        <details>
+            <summary>Warranty, manual & notes</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field full"><label asp-for="WarrantyInfo">Warranty Info</label><input asp-for="WarrantyInfo" /></div>
+                <div class="field"><label asp-for="WarrantyExpiry">Warranty Expiry</label><input asp-for="WarrantyExpiry" type="date" /></div>
+                <div class="field full"><label asp-for="ManualUrl">Manual URL</label><input asp-for="ManualUrl" type="url" /></div>
+                <div class="field full"><label asp-for="Notes">Extra Notes</label><textarea asp-for="Notes"></textarea></div>
+            </div>
+        </details>
+    </aside>
+</div>

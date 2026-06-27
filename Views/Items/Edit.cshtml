@@ -1,0 +1,22 @@
+@model UpdateItemDto
+@{
+    ViewData["Title"] = $"Edit · {Model.Name}";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Edit Item</h1>
+        <div class="page-subtitle">@Model.Name</div>
+    </div>
+    <a class="btn" asp-action="Detail" asp-route-id="@Model.Id"><i data-lucide="arrow-left"></i> Back</a>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="form-card">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <partial name="_Form" model="Model" />
+    <div class="form-actions">
+        <button class="btn btn-primary" type="submit"><i data-lucide="check"></i> Save Changes</button>
+        <a class="btn" asp-action="Detail" asp-route-id="@Model.Id">Cancel</a>
+    </div>
+</form>

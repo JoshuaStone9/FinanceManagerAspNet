@@ -1,0 +1,174 @@
+@model PagedResult<ItemSummaryDto>
+@{
+    var stats = (StatsDto)ViewBag.Stats;
+    var categories = (IEnumerable<CategoryDto>)ViewBag.Categories;
+    var locations = (IEnumerable<LocationDto>)ViewBag.Locations;
+    var tags = (IEnumerable<TagDto>)ViewBag.Tags;
+    var filter = (ItemFilterDto)ViewBag.Filter;
+    var canEdit = ViewBag.CanEdit == true;
+    var canViewSensitive = ViewBag.CanViewSensitive == true;
+    ViewData["Title"] = "Personal Vault";
+    var loginReturnUrl = Context.Request.Path.ToString() + Context.Request.QueryString.ToString();
+}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Items</div>
+        <div class="stat-value">@stats.TotalItems</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Value</div>
+        <div class="stat-value">£@stats.TotalValue.ToString("N0")</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active Loans</div>
+        <div class="stat-value @(stats.ActiveLoans > 0 ? "warn" : "")">@stats.ActiveLoans</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Warranties Expiring Soon</div>
+        <div class="stat-value @(stats.ExpiringWarranties > 0 ? "warn" : "")">@stats.ExpiringWarranties</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Maintenance Due</div>
+        <div class="stat-value @(stats.ItemsNeedingMaintenance > 0 ? "warn" : "")">@stats.ItemsNeedingMaintenance</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Categories</div>
+        <div class="stat-value">@stats.TotalCategories</div>
+    </div>
+</div>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Your Vault</h1>
+        <div class="page-subtitle">@Model.TotalCount item@(Model.TotalCount == 1 ? "" : "s") found</div>
+    </div>
+    <div class="detail-actions">
+        @if (canEdit)
+        {
+            <a class="btn" asp-action="ExportCsv" asp-all-route-data="@RouteValuesFromFilter(filter)"><i data-lucide="download"></i> CSV</a>
+            <a class="btn" asp-action="ExportJson" asp-all-route-data="@RouteValuesFromFilter(filter)"><i data-lucide="download"></i> JSON</a>
+            <a class="btn" asp-controller="Locations" asp-action="Index"><i data-lucide="map-pin"></i> Locations</a>
+        }
+    </div>
+</div>
+
+<form method="get" asp-action="Index" class="filter-bar">
+    <input type="hidden" name="Search" value="@filter.Search" />
+
+    <label>Category</label>
+    <select name="CategoryId" onchange="this.form.submit()">
+        <option value="">All</option>
+        @foreach (var c in categories)
+        {
+            <option value="@c.Id" selected="@(filter.CategoryId == c.Id)">@c.Name (@c.ItemCount)</option>
+        }
+    </select>
+
+    @if (canViewSensitive)
+    {
+    <label>Location</label>
+    <select name="LocationId" onchange="this.form.submit()">
+        <option value="">All</option>
+        @foreach (var l in locations)
+        {
+            <option value="@l.Id" selected="@(filter.LocationId == l.Id)">@l.Name@(l.Room is not null ? $" · {l.Room}" : "") (@l.ItemCount)</option>
+        }
+    </select>
+    }
+
+    <label>Status</label>
+    <select name="Status" onchange="this.form.submit()">
+        <option value="">All</option>
+        @foreach (var s in Enum.GetValues<ItemStatus>())
+        {
+            <option value="@s" selected="@(filter.Status == s)">@s.ToDisplayName()</option>
+        }
+    </select>
+
+    <label>Condition</label>
+    <select name="Condition" onchange="this.form.submit()">
+        <option value="">All</option>
+        @foreach (var c in Enum.GetValues<ItemCondition>())
+        {
+            <option value="@c" selected="@(filter.Condition == c)">@c.ToDisplayName()</option>
+        }
+    </select>
+
+    <label>Sort</label>
+    <select name="SortBy" onchange="this.form.submit()">
+        <option value="UpdatedAt" selected="@(filter.SortBy == "UpdatedAt")">Last Updated</option>
+        <option value="Name" selected="@(filter.SortBy == "Name")">Name</option>
+        <option value="Value" selected="@(filter.SortBy == "Value")">Value</option>
+        <option value="PurchaseDate" selected="@(filter.SortBy == "PurchaseDate")">Purchase Date</option>
+        <option value="CreatedAt" selected="@(filter.SortBy == "CreatedAt")">Date Added</option>
+    </select>
+
+    <div class="spacer"></div>
+
+    @if (!string.IsNullOrEmpty(filter.Search) || filter.CategoryId.HasValue || filter.LocationId.HasValue || filter.Status.HasValue || filter.Condition.HasValue)
+    {
+        <a class="btn btn-sm" asp-action="Index"><i data-lucide="x"></i> Clear filters</a>
+    }
+</form>
+
+@if (!Model.Items.Any())
+{
+    <div class="empty-state">
+        <i data-lucide="package-open"></i>
+        <h3>No items found</h3>
+        <p>Try adjusting your filters, or add your first item to the vault.</p>
+        @if (canEdit)
+        {
+            <a class="btn btn-primary" asp-action="Create"><i data-lucide="plus"></i> Add Item</a>
+        }
+        else
+        {
+            <a class="btn btn-primary" asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@loginReturnUrl">Login to add/edit</a>
+        }
+    </div>
+}
+else
+{
+    <div class="item-grid">
+        @foreach (var item in Model.Items)
+        {
+            <partial name="_ItemCard" model="item" />
+        }
+    </div>
+
+    @if (Model.TotalPages > 1)
+    {
+        <div class="pagination">
+            @if (Model.HasPreviousPage)
+            {
+                <a asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, Model.Page - 1)"><i data-lucide="chevron-left"></i></a>
+            }
+            @for (var p = Math.Max(1, Model.Page - 2); p <= Math.Min(Model.TotalPages, Model.Page + 2); p++)
+            {
+                <a class="@(p == Model.Page ? "active" : "")" asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, p)">@p</a>
+            }
+            @if (Model.HasNextPage)
+            {
+                <a asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, Model.Page + 1)"><i data-lucide="chevron-right"></i></a>
+            }
+        </div>
+    }
+}
+
+@functions {
+    Dictionary<string, string> RouteValuesFromFilter(ItemFilterDto f, int? page = null)
+    {
+        var d = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(f.Search)) d["Search"] = f.Search;
+        if (f.CategoryId.HasValue) d["CategoryId"] = f.CategoryId.ToString()!;
+        if (f.LocationId.HasValue) d["LocationId"] = f.LocationId.ToString()!;
+        if (f.Status.HasValue) d["Status"] = f.Status.ToString()!;
+        if (f.Condition.HasValue) d["Condition"] = f.Condition.ToString()!;
+        if (!string.IsNullOrEmpty(f.SortBy)) d["SortBy"] = f.SortBy;
+        d["SortDescending"] = f.SortDescending.ToString();
+        d["Page"] = (page ?? f.Page).ToString();
+        d["PageSize"] = f.PageSize.ToString();
+        return d;
+    }
+}

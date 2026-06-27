@@ -1,0 +1,104 @@
+@{
+    ViewData["Title"] = "Locations";
+    var locations = (IEnumerable<LocationDto>)ViewBag.Locations;
+}
+
+<section class="hero card locations-hero">
+    <div>
+        <p class="eyebrow">Manage locations</p>
+        <h1>Locations</h1>
+        <p class="muted">Create your own storage places, then choose them when adding items.</p>
+    </div>
+</section>
+
+<section class="card location-add-card">
+    <div class="location-card-header">
+        <div>
+            <div class="section-heading">Add new location</div>
+            <p class="muted small-text">Keep it simple: main place first, then room or storage detail if needed.</p>
+        </div>
+    </div>
+
+    <form asp-controller="Locations" asp-action="Create" method="post" class="location-add-form">
+        @Html.AntiForgeryToken()
+        <div class="field">
+            <label for="name">Location name *</label>
+            <input id="name" name="name" required placeholder="Home, Garage, Storage Unit" />
+        </div>
+        <div class="field">
+            <label for="room">Room / area</label>
+            <input id="room" name="room" placeholder="Bedroom, Kitchen, Office" />
+        </div>
+        <div class="field">
+            <label for="storageUnit">Storage detail</label>
+            <input id="storageUnit" name="storageUnit" placeholder="Wardrobe, Box 1, Shelf A" />
+        </div>
+        <div class="field">
+            <label for="address">Notes</label>
+            <input id="address" name="address" placeholder="Optional extra note" />
+        </div>
+        <div class="location-submit-wrap">
+            <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add Location</button>
+        </div>
+    </form>
+</section>
+
+<section class="card location-list-card clean-location-list-card">
+    <div class="location-card-header">
+        <div>
+            <div class="section-heading">Your locations</div>
+            <p class="muted small-text">Removing a location clears it from linked items, but keeps the items.</p>
+        </div>
+        @if (locations.Any())
+        {
+            <form asp-controller="Locations" asp-action="DeleteAll" method="post" onsubmit="return confirm('Remove all locations? Items using them will be set to no location.');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="trash-2"></i> Remove all</button>
+            </form>
+        }
+    </div>
+
+    @if (!locations.Any())
+    {
+        <div class="empty-state compact-empty-state">
+            <i data-lucide="map-pin"></i>
+            <h2>No locations yet</h2>
+            <p>Add your first custom location above.</p>
+        </div>
+    }
+    else
+    {
+        <div class="clean-location-list">
+            @foreach (var location in locations)
+            {
+                var detailParts = new[] { location.Room, location.StorageUnit, location.Address }
+                    .Where(x => !string.IsNullOrWhiteSpace(x));
+                <article class="clean-location-row">
+                    <div class="location-main">
+                        <div class="location-icon"><i data-lucide="map-pin"></i></div>
+                        <div>
+                            <strong>@location.Name</strong>
+                            @if (detailParts.Any())
+                            {
+                                <p class="muted">@string.Join(" · ", detailParts)</p>
+                            }
+                            else
+                            {
+                                <p class="muted">No extra details added</p>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="location-actions">
+                        <span class="badge-count">@location.ItemCount item@(location.ItemCount == 1 ? "" : "s")</span>
+                        <form asp-controller="Locations" asp-action="Delete" method="post" onsubmit="return confirm('Remove this location? Items using it will be set to no location.');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@location.Id" />
+                            <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="trash-2"></i> Remove</button>
+                        </form>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>

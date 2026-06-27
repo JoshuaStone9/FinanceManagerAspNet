@@ -13,8 +13,8 @@ public sealed class AppAuthService(FinanceRepository repo, IConfiguration config
 
     public async Task SetPasswordAsync(string password)
     {
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 4)
-            throw new ArgumentException("Password must be at least 4 characters.", nameof(password));
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+            throw new ArgumentException("Password must be at least 8 characters.", nameof(password));
 
         var hash = _passwordHasher.HashPassword(new object(), password);
         await repo.SaveLoginPasswordHashAsync(hash);

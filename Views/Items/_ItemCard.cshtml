@@ -1,0 +1,48 @@
+@model ItemSummaryDto
+
+<a class="item-card" asp-controller="Items" asp-action="Detail" asp-route-id="@Model.Id">
+    <div class="item-card-image">
+        @if (!string.IsNullOrEmpty(Model.ImagePath))
+        {
+            <img src="@Model.ImagePath" alt="@Model.Name" loading="lazy" />
+        }
+        else
+        {
+            <i data-lucide="image" class="placeholder-icon"></i>
+        }
+        <span class="status-pill @Model.Status">@Model.Status.ToDisplayName()</span>
+    </div>
+    <div class="item-card-body">
+        @if (!string.IsNullOrEmpty(Model.CategoryName))
+        {
+            <span class="category-chip" style="background:@((Model.CategoryColour ?? "#6366f1") + "22"); color:@(Model.CategoryColour ?? "#6366f1")">
+                <i data-lucide="@(string.IsNullOrEmpty(Model.CategoryIcon) ? "tag" : Model.CategoryIcon)"></i>@Model.CategoryName
+            </span>
+        }
+        <div class="item-card-title">@Model.Name</div>
+        @if (!string.IsNullOrEmpty(Model.Brand) || !string.IsNullOrEmpty(Model.Model))
+        {
+            <div class="item-card-sub">@Model.Brand @Model.Model</div>
+        }
+        @if ((ViewBag.CanViewSensitive == true) && !string.IsNullOrEmpty(Model.LocationName))
+        {
+            <div class="item-card-sub"><i data-lucide="map-pin" style="width:12px;height:12px;vertical-align:-1px"></i> @Model.LocationName</div>
+        }
+        @if (Model.Tags.Any())
+        {
+            <div class="tag-row">
+                @foreach (var t in Model.Tags.Take(3))
+                {
+                    <span class="tag-chip">@t</span>
+                }
+            </div>
+        }
+        <div class="item-card-footer">
+            <span class="muted">@Model.Condition.ToDisplayName()</span>
+            @if (Model.CurrentValue.HasValue)
+            {
+                <span class="item-card-value">£@Model.CurrentValue.Value.ToString("N0")</span>
+            }
+        </div>
+    </div>
+</a>

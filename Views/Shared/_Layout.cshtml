@@ -1,19 +1,129 @@
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var action = ViewContext.RouteData.Values["action"]?.ToString();
+    var isVault = controller == "Items" || controller == "Locations";
+    var isLoggedIn = User.Identity?.IsAuthenticated == true;
+}
 <!doctype html>
-<html lang="en">
+<html lang="en" @(isVault ? "data-theme=\"dark\"" : "")>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>@ViewData["Title"] - Finance Manager</title>
-  <link rel="stylesheet" href="~/css/site.css" />
+  <title>@ViewData["Title"] - @(isVault ? "Personal Vault" : "Finance Manager")</title>
+  @if (isVault)
+  {
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/personalvault.css" asp-append-version="true" />
+  }
+  else
+  {
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+  }
 </head>
 <body>
+@if (isVault)
+{
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <span class="brand-icon"><i data-lucide="box"></i></span>
+                <span class="brand-text">Personal Vault</span>
+            </div>
+
+            <nav class="nav-section">
+                <a class="nav-link fm-link" asp-controller="Dashboard" asp-action="Index">
+                    <i data-lucide="wallet"></i> <span>Finance Manager</span>
+                </a>
+                <a class="nav-link @(controller == "Items" && action == "Index" ? "active" : "")" asp-controller="Items" asp-action="Index">
+                    <i data-lucide="layout-dashboard"></i> <span>Vault Dashboard</span>
+                </a>
+                @if (isLoggedIn)
+                {
+                    <a class="nav-link @(controller == "Items" && action == "Create" ? "active" : "")" asp-controller="Items" asp-action="Create">
+                        <i data-lucide="plus-circle"></i> <span>Add Item</span>
+                    </a>
+                    <a class="nav-link @(controller == "Locations" ? "active" : "")" asp-controller="Locations" asp-action="Index">
+                        <i data-lucide="map-pin"></i> <span>Locations</span>
+                    </a>
+                }
+            </nav>
+
+            <div class="nav-section nav-section--scroll">
+                <div class="nav-heading">Categories</div>
+                @if (ViewBag.SidebarCategories != null)
+                {
+                    foreach (var c in ViewBag.SidebarCategories)
+                    {
+                        <a class="nav-link nav-link--sub" asp-controller="Items" asp-action="Index" asp-route-CategoryId="@c.Id">
+                            <i data-lucide="tag"></i>
+                            <span>@c.Name</span>
+                            <span class="badge-count">@c.ItemCount</span>
+                        </a>
+                    }
+                }
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="themeToggle" type="button" title="Toggle theme">
+                    <i data-lucide="sun-moon"></i> <span>Toggle theme</span>
+                </button>
+            </div>
+        </aside>
+
+        <div class="main-col">
+            <header class="topbar">
+                <button class="icon-btn sidebar-toggle" id="sidebarToggle" type="button" title="Toggle sidebar">
+                    <i data-lucide="menu"></i>
+                </button>
+                <form class="search-form" asp-controller="Items" asp-action="Index" method="get">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" name="Search" value="@(ViewBag.Filter?.Search)" placeholder="Search Personal Vault..." class="search-input" />
+                </form>
+                <div class="topbar-actions">
+                    @if (isLoggedIn)
+                    {
+                        <a class="btn btn-primary" asp-controller="Items" asp-action="Create"><i data-lucide="plus"></i> <span>Add Item</span></a>
+                        <form asp-controller="Auth" asp-action="Logout" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="nav-button"><i data-lucide="log-out"></i> <span>Logout</span></button>
+                        </form>
+                    }
+                    else
+                    {
+                        <a class="btn btn-primary" asp-controller="Auth" asp-action="Login"><i data-lucide="log-in"></i> <span>Login</span></a>
+                    }
+                </div>
+            </header>
+
+            <main class="content">
+                @if (!isLoggedIn)
+                {
+                    <div class="readonly-banner-vault">Read-only mode — login to unlock editing and location details.</div>
+                }
+                @if (TempData["Success"] != null)
+                {
+                    <div class="toast toast-success"><i data-lucide="check-circle-2"></i><span>@TempData["Success"]</span></div>
+                }
+                @if (TempData["Error"] != null)
+                {
+                    <div class="toast toast-error"><i data-lucide="alert-circle"></i><span>@TempData["Error"]</span></div>
+                }
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+}
+else
+{
   <header class="topbar">
     <a class="brand" asp-controller="Auth" asp-action="Start">Finance Manager</a>
     <nav>
       <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
       <a asp-controller="Statistics" asp-action="Index">Statistics</a>
       <a asp-controller="SavingPots" asp-action="Index">Saving Pots</a>
-      @if (User.Identity?.IsAuthenticated == true)
+      <a asp-controller="Items" asp-action="Index">Personal Vault</a>
+      @if (isLoggedIn)
       {
         <form asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">
           @Html.AntiForgeryToken()
@@ -26,12 +136,24 @@
       }
     </nav>
   </header>
-  @if (User.Identity?.IsAuthenticated != true)
+  @if (!isLoggedIn)
   {
     <div class="readonly-banner">Read-only mode — login to unlock editing.</div>
   }
-  <main class="shell">@RenderBody()</main>
-  <script src="~/js/site.js"></script>
+  <main class="shell">
+    @if (TempData["Success"] != null)
+    {
+      <div class="card" style="border-left:4px solid #07833d"><strong>@TempData["Success"]</strong></div>
+    }
+    @if (TempData["Error"] != null)
+    {
+      <div class="card" style="border-left:4px solid #c73535"><strong>@TempData["Error"]</strong></div>
+    }
+    @RenderBody()
+  </main>
+}
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="~/js/site.js" asp-append-version="true"></script>
   @await RenderSectionAsync("Scripts", false)
 </body>
 </html>

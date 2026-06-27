@@ -13,6 +13,27 @@ public sealed class FinanceRepository(IConfiguration config)
     public async Task EnsureModernTablesAsync()
     {
         const string sql = @"
+IF OBJECT_ID('dbo.bills','U') IS NULL
+CREATE TABLE dbo.bills(billid int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, [type] nvarchar(80) NULL, [length] nvarchar(50) NULL, [description] nvarchar(500) NULL);
+
+IF OBJECT_ID('dbo.extra_expenses','U') IS NULL
+CREATE TABLE dbo.extra_expenses(extra_expense_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, duedate date NOT NULL, category nvarchar(100) NULL, [type] nvarchar(80) NULL, [length] nvarchar(50) NULL, [description] nvarchar(500) NULL);
+
+IF OBJECT_ID('dbo.investments','U') IS NULL
+CREATE TABLE dbo.investments(investments_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, category nvarchar(100) NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
+
+IF OBJECT_ID('dbo.savings','U') IS NULL
+CREATE TABLE dbo.savings(savings_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
+
+IF OBJECT_ID('dbo.emergency_fund','U') IS NULL
+CREATE TABLE dbo.emergency_fund(emergency_fund_id int IDENTITY(1,1) PRIMARY KEY, amount decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+
+IF NOT EXISTS (SELECT 1 FROM dbo.emergency_fund)
+INSERT INTO dbo.emergency_fund(amount) VALUES(0);
+
+IF OBJECT_ID('dbo.monthly_allowance','U') IS NULL
+CREATE TABLE dbo.monthly_allowance(month_id int NOT NULL PRIMARY KEY, amount decimal(18,2) NOT NULL DEFAULT 0);
+
 IF OBJECT_ID('dbo.finance_settings','U') IS NULL
 CREATE TABLE dbo.finance_settings([key] nvarchar(120) NOT NULL PRIMARY KEY, [value] nvarchar(300) NOT NULL, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 

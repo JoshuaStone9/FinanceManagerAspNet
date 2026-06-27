@@ -59,8 +59,8 @@ public sealed class AuthController(AppAuthService auth) : Controller
         if (password != confirmPassword)
             ModelState.AddModelError(string.Empty, "Passwords do not match.");
 
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 4)
-            ModelState.AddModelError(string.Empty, "Password must be at least 4 characters.");
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+            ModelState.AddModelError(string.Empty, "Password must be at least 8 characters.");
 
         if (!ModelState.IsValid)
         {
