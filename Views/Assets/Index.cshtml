@@ -1,0 +1,329 @@
+@model FinanceManagerAspNet.Models.AssetsViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Assets";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+    var types = new[] { "Stock", "ETF", "Crypto", "Gold", "Silver", "Cash", "Manual" };
+    var brokers = new[] { "Trading 212", "Moneybox", "Coinbase", "Crypto.com", "Kraken", "Binance", "Royal Mint", "Bank Account", "Manual" };
+    var sources = new[] { "Auto", "Yahoo", "Stooq", "CoinGecko", "Manual" };
+    var groupedTypes = new[] { "Stock", "ETF", "Crypto", "Gold", "Silver", "Cash", "Manual" };
+    var bullionSeries = new[] { "Britannia", "Royal Arms", "Buckingham Palace", "Sovereign", "Tudor Beasts", "Myths & Legends", "Lunar", "Queen's Beasts", "Great Engravers", "Other" };
+    var bullionForms = new[] { "Bullion Coin", "Proof Coin", "Commemorative Coin", "Coin Set", "Bar", "Round", "Medal", "Other" };
+    var valuationMethods = new[] { ("SpotPremium", "Live spot + premium"), ("Manual", "Manual / collector value"), ("Market", "Market value") };
+    var goldWeights = new[] { ("1/40 oz", 0.025m), ("1/25 oz", 0.04m), ("1/20 oz", 0.05m), ("1/10 oz", 0.1m), ("1/4 oz", 0.25m), ("1/2 oz", 0.5m), ("1 oz", 1m), ("2 oz", 2m), ("5 oz", 5m), ("10 oz", 10m), ("1 kg", 32.1507466m) };
+    var silverWeights = new[] { ("1 oz", 1m), ("2 oz", 2m), ("5 oz", 5m), ("10 oz", 10m), ("1 kg", 32.1507466m) };
+}
+
+<style>
+  .asset-sections{display:grid;gap:18px}.asset-type-section{border:1px solid var(--line);border-radius:22px;padding:18px;background:rgba(15,23,42,.38)}.asset-type-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.asset-list{display:grid;gap:12px}.asset-card{border:1px solid rgba(148,163,184,.22);border-radius:18px;padding:16px;background:rgba(2,6,23,.36)}.asset-main{display:grid;grid-template-columns:minmax(180px,1.4fr) repeat(5,minmax(110px,1fr)) auto;gap:12px;align-items:center}.asset-main p{margin:.15rem 0}.asset-label{font-size:.74rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.asset-value{font-weight:800}.asset-edit{margin-top:14px;padding-top:14px;border-top:1px solid rgba(148,163,184,.2)}.asset-edit summary{cursor:pointer;font-weight:800}.asset-form-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;align-items:end}.asset-form-grid label{display:grid;gap:6px}.asset-form-grid input,.asset-form-grid select{width:100%}.asset-actions{display:flex;gap:10px;align-items:center;margin-top:12px}.asset-help{font-size:.9rem;color:var(--muted)}.bullion-live{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:12px;margin-top:12px}.read-card{border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:12px;background:rgba(15,23,42,.55)}.good{color:#22c55e}.bad{color:#fb7185}@@media(max-width:1050px){.asset-main{grid-template-columns:1fr 1fr}.asset-form-grid{grid-template-columns:1fr 1fr}}@@media(max-width:650px){.asset-main,.asset-form-grid{grid-template-columns:1fr}}
+</style>
+
+<section class="hero card">
+  <div>
+    <p class="eyebrow">Financial Command Centre</p>
+    <h1>Assets</h1>
+    <p class="muted">Track market assets separately from physical bullion. Stocks, ETFs, crypto, gold, silver, cash and manual assets each have their own section.</p>
+  </div>
+</section>
+
+@if (TempData["Success"] is string msg)
+{
+  <section class="card"><strong>@msg</strong></section>
+}
+
+<section class="grid cards-4">
+  <article class="card"><p class="eyebrow">Market assets</p><h2>@Model.Summary.TotalValue.ToString("C", gb)</h2><p>Stocks, ETFs, crypto, bullion, cash and manual assets.</p></article>
+  <article class="card"><p class="eyebrow">Personal Vault</p><h2>@Model.VaultTotalValue.ToString("C", gb)</h2><p>Vault value excluding coins/bullion already tracked in Assets.</p></article>
+  <article class="card"><p class="eyebrow">Goal accounts</p><h2>@Model.GoalAccountsTotal.ToString("C", gb)</h2><p>ISA/pots included in your finance goal.</p></article>
+  <article class="card"><p class="eyebrow">Total net assets</p><h2>@Model.TotalNetAssets.ToString("C", gb)</h2><p>Everything together.</p></article>
+</section>
+
+<section class="card actions">
+  @if (canEdit)
+  {
+    <form asp-action="UpdateLivePrices" method="post">
+      <button class="primary" type="submit">Sync portfolio</button>
+    </form>
+  }
+  <a class="button" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+  <a class="button" asp-controller="Statistics" asp-action="Index">Statistics</a>
+</section>
+
+@if (canEdit)
+{
+<section class="card">
+  <h2>Add asset</h2>
+  <p class="muted">Stocks and ETFs use a ticker. Gold and silver use weight, purity and optional premium instead of a stock symbol.</p>
+  <form asp-action="Save" method="post" class="asset-form-grid">
+    <input type="hidden" name="Id" value="0" />
+    <label>Name<input name="Name" placeholder="Nvidia, VWRP, XRP, Britannia 1/4oz" required /></label>
+    <label>Broker
+      <select name="Broker">
+        @foreach (var b in brokers) { <option value="@b">@b</option> }
+      </select>
+    </label>
+    <label>Type<select name="AssetType">@foreach (var t in types) { <option value="@t">@t</option> }</select></label>
+    <label>Symbol / ticker<input name="Symbol" placeholder="NVDA, VWRP.L, BTC, XRP - blank for bullion" /></label>
+    <label>Quantity<input name="Quantity" type="number" step="0.00000001" value="1" /></label>
+    <label>Average buy / purchase price<input name="AverageBuyPrice" type="number" step="0.0001" /></label>
+    <label>Purchase date<input name="PurchaseDate" type="date" /></label>
+    <label>Currency<input name="Currency" value="GBP" /></label>
+    <label>Price source
+      <select name="PriceSource">
+        @foreach (var s in sources) { <option value="@s">@s</option> }
+      </select>
+    </label>
+    <label>Metal weight per item, oz<input name="MetalWeightOz" type="number" step="0.00000001" placeholder="0.25 for 1/4oz coin" /></label>
+    <label>Purity<input name="MetalPurity" type="number" step="0.0001" placeholder="999.9" /></label>
+    <label>Premium / extra value<input name="PremiumValue" type="number" step="0.01" placeholder="Optional coin premium" /></label>
+    <label>Manual total value<input name="ManualValue" type="number" step="0.01" placeholder="Only for manual assets" /></label>
+    <label><input name="UseLivePrice" type="checkbox" value="true" checked /> Use live price</label>
+    <label>Growth %<input name="AnnualGrowthRate" type="number" step="0.01" /></label>
+    <label>Monthly in<input name="MonthlyContribution" type="number" step="0.01" /></label>
+    <div><button class="primary" type="submit">Add asset</button></div>
+  </form>
+  <hr />
+  <h3>Quick add bullion</h3>
+  <p class="muted">Use this for Royal Mint gold/silver coins and bars. No ticker needed — sync uses live metal spot pricing.</p>
+  <form asp-action="Save" method="post" class="asset-form-grid">
+    <input type="hidden" name="Id" value="0" />
+    <input type="hidden" name="UseLivePrice" value="true" />
+    <input type="hidden" name="PriceSource" value="Auto" />
+    <input type="hidden" name="Currency" value="GBP" />
+    <label>Name<input name="Name" placeholder="Britannia 2026 1/4oz Gold Bullion Coin" required /></label>
+    <label>Metal
+      <select name="AssetType">
+        <option value="Gold">Gold</option>
+        <option value="Silver">Silver</option>
+      </select>
+    </label>
+    <label>Mint / dealer
+      <select name="Broker">
+        <option value="Royal Mint">Royal Mint</option>
+        <option value="BullionByPost">BullionByPost</option>
+        <option value="Atkinsons">Atkinsons</option>
+        <option value="Manual">Manual</option>
+      </select>
+    </label>
+    <label>Series
+      <select name="BullionSeries">
+        <option value="Britannia">Britannia</option>
+        <option value="Sovereign">Sovereign</option>
+        <option value="Tudor Beasts">Tudor Beasts</option>
+        <option value="Lunar">Lunar</option>
+        <option value="Other">Other</option>
+      </select>
+    </label>
+    <label>Form
+      <select name="BullionForm">
+        @foreach (var form in bullionForms) { <option value="@form">@form</option> }
+      </select>
+    </label>
+    <label>Valuation method
+      <select name="ValuationMethod">
+        @foreach (var vm in valuationMethods) { <option value="@vm.Item1">@vm.Item2</option> }
+      </select>
+    </label>
+    <label>Year<input name="MetalYear" type="number" min="1800" max="2100" placeholder="2026" /></label>
+    <label>Weight
+      <select name="MetalWeightOz">
+        <option value="0.025">1/40 oz</option>
+        <option value="0.04">1/25 oz</option>
+        <option value="0.05">1/20 oz</option>
+        <option value="0.1">1/10 oz</option>
+        <option value="0.25">1/4 oz</option>
+        <option value="0.5">1/2 oz</option>
+        <option value="1">1 oz</option>
+        <option value="2">2 oz</option>
+        <option value="5">5 oz</option>
+        <option value="10">10 oz</option>
+        <option value="32.1507466">1 kg</option>
+      </select>
+    </label>
+    <label>Quantity<input name="Quantity" type="number" step="0.00000001" value="1" /></label>
+    <label>Purchase price<input name="AverageBuyPrice" type="number" step="0.0001" placeholder="859.11" /></label>
+    <label>Purchase date<input name="PurchaseDate" type="date" /></label>
+    <label>Premium / extra value<input name="PremiumValue" type="number" step="0.01" placeholder="Only for live spot + premium" /></label>
+    <label>Manual / market value<input name="ManualValue" type="number" step="0.01" placeholder="For proof/collector coins" /></label>
+    <label>Purity
+      <select name="MetalPurity">
+        <option value="0.9999">999.9 fine gold</option>
+        <option value="0.999">999 fine silver</option>
+      </select>
+    </label>
+    <div><button class="primary" type="submit">Add bullion</button></div>
+  </form>
+</section>
+}
+
+<section class="asset-sections">
+@foreach (var type in groupedTypes)
+{
+    var assets = Model.Assets.Where(a => string.Equals(a.AssetType, type, StringComparison.OrdinalIgnoreCase)).ToList();
+    if (!assets.Any()) { continue; }
+    var sectionTotal = assets.Sum(a => a.DisplayValue);
+    <section class="asset-type-section">
+      <div class="asset-type-head">
+        <div>
+          <p class="eyebrow">@type</p>
+          <h2>@type holdings</h2>
+        </div>
+        <strong>@sectionTotal.ToString("C", gb)</strong>
+      </div>
+      <div class="asset-list">
+      @foreach (var a in assets)
+      {
+        var profitClass = a.ProfitLoss >= 0 ? "good" : "bad";
+        var isBullion = a.AssetType == "Gold" || a.AssetType == "Silver";
+        <article class="asset-card">
+          <div class="asset-main">
+            <div>
+              <p class="asset-label">Asset</p>
+              <p class="asset-value">@a.Name</p>
+              <p class="muted">@a.BrokerDisplay</p>
+              @if (a.PurchaseDate.HasValue) { <small class="muted">Bought @a.PurchaseDate.Value.ToString("dd MMM yyyy")</small> }
+            </div>
+            <div><p class="asset-label">@(isBullion ? "Items" : "Quantity")</p><p class="asset-value">@a.Quantity.ToString("0.########")</p></div>
+            @if (isBullion)
+            {
+              <div><p class="asset-label">Weight</p><p class="asset-value">@((a.MetalWeightOz ?? 0m).ToString("0.########")) oz</p></div>
+              @if (a.UsesSpotValuation)
+              {
+                <div><p class="asset-label">Spot / oz</p><p class="asset-value">@((a.CurrentPrice ?? 0m).ToString("C", gb))</p></div>
+                <div><p class="asset-label">Premium</p><p class="asset-value">@((a.PremiumValue ?? 0m).ToString("C", gb))</p></div>
+              }
+              else
+              {
+                <div><p class="asset-label">Valuation</p><p class="asset-value">@a.ValuationMethod</p></div>
+                <div><p class="asset-label">Manual value</p><p class="asset-value">@((a.ManualValue ?? a.DisplayValue).ToString("C", gb))</p></div>
+              }
+            }
+            else
+            {
+              <div><p class="asset-label">Symbol</p><p class="asset-value">@(!string.IsNullOrWhiteSpace(a.Symbol) ? a.Symbol : "-")</p></div>
+              <div><p class="asset-label">Price</p><p class="asset-value">@((a.CurrentPrice ?? 0m).ToString("C", gb))</p></div>
+              <div><p class="asset-label">Source</p><p class="asset-value">@(a.UseLivePrice ? a.PriceSourceDisplay : "Manual")</p></div>
+            }
+            <div><p class="asset-label">Value</p><p class="asset-value">@a.DisplayValue.ToString("C", gb)</p></div>
+            <div>
+              <p class="asset-label">Profit/Loss</p>
+              @if (a.AverageBuyPrice.HasValue)
+              {
+                <p class="asset-value @profitClass">@a.ProfitLoss.ToString("C", gb)</p>
+                @if (a.ProfitLossPercent.HasValue) { <small class="@profitClass">@a.ProfitLossPercent.Value.ToString("0.##")%</small> }
+              }
+              else { <p class="muted">-</p> }
+            </div>
+          </div>
+
+          @if (canEdit)
+          {
+            <details class="asset-edit">
+              <summary>Edit @a.Name</summary>
+              @if (isBullion)
+              {
+                var weightOptions = a.AssetType == "Gold" ? goldWeights : silverWeights;
+                <form asp-action="Save" method="post" class="asset-form-grid">
+                  <input type="hidden" name="Id" value="@a.Id" />
+                  <input type="hidden" name="AssetType" value="@a.AssetType" />
+                  <input type="hidden" name="Symbol" value="@(a.AssetType == "Gold" ? "XAU" : "XAG")" />
+                  <input type="hidden" name="CurrentPrice" value="@a.CurrentPrice" />
+                  <input type="hidden" name="CurrentValue" value="@a.CurrentValue" />
+                  <input type="hidden" name="LastPriceUpdatedAt" value="@a.LastPriceUpdatedAt" />
+                  <label>Name<input name="Name" value="@a.Name" /></label>
+                  <label>Mint / dealer
+                    <select name="Broker">
+                      <option value="Royal Mint" selected="@(a.BrokerDisplay == "Royal Mint")">Royal Mint</option>
+                      <option value="BullionByPost" selected="@(a.BrokerDisplay == "BullionByPost")">BullionByPost</option>
+                      <option value="Atkinsons" selected="@(a.BrokerDisplay == "Atkinsons")">Atkinsons</option>
+                      <option value="Manual" selected="@(a.BrokerDisplay == "Manual")">Manual</option>
+                    </select>
+                  </label>
+                  <label>Series
+                    <select name="BullionSeries">
+                      <option value="">Select series</option>
+                      @foreach (var series in bullionSeries) { <option value="@series" selected="@(a.BullionSeries == series)">@series</option> }
+                    </select>
+                  </label>
+                  <label>Form
+                    <select name="BullionForm">
+                      @foreach (var form in bullionForms) { <option value="@form" selected="@(a.BullionForm == form)">@form</option> }
+                    </select>
+                  </label>
+                  <label>Valuation method
+                    <select name="ValuationMethod">
+                      @foreach (var vm in valuationMethods) { <option value="@vm.Item1" selected="@(a.ValuationMethod == vm.Item1)">@vm.Item2</option> }
+                    </select>
+                  </label>
+                  <label>Year<input name="MetalYear" type="number" min="1800" max="2100" value="@a.MetalYear" placeholder="2026" /></label>
+                  <label>Quantity<input name="Quantity" type="number" step="0.00000001" value="@a.Quantity" /></label>
+                  <label>Weight
+                    <select name="MetalWeightOz">
+                      <option value="">Select weight</option>
+                      @foreach (var w in weightOptions) { <option value="@w.Item2" selected="@(a.MetalWeightOz == w.Item2)">@w.Item1</option> }
+                      @if (a.MetalWeightOz.HasValue && !weightOptions.Any(w => w.Item2 == a.MetalWeightOz.Value)) { <option value="@a.MetalWeightOz" selected>Custom: @a.MetalWeightOz oz</option> }
+                    </select>
+                  </label>
+                  <label>Purchase price<input name="AverageBuyPrice" type="number" step="0.0001" value="@a.AverageBuyPrice" /></label>
+                  <label>Purchase date<input name="PurchaseDate" type="date" value='@(a.PurchaseDate?.ToString("yyyy-MM-dd"))' /></label>
+                  <label>Premium / extra value<input name="PremiumValue" type="number" step="0.01" value="@a.PremiumValue" /></label>
+                  <label>Manual / market value<input name="ManualValue" type="number" step="0.01" value="@a.ManualValue" /></label>
+                  <input type="hidden" name="MetalPurity" value="@(a.AssetType == "Gold" ? "0.9999" : "0.999")" />
+                  <input type="hidden" name="Currency" value="GBP" />
+                  <input type="hidden" name="PriceSource" value="Auto" />
+                  <label><input name="UseLivePrice" type="checkbox" value="true" checked="@a.UseLivePrice" /> Use live spot price</label>
+                  <div class="bullion-live" style="grid-column:1/-1">
+                    <div class="read-card"><p class="asset-label">@(a.UsesSpotValuation ? "Spot / oz" : "Valuation method")</p><strong>@(a.UsesSpotValuation ? (a.CurrentPrice ?? 0m).ToString("C", gb) : a.ValuationMethod)</strong></div>
+                    <div class="read-card"><p class="asset-label">@(a.UsesSpotValuation ? "Estimated value" : "Collector value")</p><strong>@a.DisplayValue.ToString("C", gb)</strong></div>
+                    <div class="read-card"><p class="asset-label">Purchase date</p><strong>@(a.PurchaseDate?.ToString("dd MMM yyyy") ?? "Not set")</strong></div>
+                    <div class="read-card"><p class="asset-label">Last updated</p><strong>@(a.LastPriceUpdatedAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "Not synced")</strong></div>
+                  </div>
+                  <div class="asset-actions"><button type="submit">Save</button></div>
+                </form>
+              }
+              else
+              {
+                <form asp-action="Save" method="post" class="asset-form-grid">
+                  <input type="hidden" name="Id" value="@a.Id" />
+                  <input type="hidden" name="CurrentPrice" value="@a.CurrentPrice" />
+                  <input type="hidden" name="CurrentValue" value="@a.CurrentValue" />
+                  <input type="hidden" name="LastPriceUpdatedAt" value="@a.LastPriceUpdatedAt" />
+                  <label>Name<input name="Name" value="@a.Name" /></label>
+                  <label>Broker
+                    <select name="Broker">
+                      @foreach (var b in brokers) { <option value="@b" selected="@(a.BrokerDisplay == b)">@b</option> }
+                    </select>
+                  </label>
+                  <label>Type<select name="AssetType">@foreach (var t in types) { <option value="@t" selected="@(a.AssetType == t)">@t</option> }</select></label>
+                  <label>Symbol / ticker<input name="Symbol" value="@a.Symbol" placeholder="NVDA, VWRP, BTC, XRP" /></label>
+                  <label>Quantity<input name="Quantity" type="number" step="0.00000001" value="@a.Quantity" /></label>
+                  <label>Average buy<input name="AverageBuyPrice" type="number" step="0.0001" value="@a.AverageBuyPrice" /></label>
+                  <label>Purchase date<input name="PurchaseDate" type="date" value='@(a.PurchaseDate?.ToString("yyyy-MM-dd"))' /></label>
+                  <label>Currency<input name="Currency" value="@a.Currency" /></label>
+                  <label>Price source
+                    <select name="PriceSource">
+                      @foreach (var s in sources) { <option value="@s" selected="@(a.PriceSourceDisplay == s)">@s</option> }
+                    </select>
+                  </label>
+                  <label><input name="UseLivePrice" type="checkbox" value="true" checked="@a.UseLivePrice" /> Use live price</label>
+                  <label>Manual total<input name="ManualValue" type="number" step="0.01" value="@a.ManualValue" /></label>
+                  <label>Current price<input value="@a.CurrentPrice" readonly /></label>
+                  <label>Calculated value<input value="@a.DisplayValue.ToString("0.00")" readonly /></label>
+                  <label>Growth %<input name="AnnualGrowthRate" type="number" step="0.01" value="@a.AnnualGrowthRate" /></label>
+                  <label>Monthly in<input name="MonthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label>
+                  <div class="asset-actions"><button type="submit">Save</button></div>
+                </form>
+              }
+              <form asp-action="Delete" method="post" data-confirm="Delete this asset?" class="asset-actions">
+                <input type="hidden" name="id" value="@a.Id" />
+                <button class="danger-inline" type="submit">Delete</button>
+              </form>
+            </details>
+          }
+        </article>
+      }
+      </div>
+    </section>
+}
+</section>

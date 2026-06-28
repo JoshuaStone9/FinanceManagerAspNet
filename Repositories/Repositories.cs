@@ -11,6 +11,8 @@ public class ItemRepository(AppDbContext db) : IItemRepository
     {
         var query = db.Items
             .Include(i => i.Category)
+            .Include(i => i.ItemType)
+            .Include(i => i.Platform)
             .Include(i => i.Location)
             .Include(i => i.ItemTags).ThenInclude(it => it.Tag)
             .AsQueryable();
@@ -23,6 +25,10 @@ public class ItemRepository(AppDbContext db) : IItemRepository
                 i.Name.ToLower().Contains(s) ||
                 (i.Brand != null && i.Brand.ToLower().Contains(s)) ||
                 (i.Model != null && i.Model.ToLower().Contains(s)) ||
+                (i.Manufacturer != null && i.Manufacturer.ToLower().Contains(s)) ||
+                (i.Owner != null && i.Owner.ToLower().Contains(s)) ||
+                (i.CaseType != null && i.CaseType.ToLower().Contains(s)) ||
+                (i.MediaFormat != null && i.MediaFormat.ToLower().Contains(s)) ||
                 (i.Description != null && i.Description.ToLower().Contains(s)) ||
                 (i.SerialNumber != null && i.SerialNumber.ToLower().Contains(s)) ||
                 (i.Barcode != null && i.Barcode.ToLower().Contains(s))
@@ -35,6 +41,12 @@ public class ItemRepository(AppDbContext db) : IItemRepository
 
         if (filter.LocationId.HasValue)
             query = query.Where(i => i.LocationId == filter.LocationId);
+
+        if (filter.ItemTypeId.HasValue)
+            query = query.Where(i => i.ItemTypeId == filter.ItemTypeId);
+
+        if (filter.PlatformId.HasValue)
+            query = query.Where(i => i.PlatformId == filter.PlatformId);
 
         if (filter.Status.HasValue)
             query = query.Where(i => i.Status == filter.Status);
@@ -83,10 +95,13 @@ public class ItemRepository(AppDbContext db) : IItemRepository
     public async Task<Item?> GetByIdWithDetailsAsync(int id) =>
         await db.Items
             .Include(i => i.Category)
+            .Include(i => i.ItemType)
+            .Include(i => i.Platform)
             .Include(i => i.Location)
             .Include(i => i.ItemTags).ThenInclude(it => it.Tag)
             .Include(i => i.MaintenanceLogs)
             .Include(i => i.LoanRecords)
+            .Include(i => i.Photos)
             .FirstOrDefaultAsync(i => i.Id == id);
 
     public async Task<Item> CreateAsync(Item item)

@@ -15,14 +15,17 @@ public static class DisplayNames
 
     public static string ToDisplayName(this ItemStatus status) => status switch
     {
-        ItemStatus.EasyAccess => "Easy access",
-        ItemStatus.NearbyStorage => "Nearby storage",
-        ItemStatus.StoredAway => "Stored away",
-        ItemStatus.HardToReach => "Hard to reach",
-        ItemStatus.LoanedOut => "Loaned out",
+        ItemStatus.EasilyAccessible => "Easily accessible",
+        ItemStatus.AccessibleWithNotice => "Accessible with notice",
+        ItemStatus.StoredSafely => "Stored safely",
+        ItemStatus.HardToAccess => "Hard to access",
+        ItemStatus.InUse => "In use",
+        ItemStatus.OnLoan => "On loan",
+        ItemStatus.NeedsRepair => "Needs repair",
         ItemStatus.Sold => "Sold",
         ItemStatus.Disposed => "Disposed",
         ItemStatus.Missing => "Missing",
+        ItemStatus.BeingDelivered => "Being delivered",
         _ => status.ToString()
     };
 }

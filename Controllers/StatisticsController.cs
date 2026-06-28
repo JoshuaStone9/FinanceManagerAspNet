@@ -1,10 +1,12 @@
 using FinanceManagerAspNet.Models;
 using FinanceManagerAspNet.Services;
+using FinanceManagerAspNet.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class StatisticsController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config) : Controller
+public sealed class StatisticsController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config, AppDbContext vaultDb) : Controller
 {
     public async Task<IActionResult> Index(
         decimal? externalTotalValue,
@@ -38,8 +40,19 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var projectedWithoutInterest = calc.ProjectAccountsWithoutInterest(included, months, monthlyTarget);
         var projectedWithInterest = calc.ProjectAccounts(included, months, monthlyTarget);
         var monthsToGoalWithInterest = calc.MonthsToGoalWithInterest(included, goal, monthlyTarget);
+        var stocksCrypto = await repo.GetStocksCryptoAsync();
+        var assetSummary = await repo.GetAssetSummaryAsync();
+        var projectedStocksCrypto = calc.CompoundMonthly(assetSummary.TotalValue, assetSummary.WeightedGrowthRate, assetSummary.MonthlyContribution, months);
+        var vaultInvestedCategoryNames = new[] { "Coins & Bullion", "Coins", "Bullion", "Gold", "Silver" };
+        var vaultItemsForFinance = vaultDb.Items
+            .Where(i => i.Category == null || !vaultInvestedCategoryNames.Contains(i.Category.Name));
+        var vaultItemCount = await vaultItemsForFinance.CountAsync();
+        var vaultTotalValue = await vaultItemsForFinance.SumAsync(i => i.CurrentValue ?? 0);
 
         var allocatedToSavingPots = await repo.GetTotalAllocatedToSavingPotsAsync();
+
+        // Default "total value of everything" to the April forecast with interest unless a value is manually entered.
+        externalTotalValue ??= Math.Round(projectedWithInterest + projectedStocksCrypto + vaultTotalValue, 2);
 
         var house = BuildHouseGoalModel(
             calc,
@@ -95,10 +108,47 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             UpdatePattern = accounts.Select(a => new LastModifiedInfo(a.Name, a.UpdatedAt == DateTime.MinValue ? null : a.UpdatedAt)).ToList(),
             PatternMessage = pattern,
             HouseGoal = house,
-            AllocatedToSavingPots = allocatedToSavingPots
+            AllocatedToSavingPots = allocatedToSavingPots,
+            StocksCryptoValue = stocksCrypto.Amount,
+            LiveAssetsValue = assetSummary.TotalValue,
+            LiveAssetsMonthlyContribution = assetSummary.MonthlyContribution,
+            LiveAssetsGrowthRate = assetSummary.WeightedGrowthRate,
+            LiveAssetsLastUpdated = assetSummary.LastUpdated,
+            StocksCryptoInterestRate = stocksCrypto.Rate,
+            StocksCryptoMonthlyContribution = stocksCrypto.Monthly,
+            ProjectedStocksCryptoByApril = Math.Round(projectedStocksCrypto, 2),
+            VaultTotalValue = vaultTotalValue,
+            VaultItemCount = vaultItemCount,
+            TotalValueNow = Math.Round(total + assetSummary.TotalValue + vaultTotalValue, 2),
+            TotalValueByApril = Math.Round(projectedWithInterest + projectedStocksCrypto + vaultTotalValue, 2)
         };
 
         return View(vm);
+    }
+
+
+    [HttpPost]
+    public async Task<IActionResult> SaveAccount(int id, string name, decimal amount, decimal interestRate, decimal monthlyContribution, bool includeInGlobalGoal = true)
+    {
+        if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+        await repo.SaveAccountAsync(id, name, amount, interestRate, monthlyContribution, includeInGlobalGoal);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteAccount(int id)
+    {
+        if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+        await repo.DeleteAccountAsync(id);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveStocksCrypto(decimal amount, decimal interestRate, decimal monthlyContribution)
+    {
+        if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+        await repo.SaveStocksCryptoAsync(amount, interestRate, monthlyContribution);
+        return RedirectToAction(nameof(Index));
     }
 
     private static HouseGoalViewModel BuildHouseGoalModel(

@@ -14,8 +14,8 @@
         </div>
     </div>
     <div class="detail-actions">
-        <span class="status-pill @Model.Status" style="position:static">@Model.Status.ToDisplayName()</span>
-        @if (canEdit) { <a class="btn" asp-action="Edit" asp-route-id="@Model.Id"><i data-lucide="pencil"></i> Edit</a> }
+        <span class="status-pill detail-status @Model.Status">@(string.IsNullOrWhiteSpace(Model.CustomStatus) ? Model.Status.ToDisplayName() : Model.CustomStatus)</span>
+        @if (canEdit) { <a class="btn" asp-action="Duplicate" asp-route-id="@Model.Id"><i data-lucide="copy"></i> Duplicate as template</a> <a class="btn" asp-action="Edit" asp-route-id="@Model.Id"><i data-lucide="pencil"></i> Edit</a> }
         @if (canEdit)
         {
             <form method="post" asp-action="Delete" asp-route-id="@Model.Id" data-confirm="Permanently delete '@Model.Name'?">
@@ -49,14 +49,69 @@
             </div>
         }
 
+
+
+        <div class="info-card">
+            <h3>Additional pictures</h3>
+            @if (Model.Photos.Any())
+            {
+                <div class="photo-grid">
+                    @foreach (var photo in Model.Photos)
+                    {
+                        <div class="photo-tile">
+                            <img src="@photo.ImagePath" alt="Additional photo for @Model.Name" />
+                            @if (canEdit)
+                            {
+                                <form method="post" asp-action="DeletePhoto" data-confirm="Remove this photo?">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@photo.Id" />
+                                    <input type="hidden" name="itemId" value="@Model.Id" />
+                                    <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="muted">No additional pictures yet.</p>
+            }
+            @if (canEdit)
+            {
+                <form method="post" asp-action="AddPhotos" enctype="multipart/form-data" class="form-grid compact-form-grid" style="margin-top:12px">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <div class="field full"><label>Add pictures</label><input type="file" name="photos" multiple accept=".jpg,.jpeg,.png,.webp" /></div>
+                    <div class="full"><button class="btn btn-primary" type="submit"><i data-lucide="images"></i> Upload pictures</button></div>
+                </form>
+            }
+        </div>
+
         <div class="info-card" style="margin-top:16px">
             <h3>Identification</h3>
-            <div class="info-row"><span class="label">Brand</span><span class="value">@(Model.Brand ?? "—")</span></div>
+            <div class="info-row"><span class="label">Manufacturer</span><span class="value">@(Model.Manufacturer ?? "—")</span></div>
+            <div class="info-row"><span class="label">Brand / range</span><span class="value">@(Model.Brand ?? "—")</span></div>
             <div class="info-row"><span class="label">Model</span><span class="value">@(Model.Model ?? "—")</span></div>
             <div class="info-row"><span class="label">Serial Number</span><span class="value">@(Model.SerialNumber ?? "—")</span></div>
+            <div class="info-row"><span class="label">Memory / capacity</span><span class="value">@(Model.Memory ?? "—")</span></div>
+            <div class="info-row"><span class="label">Owner</span><span class="value">@(Model.Owner ?? "—")</span></div>
+            <div class="info-row"><span class="label">Year</span><span class="value">@(Model.ReleaseYear?.ToString() ?? "—")</span></div>
             <div class="info-row"><span class="label">Barcode</span><span class="value">@(Model.Barcode ?? "—")</span></div>
             <div class="info-row"><span class="label">Quantity</span><span class="value">@(Model.Quantity ?? 1)</span></div>
+            <div class="info-row"><span class="label">Type / section</span><span class="value">@(Model.ItemTypeName ?? "—")</span></div>
+            <div class="info-row"><span class="label">Platform</span><span class="value">@(Model.PlatformName ?? "—")</span></div>
             <div class="info-row"><span class="label">Condition</span><span class="value">@Model.Condition.ToDisplayName()</span></div>
+        </div>
+
+        <div class="info-card">
+            <h3>Collection Details</h3>
+            <div class="info-row"><span class="label">Case type</span><span class="value">@(Model.CaseType ?? "—")</span></div>
+            <div class="info-row"><span class="label">Format</span><span class="value">@(Model.MediaFormat ?? "—")</span></div>
+            <div class="info-row"><span class="label">Instruction / manual</span><span class="value">@(Model.Instruction ?? "—")</span></div>
+            <div class="info-row"><span class="label">Boxed</span><span class="value">@(Model.Boxed.HasValue ? (Model.Boxed.Value ? "Yes" : "No") : "—")</span></div>
+            <div class="info-row"><span class="label">For sale</span><span class="value">@(Model.Sell.HasValue ? (Model.Sell.Value ? "Yes" : "No") : "—")</span></div>
+            <div class="info-row"><span class="label">Tested</span><span class="value">@(Model.Tested ?? "—")</span></div>
         </div>
 
         <div class="info-card">

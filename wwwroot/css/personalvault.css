@@ -709,3 +709,70 @@ a { color: inherit; text-decoration: none; }
   .topbar-actions { gap: 6px; }
   .topbar-actions .btn span, .topbar-actions .nav-button span { display:none; }
 }
+
+/* ── Josh custom updates ───────────────────────────────────────────────── */
+.nav-section--primary {
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+.nav-link--add {
+    margin-top: 8px;
+    border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.item-card-updated {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-dim);
+    font-size: .75rem;
+}
+
+.detail-status {
+    position: static;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+    backdrop-filter: none;
+    box-shadow: none;
+}
+
+.detail-status::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+.status-pill.EasilyAccessible { background: rgba(34,197,94,.88); }
+.status-pill.AccessibleWithNotice, .status-pill.StoredSafely, .status-pill.InUse { background: rgba(99,102,241,.88); }
+.status-pill.HardToAccess, .status-pill.OnLoan, .status-pill.NeedsRepair { background: rgba(245,158,11,.92); }
+
+.template-panel {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.is-hidden { display: none !important; }
+
+.photo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; }
+.photo-tile { border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card); padding:8px; }
+.photo-tile img { width:100%; height:120px; object-fit:cover; border-radius:8px; display:block; margin-bottom:8px; }
+.status-pill.BeingDelivered { background:rgba(59,130,246,.16); color:#60a5fa; border-color:rgba(59,130,246,.35); }
+.danger-inline { border-color: var(--danger); color: var(--danger); }

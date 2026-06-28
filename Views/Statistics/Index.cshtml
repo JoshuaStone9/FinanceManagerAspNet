@@ -16,7 +16,20 @@
 
 <section class="grid cards-4">
   <article class="card">
-    <p class="eyebrow">Current total</p>
+    <p class="eyebrow">Total value now</p>
+    <h2>@Model.TotalValueNow.ToString("C", gb)</h2>
+    <p>Goal accounts + live assets + Personal Vault excluding coins/bullion already tracked in Assets.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">Total value by @Model.AprilTarget.ToString("MMM yyyy")</p>
+    <h2>@Model.TotalValueByApril.ToString("C", gb)</h2>
+    <p>Goal forecast + live asset forecast + vault asset value.</p>
+  </article>
+</section>
+
+<section class="grid cards-4">
+  <article class="card">
+    <p class="eyebrow">Current ISA / pot total</p>
     <h2>@Model.TotalNow.ToString("C", gb)</h2>
     <p>@Model.Remaining.ToString("C", gb) left to £20k today</p>
   </article>
@@ -37,10 +50,68 @@
   </article>
 </section>
 
+
+
+<section class="card">
+  <h2>Live assets</h2>
+  <p class="muted">Stocks, ETFs, crypto, gold, silver, cash and manual assets are now tracked in the Assets section and included in Total value.</p>
+  <div class="grid cards-4">
+    <article class="card"><p class="eyebrow">Current value</p><h2>@Model.LiveAssetsValue.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">By @Model.AprilTarget.ToString("MMM yyyy")</p><h2>@Model.ProjectedStocksCryptoByApril.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">Monthly in</p><h2>@Model.LiveAssetsMonthlyContribution.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">Average growth</p><h2>@Model.LiveAssetsGrowthRate.ToString("0.##")%</h2></article>
+  </div>
+  <div class="actions">
+    <a class="button primary" asp-controller="Assets" asp-action="Index">Open Assets</a>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+      <form asp-controller="Assets" asp-action="UpdateLivePrices" method="post"><button type="submit">Sync portfolio</button></form>
+    }
+  </div>
+</section>
+
+<section class="grid cards-4">
+  <article class="card"><p class="eyebrow">Personal Vault assets</p><h2>@Model.VaultTotalValue.ToString("C", gb)</h2><p>@Model.VaultItemCount non-bullion vault items included in total value.</p></article>
+</section>
+
+@if (User.Identity?.IsAuthenticated == true)
+{
+<section class="card">
+  <h2>Edit ISA / pots</h2>
+  <p class="muted">You can now update or delete/reset accounts from Statistics as well as the Dashboard.</p>
+  @foreach (var a in Model.Accounts)
+  {
+    <form asp-action="SaveAccount" method="post" class="account-form">
+      <input type="hidden" name="id" value="@a.Id" />
+      <label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "") /></label>
+      <label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label>
+      <label>Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate" /></label>
+      <label>Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label>
+      <label><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@(a.IncludeInGlobalGoal)" /> Include</label>
+      <button type="submit">Save</button>
+    </form>
+    <form asp-action="DeleteAccount" method="post" data-confirm="Delete/reset this account?" style="margin-bottom:14px">
+      <input type="hidden" name="id" value="@a.Id" />
+      <button class="danger-inline" type="submit">@(a.Id == 0 ? "Reset emergency fund" : "Delete account")</button>
+    </form>
+  }
+  <form asp-action="SaveAccount" method="post" class="account-form">
+    <input type="hidden" name="id" value="0" />
+    <input name="name" placeholder="New account name" />
+    <input name="amount" type="number" step="0.01" placeholder="Amount" />
+    <input name="interestRate" type="number" step="0.01" placeholder="Interest %" />
+    <input name="monthlyContribution" type="number" step="0.01" placeholder="Monthly in" />
+    <label><input name="includeInGlobalGoal" type="checkbox" value="true" checked /> Include</label>
+    <button type="submit">Add account</button>
+  </form>
+</section>
+}
+
+
 <section class="card">
   <p class="eyebrow">Emergency fund calculator</p>
   <h2>Take the house target off your total</h2>
-  <p class="muted">This now does one simple job: Total value minus the £30,000 house target, minus Moneybox interest made, minus the Moneybox bonus. The result is your estimated emergency fund.</p>
+  <p class="muted">This now defaults Total value of everything to your "By @Model.AprilTarget.ToString("MMM yyyy") with interest" number. Forecast months are the months left until April: <strong>@Model.MonthsToApril</strong>.</p>
 
   <form method="get" class="planner-form">
     <label>Total value of everything

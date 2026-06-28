@@ -1,10 +1,12 @@
 using FinanceManagerAspNet.Models;
 using FinanceManagerAspNet.Services;
+using FinanceManagerAspNet.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class DashboardController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config) : Controller
+public sealed class DashboardController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config, AppDbContext vaultDb) : Controller
 {
     public async Task<IActionResult> Index(int? year, int? month)
     {
@@ -25,13 +27,21 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
         var investments = await repo.GetRowsAsync("investments", m, y);
         var savings = await repo.GetRowsAsync("savings", m, y);
         var totalGoalBalance = accounts.Where(a => a.IncludeInGlobalGoal).Sum(a => a.Amount);
+        var vaultInvestedCategoryNames = new[] { "Coins & Bullion", "Coins", "Bullion", "Gold", "Silver" };
+        var vaultItemsForFinance = vaultDb.Items
+            .Where(i => i.Category == null || !vaultInvestedCategoryNames.Contains(i.Category.Name));
+        var vaultItemCount = await vaultItemsForFinance.CountAsync();
+        var vaultTotalValue = await vaultItemsForFinance.SumAsync(i => i.CurrentValue ?? 0);
+        var stocksCrypto = await repo.GetStocksCryptoAsync();
+        var assetSummary = await repo.GetAssetSummaryAsync();
+        var projectedStocksCrypto = calc.CompoundMonthly(assetSummary.TotalValue, assetSummary.WeightedGrowthRate, assetSummary.MonthlyContribution, monthsToApril);
         var vm = new DashboardViewModel
         {
             Year = y, Month = m, MonthlyIncome = allowance, SickDays = income?.SickDays ?? 0,
             MonthlySavingTarget = monthlyTarget, GlobalGoal = globalGoal,
             Bills = bills, Expenses = expenses, Investments = investments, Savings = savings,
             BillsTotal = bills.Sum(x=>x.Amount), ExpensesTotal = expenses.Sum(x=>x.Amount), InvestmentsTotal = investments.Sum(x=>x.Amount), SavingsTotal = savings.Sum(x=>x.Amount),
-            Accounts = accounts, TotalGoalBalance = totalGoalBalance, TargetDate = targetDate,
+            Accounts = accounts, TotalGoalBalance = totalGoalBalance, VaultItemCount = vaultItemCount, VaultTotalValue = vaultTotalValue, StocksCryptoValue = stocksCrypto.Amount, LiveAssetsValue = assetSummary.TotalValue, LiveAssetsMonthlyContribution = assetSummary.MonthlyContribution, LiveAssetsGrowthRate = assetSummary.WeightedGrowthRate, LiveAssetsLastUpdated = assetSummary.LastUpdated, StocksCryptoInterestRate = stocksCrypto.Rate, StocksCryptoMonthlyContribution = stocksCrypto.Monthly, ProjectedStocksCryptoByGoalDate = projectedStocksCrypto, TargetDate = targetDate,
             ProjectedWithoutInterestByGoalDate = calc.ProjectAccountsWithoutInterest(accounts, monthsToApril, monthlyTarget),
             ProjectedWithInterestByGoalDate = calc.ProjectAccounts(accounts, monthsToApril, monthlyTarget),
             ProjectedInterestByGoalDate = calc.ProjectAccounts(accounts, monthsToApril, monthlyTarget) - calc.ProjectAccountsWithoutInterest(accounts, monthsToApril, monthlyTarget),
@@ -54,6 +64,32 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
         if (!CanEdit()) return LoginRedirect(); await repo.SaveAccountAsync(id, name, amount, interestRate, monthlyContribution, includeInGlobalGoal); return RedirectToAction(nameof(Index), new { year, month }); }
 
 
+
+
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteAccount(int year, int month, int id)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        await repo.DeleteAccountAsync(id);
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> DeletePayment(int year, int month, string source, int id)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        await repo.DeletePaymentAsync(source, id);
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveStocksCrypto(int year, int month, decimal amount, decimal interestRate, decimal monthlyContribution)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        await repo.SaveStocksCryptoAsync(amount, interestRate, monthlyContribution);
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
 
     [HttpPost]
     public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)

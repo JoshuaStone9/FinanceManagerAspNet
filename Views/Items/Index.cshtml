@@ -4,6 +4,8 @@
     var categories = (IEnumerable<CategoryDto>)ViewBag.Categories;
     var locations = (IEnumerable<LocationDto>)ViewBag.Locations;
     var tags = (IEnumerable<TagDto>)ViewBag.Tags;
+    var types = (IEnumerable<ItemTypeDto>)ViewBag.Types;
+    var platforms = (IEnumerable<PlatformDto>)ViewBag.Platforms;
     var filter = (ItemFilterDto)ViewBag.Filter;
     var canEdit = ViewBag.CanEdit == true;
     var canViewSensitive = ViewBag.CanViewSensitive == true;
@@ -76,6 +78,24 @@
         }
     </select>
     }
+
+    <label>Type</label>
+    <select name="ItemTypeId" onchange="this.form.submit()">
+        <option value="">All</option>
+        @foreach (var t in types)
+        {
+            <option value="@t.Id" selected="@(filter.ItemTypeId == t.Id)">@t.Name (@t.ItemCount)</option>
+        }
+    </select>
+
+    <label>Platform</label>
+    <select name="PlatformId" onchange="this.form.submit()">
+        <option value="">All</option>
+        @foreach (var p in platforms)
+        {
+            <option value="@p.Id" selected="@(filter.PlatformId == p.Id)">@p.Name (@p.ItemCount)</option>
+        }
+    </select>
 
     <label>Status</label>
     <select name="Status" onchange="this.form.submit()">
@@ -163,6 +183,8 @@ else
         if (!string.IsNullOrEmpty(f.Search)) d["Search"] = f.Search;
         if (f.CategoryId.HasValue) d["CategoryId"] = f.CategoryId.ToString()!;
         if (f.LocationId.HasValue) d["LocationId"] = f.LocationId.ToString()!;
+        if (f.ItemTypeId.HasValue) d["ItemTypeId"] = f.ItemTypeId.ToString()!;
+        if (f.PlatformId.HasValue) d["PlatformId"] = f.PlatformId.ToString()!;
         if (f.Status.HasValue) d["Status"] = f.Status.ToString()!;
         if (f.Condition.HasValue) d["Condition"] = f.Condition.ToString()!;
         if (!string.IsNullOrEmpty(f.SortBy)) d["SortBy"] = f.SortBy;

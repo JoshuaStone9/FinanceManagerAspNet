@@ -13,20 +13,23 @@ namespace FinanceManagerAspNet.Services;
 public static class Mapper
 {
     public static ItemSummaryDto ToSummary(Item i) => new(
-        i.Id, i.Name, i.Brand, i.Model,
+        i.Id, i.Name, i.Brand, i.Model, i.Manufacturer,
         i.Category?.Name, i.Category?.Colour, i.Category?.Icon,
+        i.ItemType?.Name, i.Platform?.Name,
         i.Location is null ? null : $"{i.Location.Name}{(i.Location.Room is not null ? $" · {i.Location.Room}" : "")}",
-        i.CurrentValue, i.Condition, i.Status, i.ImagePath, i.Quantity, i.UpdatedAt,
+        i.CurrentValue, i.Condition, i.Status, i.CustomStatus, i.ImagePath, i.Quantity, i.UpdatedAt,
         i.ItemTags.Select(it => it.Tag!.Name)
     );
 
     public static ItemDetailDto ToDetail(Item i) => new(
         i.Id, i.Name, i.Description, i.Brand, i.Model,
+        i.Manufacturer, i.CaseType, i.MediaFormat, i.Instruction, i.Memory, i.Owner, i.ReleaseYear, i.Boxed, i.Sell, i.Tested,
         i.SerialNumber, i.Barcode, i.PurchasePrice, i.CurrentValue,
         i.PurchaseDate, i.PurchasedFrom, i.WarrantyInfo, i.WarrantyExpiry,
-        i.Condition, i.Status, i.Notes, i.ImagePath, i.ManualUrl, i.ReceiptImagePath,
+        i.Condition, i.Status, i.CustomStatus, i.Notes, i.ImagePath, i.ManualUrl, i.ReceiptImagePath,
+        i.Photos.Select(p => new ItemPhotoDto(p.Id, p.ImagePath, p.Caption, p.CreatedAt)),
         i.IsInsured, i.InsurancePolicy, i.Quantity, i.CreatedAt, i.UpdatedAt,
-        i.CategoryId, i.Category?.Name, i.LocationId, i.Location?.Name, i.Location?.Room,
+        i.CategoryId, i.Category?.Name, i.ItemTypeId, i.ItemType?.Name, i.PlatformId, i.Platform?.Name, i.LocationId, i.Location?.Name, i.Location?.Room,
         i.ItemTags.Select(it => new TagDto(it.Tag!.Id, it.Tag.Name, it.Tag.Colour)),
         i.MaintenanceLogs.Select(m => new MaintenanceLogDto(m.Id, m.Description, m.Cost, m.Date, m.NextDueDate, m.PerformedBy)),
         i.LoanRecords.Select(l => new LoanRecordDto(l.Id, l.LoanedTo, l.ContactInfo, l.LoanedOn, l.DueBack, l.ReturnedOn, l.IsReturned, l.Notes))
@@ -34,6 +37,8 @@ public static class Mapper
 
     public static CategoryDto ToDto(Category c) => new(c.Id, c.Name, c.Description, c.Icon, c.Colour, c.ParentCategoryId, c.Items.Count);
     public static LocationDto ToDto(Location l) => new(l.Id, l.Name, l.Room, l.StorageUnit, l.Address, l.Items.Count);
+    public static ItemTypeDto ToDto(ItemType t) => new(t.Id, t.Name, t.Description, t.Items.Count);
+    public static PlatformDto ToDto(Platform p) => new(p.Id, p.Name, p.Description, p.ItemTypeId, p.ItemType?.Name, p.Items.Count);
     public static TagDto ToDto(Tag t) => new(t.Id, t.Name, t.Colour);
 }
 
@@ -63,6 +68,17 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
             Description = dto.Description,
             Brand = dto.Brand,
             Model = dto.Model,
+            Manufacturer = dto.Manufacturer,
+            CaseType = dto.CaseType,
+            MediaFormat = dto.MediaFormat,
+            Instruction = dto.Instruction,
+            Memory = dto.Memory,
+            Owner = dto.Owner,
+            ReleaseYear = dto.ReleaseYear,
+            Boxed = dto.Boxed,
+            Sell = dto.Sell,
+            Tested = dto.Tested,
+            CustomStatus = Clean(dto.CustomStatus),
             SerialNumber = dto.SerialNumber,
             Barcode = dto.Barcode,
             PurchasePrice = dto.PurchasePrice,
@@ -79,7 +95,9 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
             InsurancePolicy = dto.InsurancePolicy,
             Quantity = dto.Quantity,
             CategoryId = dto.CategoryId,
-            LocationId = dto.LocationId
+            ItemTypeId = dto.ItemTypeId,
+            PlatformId = dto.PlatformId,
+            LocationId = await ResolveLocationIdAsync(dto)
         };
 
         var created = await items.CreateAsync(item);
@@ -107,6 +125,17 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
         item.Description = dto.Description;
         item.Brand = dto.Brand;
         item.Model = dto.Model;
+        item.Manufacturer = dto.Manufacturer;
+        item.CaseType = dto.CaseType;
+        item.MediaFormat = dto.MediaFormat;
+        item.Instruction = dto.Instruction;
+        item.Memory = dto.Memory;
+        item.Owner = dto.Owner;
+        item.ReleaseYear = dto.ReleaseYear;
+        item.Boxed = dto.Boxed;
+        item.Sell = dto.Sell;
+        item.Tested = dto.Tested;
+        item.CustomStatus = Clean(dto.CustomStatus);
         item.SerialNumber = dto.SerialNumber;
         item.Barcode = dto.Barcode;
         item.PurchasePrice = dto.PurchasePrice;
@@ -123,7 +152,9 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
         item.InsurancePolicy = dto.InsurancePolicy;
         item.Quantity = dto.Quantity;
         item.CategoryId = dto.CategoryId;
-        item.LocationId = dto.LocationId;
+        item.ItemTypeId = dto.ItemTypeId;
+        item.PlatformId = dto.PlatformId;
+        item.LocationId = await ResolveLocationIdAsync(dto);
 
         if (image is not null && images.IsValidImage(image))
         {
@@ -141,11 +172,37 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
         return Mapper.ToDetail(full!);
     }
 
+    private async Task<int?> ResolveLocationIdAsync(CreateItemDto dto)
+    {
+        if (!string.IsNullOrWhiteSpace(dto.NewLocationName))
+        {
+            var location = new Location
+            {
+                Name = dto.NewLocationName.Trim(),
+                Room = Clean(dto.NewLocationRoom),
+                StorageUnit = Clean(dto.NewLocationStorageUnit),
+                Address = Clean(dto.NewLocationAddress)
+            };
+            db.Locations.Add(location);
+            await db.SaveChangesAsync();
+            return location.Id;
+        }
+
+        return dto.LocationId;
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     public async Task<bool> DeleteAsync(int id)
     {
         if (!await items.ExistsAsync(id)) return false;
-        var item = await items.GetByIdAsync(id);
+        var item = await db.Items.Include(i => i.Photos).FirstOrDefaultAsync(i => i.Id == id);
         await images.DeleteImageAsync(item?.ImagePath);
+        if (item is not null)
+        {
+            foreach (var photo in item.Photos)
+                await images.DeleteImageAsync(photo.ImagePath);
+        }
         await items.DeleteAsync(id);
         return true;
     }
@@ -180,7 +237,7 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
 
         // Update item status
         var item = await db.Items.FindAsync(dto.ItemId);
-        if (item is not null) item.Status = ItemStatus.LoanedOut;
+        if (item is not null) item.Status = ItemStatus.OnLoan;
 
         await db.SaveChangesAsync();
         return new LoanRecordDto(loan.Id, loan.LoanedTo, loan.ContactInfo, loan.LoanedOn, loan.DueBack, null, false, loan.Notes);
@@ -191,7 +248,7 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
         var loan = await db.LoanRecords.Include(l => l.Item).FirstOrDefaultAsync(l => l.Id == loanId);
         if (loan is null) return null;
         loan.ReturnedOn = DateTime.UtcNow;
-        if (loan.Item is not null) loan.Item.Status = ItemStatus.EasyAccess;
+        if (loan.Item is not null) loan.Item.Status = ItemStatus.EasilyAccessible;
         await db.SaveChangesAsync();
         return new LoanRecordDto(loan.Id, loan.LoanedTo, loan.ContactInfo, loan.LoanedOn, loan.DueBack, loan.ReturnedOn, true, loan.Notes);
     }

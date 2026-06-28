@@ -5,7 +5,7 @@
     var isLoggedIn = User.Identity?.IsAuthenticated == true;
 }
 <!doctype html>
-<html lang="en" @(isVault ? "data-theme=\"dark\"" : "")>
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,16 +31,17 @@
                 <span class="brand-text">Personal Vault</span>
             </div>
 
-            <nav class="nav-section">
+            <nav class="nav-section nav-section--primary">
                 <a class="nav-link fm-link" asp-controller="Dashboard" asp-action="Index">
                     <i data-lucide="wallet"></i> <span>Finance Manager</span>
                 </a>
                 <a class="nav-link @(controller == "Items" && action == "Index" ? "active" : "")" asp-controller="Items" asp-action="Index">
                     <i data-lucide="layout-dashboard"></i> <span>Vault Dashboard</span>
                 </a>
-                @if (isLoggedIn)
+                <button class="theme-toggle-inline" id="themeToggleInline" type="button">Toggle theme</button>
+      @if (isLoggedIn)
                 {
-                    <a class="nav-link @(controller == "Items" && action == "Create" ? "active" : "")" asp-controller="Items" asp-action="Create">
+                    <a class="nav-link nav-link--add @(controller == "Items" && action == "Create" ? "active" : "")" asp-controller="Items" asp-action="Create">
                         <i data-lucide="plus-circle"></i> <span>Add Item</span>
                     </a>
                     <a class="nav-link @(controller == "Locations" ? "active" : "")" asp-controller="Locations" asp-action="Index">
@@ -121,8 +122,10 @@ else
     <nav>
       <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
       <a asp-controller="Statistics" asp-action="Index">Statistics</a>
+      <a asp-controller="Assets" asp-action="Index">Assets</a>
       <a asp-controller="SavingPots" asp-action="Index">Saving Pots</a>
       <a asp-controller="Items" asp-action="Index">Personal Vault</a>
+      <button class="theme-toggle-inline" id="themeToggle" type="button">Toggle theme</button>
       @if (isLoggedIn)
       {
         <form asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">

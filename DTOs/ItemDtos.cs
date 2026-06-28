@@ -10,13 +10,17 @@ public record ItemSummaryDto(
     string Name,
     string? Brand,
     string? Model,
+    string? Manufacturer,
     string? CategoryName,
     string? CategoryColour,
     string? CategoryIcon,
+    string? TypeName,
+    string? PlatformName,
     string? LocationName,
     decimal? CurrentValue,
     ItemCondition Condition,
     ItemStatus Status,
+    string? CustomStatus,
     string? ImagePath,
     int? Quantity,
     DateTime UpdatedAt,
@@ -29,6 +33,16 @@ public record ItemDetailDto(
     string? Description,
     string? Brand,
     string? Model,
+    string? Manufacturer,
+    string? CaseType,
+    string? MediaFormat,
+    string? Instruction,
+    string? Memory,
+    string? Owner,
+    int? ReleaseYear,
+    bool? Boxed,
+    bool? Sell,
+    string? Tested,
     string? SerialNumber,
     string? Barcode,
     decimal? PurchasePrice,
@@ -39,10 +53,12 @@ public record ItemDetailDto(
     DateTime? WarrantyExpiry,
     ItemCondition Condition,
     ItemStatus Status,
+    string? CustomStatus,
     string? Notes,
     string? ImagePath,
     string? ManualUrl,
     string? ReceiptImagePath,
+    IEnumerable<ItemPhotoDto> Photos,
     bool IsInsured,
     string? InsurancePolicy,
     int? Quantity,
@@ -50,6 +66,10 @@ public record ItemDetailDto(
     DateTime UpdatedAt,
     int? CategoryId,
     string? CategoryName,
+    int? ItemTypeId,
+    string? ItemTypeName,
+    int? PlatformId,
+    string? PlatformName,
     int? LocationId,
     string? LocationName,
     string? LocationRoom,
@@ -66,6 +86,17 @@ public class CreateItemDto
     public string? Description { get; set; }
     public string? Brand { get; set; }
     public string? Model { get; set; }
+    public string? Manufacturer { get; set; }
+    public string? CaseType { get; set; }
+    public string? MediaFormat { get; set; }
+    public string? Instruction { get; set; }
+    public string? Memory { get; set; }
+    public string? Owner { get; set; }
+    public int? ReleaseYear { get; set; }
+    public bool? Boxed { get; set; }
+    public bool? Sell { get; set; }
+    public string? Tested { get; set; }
+    public string? CustomStatus { get; set; }
     public string? SerialNumber { get; set; }
     public string? Barcode { get; set; }
     public decimal? PurchasePrice { get; set; }
@@ -75,14 +106,21 @@ public class CreateItemDto
     public string? WarrantyInfo { get; set; }
     public DateTime? WarrantyExpiry { get; set; }
     public ItemCondition Condition { get; set; } = ItemCondition.None;
-    public ItemStatus Status { get; set; } = ItemStatus.EasyAccess;
+    public ItemStatus Status { get; set; } = ItemStatus.EasilyAccessible;
     public string? Notes { get; set; }
     public string? ManualUrl { get; set; }
     public bool IsInsured { get; set; }
     public string? InsurancePolicy { get; set; }
     public int? Quantity { get; set; } = 1;
     public int? CategoryId { get; set; }
+    public int? ItemTypeId { get; set; }
+    public int? PlatformId { get; set; }
     public int? LocationId { get; set; }
+    public string? NewLocationName { get; set; }
+    public string? NewLocationRoom { get; set; }
+    public string? NewLocationStorageUnit { get; set; }
+    public string? NewLocationAddress { get; set; }
+    public int? TemplateItemId { get; set; }
     public List<int> TagIds { get; set; } = [];
 }
 
@@ -97,6 +135,8 @@ public class ItemFilterDto
 {
     public string? Search { get; set; }
     public int? CategoryId { get; set; }
+    public int? ItemTypeId { get; set; }
+    public int? PlatformId { get; set; }
     public int? LocationId { get; set; }
     public ItemStatus? Status { get; set; }
     public ItemCondition? Condition { get; set; }
@@ -128,7 +168,13 @@ public record CategoryDto(int Id, string Name, string? Description, string? Icon
 
 public record LocationDto(int Id, string Name, string? Room, string? StorageUnit, string? Address, int ItemCount);
 
+public record ItemTypeDto(int Id, string Name, string? Description, int ItemCount);
+
+public record PlatformDto(int Id, string Name, string? Description, int? ItemTypeId, string? ItemTypeName, int ItemCount);
+
 public record TagDto(int Id, string Name, string? Colour);
+
+public record ItemPhotoDto(int Id, string ImagePath, string? Caption, DateTime CreatedAt);
 
 public record MaintenanceLogDto(int Id, string Description, decimal? Cost, DateTime Date, DateTime? NextDueDate, string? PerformedBy);
 

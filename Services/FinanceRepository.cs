@@ -76,6 +76,66 @@ INNER JOIN dbo.saving_pots p ON p.saving_pot_id = m.saving_pot_id
 WHERE m.is_saved = 1
   AND m.saved_amount = 0;
 
+
+IF OBJECT_ID('dbo.asset_holdings','U') IS NULL
+CREATE TABLE dbo.asset_holdings(
+    asset_holding_id int IDENTITY(1,1) PRIMARY KEY,
+    [name] nvarchar(160) NOT NULL,
+    asset_type nvarchar(40) NOT NULL DEFAULT 'Manual',
+    symbol nvarchar(40) NULL,
+    quantity decimal(28,8) NOT NULL DEFAULT 0,
+    average_buy_price decimal(18,4) NULL,
+    current_price decimal(18,4) NULL,
+    current_value decimal(18,2) NULL,
+    currency nvarchar(10) NOT NULL DEFAULT 'GBP',
+    use_live_price bit NOT NULL DEFAULT 0,
+    provider nvarchar(60) NULL,
+    broker nvarchar(80) NULL,
+    price_source nvarchar(40) NOT NULL DEFAULT 'Auto',
+    valuation_method nvarchar(40) NOT NULL DEFAULT 'SpotPremium',
+    metal_weight_oz decimal(18,8) NULL,
+    metal_purity decimal(9,4) NULL,
+    premium_value decimal(18,2) NULL,
+    metal_year int NULL,
+    bullion_series nvarchar(100) NULL,
+    bullion_form nvarchar(30) NULL,
+    manual_value decimal(18,2) NULL,
+    annual_growth_rate decimal(9,4) NULL,
+    monthly_contribution decimal(18,2) NULL,
+    purchase_date date NULL,
+    last_price_updated_at datetime2 NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','valuation_method') IS NULL ALTER TABLE dbo.asset_holdings ADD valuation_method nvarchar(40) NOT NULL CONSTRAINT DF_asset_holdings_valuation_method DEFAULT 'SpotPremium';
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','metal_weight_oz') IS NULL ALTER TABLE dbo.asset_holdings ADD metal_weight_oz decimal(18,8) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','metal_purity') IS NULL ALTER TABLE dbo.asset_holdings ADD metal_purity decimal(9,4) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','premium_value') IS NULL ALTER TABLE dbo.asset_holdings ADD premium_value decimal(18,2) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','metal_year') IS NULL ALTER TABLE dbo.asset_holdings ADD metal_year int NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','bullion_series') IS NULL ALTER TABLE dbo.asset_holdings ADD bullion_series nvarchar(100) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','bullion_form') IS NULL ALTER TABLE dbo.asset_holdings ADD bullion_form nvarchar(30) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','manual_value') IS NULL ALTER TABLE dbo.asset_holdings ADD manual_value decimal(18,2) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','annual_growth_rate') IS NULL ALTER TABLE dbo.asset_holdings ADD annual_growth_rate decimal(9,4) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','monthly_contribution') IS NULL ALTER TABLE dbo.asset_holdings ADD monthly_contribution decimal(18,2) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','purchase_date') IS NULL ALTER TABLE dbo.asset_holdings ADD purchase_date date NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','provider') IS NULL ALTER TABLE dbo.asset_holdings ADD provider nvarchar(60) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','broker') IS NULL ALTER TABLE dbo.asset_holdings ADD broker nvarchar(80) NULL;
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND COL_LENGTH('dbo.asset_holdings','price_source') IS NULL ALTER TABLE dbo.asset_holdings ADD price_source nvarchar(40) NOT NULL CONSTRAINT DF_asset_holdings_price_source DEFAULT 'Auto';
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL UPDATE dbo.asset_holdings SET broker = COALESCE(NULLIF(broker,''), NULLIF(provider,''), broker), price_source = COALESCE(NULLIF(price_source,''), 'Auto'), valuation_method = COALESCE(NULLIF(valuation_method,''), CASE WHEN bullion_form IN ('Proof Coin','Commemorative Coin','Coin Set','Medal') THEN 'Manual' ELSE 'SpotPremium' END), metal_purity = CASE WHEN asset_type = 'Gold' AND metal_purity IS NULL THEN 999.9 WHEN asset_type = 'Silver' AND metal_purity IS NULL THEN 999 ELSE metal_purity END;
+-- Manual proof/collectible coin valuation: avoid valuing proof coins only by melt value.
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL
+UPDATE dbo.asset_holdings
+SET valuation_method = 'Manual',
+    use_live_price = 0,
+    manual_value = COALESCE(manual_value, current_value, ROUND(quantity * ISNULL(average_buy_price, 0), 2)),
+    current_value = COALESCE(manual_value, current_value, ROUND(quantity * ISNULL(average_buy_price, 0), 2))
+WHERE asset_type IN ('Gold','Silver')
+  AND bullion_form IN ('Proof Coin','Commemorative Coin','Coin Set','Medal')
+  AND ISNULL(valuation_method,'SpotPremium') IN ('SpotPremium','Spot');
+
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_asset_holdings_type' AND object_id=OBJECT_ID('dbo.asset_holdings')) CREATE INDEX IX_asset_holdings_type ON dbo.asset_holdings(asset_type);
+IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_asset_holdings_symbol' AND object_id=OBJECT_ID('dbo.asset_holdings')) CREATE INDEX IX_asset_holdings_symbol ON dbo.asset_holdings(symbol);
+
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Lucy''s ISA') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Lucy''s ISA',4000,3.8,0,1);
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Monzo Pots',1370,2.75,0,1);";
         await ExecuteAsync(sql);
@@ -164,6 +224,48 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
         if (id == 0) await ExecuteAsync("INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal) VALUES(@name,@amount,@rate,@monthly,@include)", ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include));
         else await ExecuteAsync("UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include));
         await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)", ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly));
+    }
+
+
+    public async Task DeleteAccountAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        if (id == 0)
+        {
+            await ExecuteAsync("UPDATE dbo.emergency_fund SET amount=0, updated_at=SYSUTCDATETIME()");
+            return;
+        }
+        await ExecuteAsync("DELETE FROM dbo.account_balances WHERE account_balance_id=@id", ("@id", id));
+    }
+
+    public async Task DeletePaymentAsync(string source, int id)
+    {
+        await EnsureModernTablesAsync();
+        var sql = source switch
+        {
+            "bills" => "DELETE FROM dbo.bills WHERE billid=@id",
+            "extra_expenses" => "DELETE FROM dbo.extra_expenses WHERE extra_expense_id=@id",
+            "investments" => "DELETE FROM dbo.investments WHERE investments_id=@id",
+            "savings" => "DELETE FROM dbo.savings WHERE savings_id=@id",
+            _ => throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.")
+        };
+        await ExecuteAsync(sql, ("@id", id));
+    }
+
+    public async Task SaveStocksCryptoAsync(decimal amount, decimal rate, decimal monthly)
+    {
+        await SaveDecimalSettingAsync("StocksCryptoValue", amount);
+        await SaveDecimalSettingAsync("StocksCryptoInterestRate", rate);
+        await SaveDecimalSettingAsync("StocksCryptoMonthlyContribution", monthly);
+    }
+
+    public async Task<(decimal Amount, decimal Rate, decimal Monthly)> GetStocksCryptoAsync()
+    {
+        return (
+            await GetDecimalSettingAsync("StocksCryptoValue", 0m),
+            await GetDecimalSettingAsync("StocksCryptoInterestRate", 0m),
+            await GetDecimalSettingAsync("StocksCryptoMonthlyContribution", 0m)
+        );
     }
 
     public async Task AddPaymentAsync(string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
@@ -419,6 +521,167 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
         }
     }
 
+
+
+    public async Task<List<AssetHolding>> GetAssetHoldingsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<AssetHolding>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"
+SELECT asset_holding_id,[name],asset_type,symbol,quantity,average_buy_price,current_price,current_value,currency,use_live_price,provider,broker,price_source,valuation_method,metal_weight_oz,metal_purity,premium_value,metal_year,bullion_series,bullion_form,manual_value,annual_growth_rate,monthly_contribution,purchase_date,last_price_updated_at,created_at,updated_at
+FROM dbo.asset_holdings
+ORDER BY CASE asset_type WHEN 'Stock' THEN 1 WHEN 'ETF' THEN 2 WHEN 'Crypto' THEN 3 WHEN 'Gold' THEN 4 WHEN 'Silver' THEN 5 WHEN 'Cash' THEN 6 ELSE 9 END, [name]", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new AssetHolding
+            {
+                Id = r.GetInt32(0),
+                Name = r.GetString(1),
+                AssetType = r.GetString(2),
+                Symbol = r.IsDBNull(3) ? null : r.GetString(3),
+                Quantity = r.GetDecimal(4),
+                AverageBuyPrice = r.IsDBNull(5) ? null : r.GetDecimal(5),
+                CurrentPrice = r.IsDBNull(6) ? null : r.GetDecimal(6),
+                CurrentValue = r.IsDBNull(7) ? null : r.GetDecimal(7),
+                Currency = r.GetString(8),
+                UseLivePrice = r.GetBoolean(9),
+                Provider = r.IsDBNull(10) ? null : r.GetString(10),
+                Broker = r.IsDBNull(11) ? null : r.GetString(11),
+                PriceSource = r.IsDBNull(12) ? "Auto" : r.GetString(12),
+                ValuationMethod = r.IsDBNull(13) ? "SpotPremium" : r.GetString(13),
+                MetalWeightOz = r.IsDBNull(14) ? null : r.GetDecimal(14),
+                MetalPurity = r.IsDBNull(15) ? null : r.GetDecimal(15),
+                PremiumValue = r.IsDBNull(16) ? null : r.GetDecimal(16),
+                MetalYear = r.IsDBNull(17) ? null : r.GetInt32(17),
+                BullionSeries = r.IsDBNull(18) ? null : r.GetString(18),
+                BullionForm = r.IsDBNull(19) ? null : r.GetString(19),
+                ManualValue = r.IsDBNull(20) ? null : r.GetDecimal(20),
+                AnnualGrowthRate = r.IsDBNull(21) ? null : r.GetDecimal(21),
+                MonthlyContribution = r.IsDBNull(22) ? null : r.GetDecimal(22),
+                PurchaseDate = r.IsDBNull(23) ? null : r.GetDateTime(23),
+                LastPriceUpdatedAt = r.IsDBNull(24) ? null : r.GetDateTime(24),
+                CreatedAt = r.GetDateTime(25),
+                UpdatedAt = r.GetDateTime(26)
+            });
+        }
+        return list;
+    }
+
+    public async Task<AssetHolding?> GetAssetHoldingAsync(int id)
+    {
+        return (await GetAssetHoldingsAsync()).FirstOrDefault(a => a.Id == id);
+    }
+
+    public async Task<AssetSummary> GetAssetSummaryAsync()
+    {
+        var assets = await GetAssetHoldingsAsync();
+        var total = assets.Sum(a => a.DisplayValue);
+        var monthly = assets.Sum(a => a.MonthlyContribution ?? 0m);
+        var rate = total <= 0 ? 0m : assets.Sum(a => a.DisplayValue * (a.AnnualGrowthRate ?? 0m)) / total;
+        var last = assets.Where(a => a.LastPriceUpdatedAt.HasValue || a.UpdatedAt > DateTime.MinValue)
+            .Select(a => a.LastPriceUpdatedAt ?? a.UpdatedAt)
+            .OrderByDescending(x => x)
+            .FirstOrDefault();
+        return new AssetSummary(Math.Round(total, 2), Math.Round(monthly, 2), Math.Round(rate, 4), last == default ? null : last);
+    }
+
+    public async Task SaveAssetHoldingAsync(AssetHolding asset)
+    {
+        await EnsureModernTablesAsync();
+        if (string.IsNullOrWhiteSpace(asset.Name)) throw new ArgumentException("Asset name is required.", nameof(asset));
+        asset.Broker = string.IsNullOrWhiteSpace(asset.Broker) ? asset.Provider : asset.Broker.Trim();
+        asset.Provider = asset.Broker;
+        asset.PriceSource = string.IsNullOrWhiteSpace(asset.PriceSource) ? "Auto" : asset.PriceSource.Trim();
+        asset.Symbol = string.IsNullOrWhiteSpace(asset.Symbol) ? null : asset.Symbol.Trim().ToUpperInvariant();
+
+        if (asset.AssetType.Equals("Gold", StringComparison.OrdinalIgnoreCase) || asset.AssetType.Equals("Silver", StringComparison.OrdinalIgnoreCase))
+        {
+            // Bullion does not need a ticker in the UI. Internally keep XAU/XAG so older rows still make sense.
+            asset.Symbol = asset.AssetType.Equals("Gold", StringComparison.OrdinalIgnoreCase) ? "XAU" : "XAG";
+            asset.MetalPurity ??= asset.AssetType.Equals("Gold", StringComparison.OrdinalIgnoreCase) ? 0.9999m : 0.999m;
+            asset.BullionForm = string.IsNullOrWhiteSpace(asset.BullionForm) ? "Bullion Coin" : asset.BullionForm.Trim();
+            asset.BullionSeries = string.IsNullOrWhiteSpace(asset.BullionSeries) ? null : asset.BullionSeries.Trim();
+            asset.ValuationMethod = string.IsNullOrWhiteSpace(asset.ValuationMethod) ?
+                (asset.BullionForm is "Proof Coin" or "Commemorative Coin" or "Coin Set" or "Medal" ? "Manual" : "SpotPremium")
+                : asset.ValuationMethod.Trim();
+        }
+
+        var isBullion = asset.AssetType.Equals("Gold", StringComparison.OrdinalIgnoreCase) || asset.AssetType.Equals("Silver", StringComparison.OrdinalIgnoreCase);
+        var usesSpotValuation = isBullion && (asset.ValuationMethod.Equals("SpotPremium", StringComparison.OrdinalIgnoreCase) || asset.ValuationMethod.Equals("Spot", StringComparison.OrdinalIgnoreCase));
+        if (isBullion && !usesSpotValuation && !asset.ManualValue.HasValue)
+        {
+            asset.ManualValue = Math.Round(asset.Quantity * (asset.AverageBuyPrice ?? 0m), 2);
+        }
+
+        var currentValue = isBullion && !usesSpotValuation
+            ? asset.ManualValue ?? asset.CurrentValue ?? Math.Round(asset.Quantity * (asset.AverageBuyPrice ?? 0m), 2)
+            : asset.UseLivePrice && asset.CurrentPrice.HasValue
+                ? (isBullion
+                    ? Math.Round(asset.Quantity * (asset.MetalWeightOz ?? 1m) * asset.CurrentPrice.Value + (asset.PremiumValue ?? 0m), 2)
+                    : Math.Round(asset.Quantity * asset.CurrentPrice.Value, 2))
+                : asset.ManualValue ?? asset.CurrentValue ?? (isBullion
+                    ? Math.Round(asset.Quantity * (asset.MetalWeightOz ?? 1m) * (asset.CurrentPrice ?? 0m) + (asset.PremiumValue ?? 0m), 2)
+                    : Math.Round(asset.Quantity * (asset.CurrentPrice ?? asset.AverageBuyPrice ?? 0m), 2));
+
+        if (asset.Id == 0)
+        {
+            await ExecuteAsync(@"
+INSERT INTO dbo.asset_holdings([name],asset_type,symbol,quantity,average_buy_price,current_price,current_value,currency,use_live_price,provider,broker,price_source,valuation_method,metal_weight_oz,metal_purity,premium_value,metal_year,bullion_series,bullion_form,manual_value,annual_growth_rate,monthly_contribution,purchase_date,last_price_updated_at)
+VALUES(@name,@type,@symbol,@quantity,@avg,@price,@value,@currency,@live,@provider,@broker,@priceSource,@valuationMethod,@metalWeight,@purity,@premium,@metalYear,@series,@form,@manual,@growth,@monthly,@purchaseDate,@last)",
+                ("@name", asset.Name.Trim()), ("@type", asset.AssetType), ("@symbol", DbValue(asset.Symbol)), ("@quantity", asset.Quantity),
+                ("@avg", asset.AverageBuyPrice.HasValue ? asset.AverageBuyPrice.Value : (object)DBNull.Value), ("@price", asset.CurrentPrice.HasValue ? asset.CurrentPrice.Value : (object)DBNull.Value),
+                ("@value", currentValue), ("@currency", string.IsNullOrWhiteSpace(asset.Currency) ? "GBP" : asset.Currency.Trim().ToUpperInvariant()),
+                ("@live", asset.UseLivePrice), ("@provider", DbValue(asset.Broker)), ("@broker", DbValue(asset.Broker)), ("@priceSource", asset.PriceSource), ("@valuationMethod", asset.ValuationMethod),
+                ("@metalWeight", asset.MetalWeightOz.HasValue ? asset.MetalWeightOz.Value : (object)DBNull.Value), ("@purity", asset.MetalPurity.HasValue ? asset.MetalPurity.Value : (object)DBNull.Value),
+                ("@premium", asset.PremiumValue.HasValue ? asset.PremiumValue.Value : (object)DBNull.Value), ("@metalYear", asset.MetalYear.HasValue ? asset.MetalYear.Value : (object)DBNull.Value),
+                ("@series", DbValue(asset.BullionSeries)), ("@form", DbValue(asset.BullionForm)), ("@manual", asset.ManualValue.HasValue ? asset.ManualValue.Value : (object)DBNull.Value),
+                ("@growth", asset.AnnualGrowthRate.HasValue ? asset.AnnualGrowthRate.Value : (object)DBNull.Value), ("@monthly", asset.MonthlyContribution.HasValue ? asset.MonthlyContribution.Value : (object)DBNull.Value),
+                ("@purchaseDate", asset.PurchaseDate.HasValue ? asset.PurchaseDate.Value.Date : (object)DBNull.Value),
+                ("@last", asset.LastPriceUpdatedAt.HasValue ? asset.LastPriceUpdatedAt.Value : (object)DBNull.Value));
+        }
+        else
+        {
+            await ExecuteAsync(@"
+UPDATE dbo.asset_holdings
+SET [name]=@name, asset_type=@type, symbol=@symbol, quantity=@quantity, average_buy_price=@avg, current_price=@price, current_value=@value, currency=@currency, use_live_price=@live, provider=@provider, broker=@broker, price_source=@priceSource, valuation_method=@valuationMethod, metal_weight_oz=@metalWeight, metal_purity=@purity, premium_value=@premium, metal_year=@metalYear, bullion_series=@series, bullion_form=@form, manual_value=@manual, annual_growth_rate=@growth, monthly_contribution=@monthly, purchase_date=@purchaseDate, last_price_updated_at=@last, updated_at=SYSUTCDATETIME()
+WHERE asset_holding_id=@id",
+                ("@id", asset.Id), ("@name", asset.Name.Trim()), ("@type", asset.AssetType), ("@symbol", DbValue(asset.Symbol)), ("@quantity", asset.Quantity),
+                ("@avg", asset.AverageBuyPrice.HasValue ? asset.AverageBuyPrice.Value : (object)DBNull.Value), ("@price", asset.CurrentPrice.HasValue ? asset.CurrentPrice.Value : (object)DBNull.Value),
+                ("@value", currentValue), ("@currency", string.IsNullOrWhiteSpace(asset.Currency) ? "GBP" : asset.Currency.Trim().ToUpperInvariant()),
+                ("@live", asset.UseLivePrice), ("@provider", DbValue(asset.Broker)), ("@broker", DbValue(asset.Broker)), ("@priceSource", asset.PriceSource), ("@valuationMethod", asset.ValuationMethod),
+                ("@metalWeight", asset.MetalWeightOz.HasValue ? asset.MetalWeightOz.Value : (object)DBNull.Value), ("@purity", asset.MetalPurity.HasValue ? asset.MetalPurity.Value : (object)DBNull.Value),
+                ("@premium", asset.PremiumValue.HasValue ? asset.PremiumValue.Value : (object)DBNull.Value), ("@metalYear", asset.MetalYear.HasValue ? asset.MetalYear.Value : (object)DBNull.Value),
+                ("@series", DbValue(asset.BullionSeries)), ("@form", DbValue(asset.BullionForm)), ("@manual", asset.ManualValue.HasValue ? asset.ManualValue.Value : (object)DBNull.Value),
+                ("@growth", asset.AnnualGrowthRate.HasValue ? asset.AnnualGrowthRate.Value : (object)DBNull.Value), ("@monthly", asset.MonthlyContribution.HasValue ? asset.MonthlyContribution.Value : (object)DBNull.Value),
+                ("@purchaseDate", asset.PurchaseDate.HasValue ? asset.PurchaseDate.Value.Date : (object)DBNull.Value),
+                ("@last", asset.LastPriceUpdatedAt.HasValue ? asset.LastPriceUpdatedAt.Value : (object)DBNull.Value));
+        }
+    }
+
+    public async Task DeleteAssetHoldingAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("DELETE FROM dbo.asset_holdings WHERE asset_holding_id=@id", ("@id", id));
+    }
+
+    public async Task UpdateAssetLivePriceAsync(int id, decimal currentPrice, DateTime updatedAt)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"
+UPDATE dbo.asset_holdings
+SET current_price=@price,
+    current_value=CASE
+        WHEN asset_type IN ('Gold','Silver') AND ISNULL(valuation_method,'SpotPremium') IN ('SpotPremium','Spot') THEN ROUND(quantity * ISNULL(metal_weight_oz, 1) * @price + ISNULL(premium_value, 0), 2)
+        WHEN asset_type IN ('Gold','Silver') THEN ISNULL(manual_value, current_value)
+        ELSE ROUND(quantity * @price, 2)
+    END,
+    last_price_updated_at=@updated,
+    updated_at=SYSUTCDATETIME()
+WHERE asset_holding_id=@id", ("@id", id), ("@price", currentPrice), ("@updated", updatedAt));
+    }
 
     public async Task<string?> GetLoginPasswordHashAsync()
     {

@@ -10,7 +10,7 @@
         {
             <i data-lucide="image" class="placeholder-icon"></i>
         }
-        <span class="status-pill @Model.Status">@Model.Status.ToDisplayName()</span>
+        <span class="status-pill @Model.Status">@(string.IsNullOrWhiteSpace(Model.CustomStatus) ? Model.Status.ToDisplayName() : Model.CustomStatus)</span>
     </div>
     <div class="item-card-body">
         @if (!string.IsNullOrEmpty(Model.CategoryName))
@@ -20,10 +20,15 @@
             </span>
         }
         <div class="item-card-title">@Model.Name</div>
-        @if (!string.IsNullOrEmpty(Model.Brand) || !string.IsNullOrEmpty(Model.Model))
+        @if (!string.IsNullOrEmpty(Model.Manufacturer) || !string.IsNullOrEmpty(Model.Brand) || !string.IsNullOrEmpty(Model.Model))
         {
-            <div class="item-card-sub">@Model.Brand @Model.Model</div>
+            <div class="item-card-sub">@Model.Manufacturer @Model.Brand @Model.Model</div>
         }
+        @if (!string.IsNullOrEmpty(Model.TypeName) || !string.IsNullOrEmpty(Model.PlatformName))
+        {
+            <div class="item-card-sub">@Model.TypeName@(Model.PlatformName is not null ? $" · {Model.PlatformName}" : "")</div>
+        }
+        <div class="item-card-updated"><i data-lucide="clock"></i> Updated @Model.UpdatedAt.ToString("dd MMM yyyy HH:mm")</div>
         @if ((ViewBag.CanViewSensitive == true) && !string.IsNullOrEmpty(Model.LocationName))
         {
             <div class="item-card-sub"><i data-lucide="map-pin" style="width:12px;height:12px;vertical-align:-1px"></i> @Model.LocationName</div>

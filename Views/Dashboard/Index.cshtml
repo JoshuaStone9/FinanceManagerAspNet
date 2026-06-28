@@ -17,9 +17,41 @@
 
 <section class="grid cards-4">
     <article class="card"><p class="eyebrow">Month result</p><h2 class="@(Model.IsAhead ? "good" : "bad")">@(Model.IsAhead ? "+" : "-")@Model.CarryOverAmount.ToString("C", gb)</h2><p>@(Model.IsAhead ? "Carrying forward as excess" : "Shortfall / debt carried forward")</p></article>
-    <article class="card"><p class="eyebrow">Global goal</p><h2>@Model.TotalGoalBalance.ToString("C", gb)</h2><p>@Model.GlobalGoalRemaining.ToString("C", gb) left to £20k</p></article>
-    <article class="card"><p class="eyebrow">With interest by @Model.TargetDate.ToString("MMM yyyy")</p><h2>@Model.ProjectedWithInterestByGoalDate.ToString("C", gb)</h2><p>Includes visible goal accounts + @Model.ProjectedSalarySavingsByGoalDate.ToString("C", gb) planned salary savings. Interest estimate: @Model.ProjectedInterestByGoalDate.ToString("C", gb)</p></article>
+    <article class="card"><p class="eyebrow">Total value now</p><h2>@Model.TotalValueNow.ToString("C", gb)</h2><p>Goal accounts + live assets + Personal Vault excluding coins/bullion already tracked in Assets.</p></article>
+    <article class="card"><p class="eyebrow">Total value by @Model.TargetDate.ToString("MMM yyyy")</p><h2>@Model.TotalValueByGoalDate.ToString("C", gb)</h2><p>Includes goal forecast, vault value, and live asset forecast.</p></article>
     <article class="card"><p class="eyebrow">Estimated time</p><h2>@(Model.MonthsToGoalAtCurrentPace < 0 ? "N/A" : Model.MonthsToGoalAtCurrentPace + " months")</h2><p>Based on current month pace</p></article>
+</section>
+
+
+
+<section class="card">
+    <h2>Financial Command Centre</h2>
+    <p class="muted">Your live market assets are now integrated with Finance Manager and Personal Vault.</p>
+    <div class="grid cards-4 totals">
+        <div class="card"><span>Live assets</span><strong>@Model.LiveAssetsValue.ToString("C", gb)</strong></div>
+        <div class="card"><span>Monthly into assets</span><strong>@Model.LiveAssetsMonthlyContribution.ToString("C", gb)</strong></div>
+        <div class="card"><span>Average growth</span><strong>@Model.LiveAssetsGrowthRate.ToString("0.##")%</strong></div>
+        <div class="card"><span>Last live update</span><strong>@(Model.LiveAssetsLastUpdated?.ToString("dd MMM HH:mm") ?? "Not updated")</strong></div>
+    </div>
+    <div class="actions">
+        <a class="button primary" asp-controller="Assets" asp-action="Index">Open Assets</a>
+        @if (canEdit)
+        {
+            <form asp-controller="Assets" asp-action="UpdateLivePrices" method="post"><button type="submit">Sync portfolio</button></form>
+        }
+    </div>
+</section>
+
+<section class="card">
+    <h2>Personal Vault overview</h2>
+    <p class="muted">Integrated from Personal Vault. Coins and bullion are excluded here if they are tracked in Assets, so they are not double counted.</p>
+    <div class="grid cards-4 totals">
+        <div class="card"><span>Vault items</span><strong>@Model.VaultItemCount</strong></div>
+        <div class="card"><span>Vault value</span><strong>@Model.VaultTotalValue.ToString("C", gb)</strong></div>
+        <div class="card"><span>Savings goal balance</span><strong>@Model.TotalGoalBalance.ToString("C", gb)</strong></div>
+        <div class="card"><span>Asset + savings view</span><strong>@(Model.TotalGoalBalance + Model.VaultTotalValue).ToString("C", gb)</strong></div>
+    </div>
+    <div class="actions"><a class="button primary" asp-controller="Items" asp-action="Index">Open Personal Vault</a></div>
 </section>
 
 @if (canEdit)
@@ -47,6 +79,7 @@
         <button type="button" class="primary" data-open="addPaymentModal">Add payment / bill</button>
         <button type="button" class="primary" data-open="carryModal">Carry items into next month</button>
         <button type="button" data-open="accountModal">Update ISA / pots / hidden interest</button>
+        <a class="button" asp-controller="Assets" asp-action="Index">Assets</a>
     }
     else
     {
@@ -82,7 +115,7 @@
                             }
                         </td>
                         <td>@r.Notes</td>
-                        @if (canEdit) { <td><a class="button" asp-action="EditPayment" asp-route-source="@r.Source" asp-route-id="@r.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a></td> }
+                        @if (canEdit) { <td><a class="button" asp-action="EditPayment" asp-route-source="@r.Source" asp-route-id="@r.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a><form asp-action="DeletePayment" method="post" style="display:inline" data-confirm="Delete this item?"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="source" value="@r.Source" /><input type="hidden" name="id" value="@r.Id" /><button class="button danger-inline" type="submit">Delete</button></form></td> }
                     </tr>
                 }
             </tbody>
@@ -103,7 +136,10 @@
 <div class="modal" id="carryModal"><div class="modal-panel"><button class="x" data-close>×</button><h2>Carry into @Model.NextMonth.ToString("MMMM yyyy")</h2><form asp-action="CarryOver" method="post"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><details open><summary><input type="checkbox" name="sections" value="bills" checked /> Bills</summary><p>Copies this month’s bills to next month.</p></details><details open><summary><input type="checkbox" name="sections" value="investments" checked /> Investments</summary><p>Copies your monthly investment records.</p></details><details><summary><input type="checkbox" name="sections" value="extra_expenses" /> Extra expenses</summary><p>Off by default so one-off spending does not accidentally repeat.</p></details><button class="primary">Carry selected items</button></form></div></div>
 
 <div class="modal" id="accountModal"><div class="modal-panel"><button class="x" data-close>×</button><h2>Goal accounts</h2>@foreach(var a in Model.Accounts){
-    <form asp-action="SaveAccount" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="id" value="@a.Id" /><label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "") /></label><label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label><label class="advanced">Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate" /></label><label class="advanced">Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label><label><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@(a.IncludeInGlobalGoal)" /> Include</label><button>Save</button></form>
+    <form asp-action="SaveAccount" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="id" value="@a.Id" /><label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "") /></label><label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label><label class="advanced">Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate" /></label><label class="advanced">Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label><label><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@(a.IncludeInGlobalGoal)" /> Include</label><button>Save</button></form><form asp-action="DeleteAccount" method="post" data-confirm="Delete/reset this account?" style="margin-bottom:12px"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="id" value="@a.Id" /><button class="button danger-inline" type="submit">@(a.Id == 0 ? "Reset emergency fund" : "Delete account")</button></form>
 }
 <form asp-action="SaveAccount" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="id" value="0" /><input name="name" placeholder="New account name" /><input name="amount" type="number" step="0.01" placeholder="Amount" /><input name="interestRate" type="number" step="0.01" placeholder="Interest %" /><input name="monthlyContribution" type="number" step="0.01" placeholder="Monthly in" /><button>Add</button></form></div></div>
+
+<div class="modal" id="stocksCryptoModal"><div class="modal-panel"><button class="x" data-close>×</button><h2>Update stocks + crypto</h2><form asp-action="SaveStocksCrypto" method="post" class="account-form"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><label>Total stocks + crypto value<input name="amount" type="number" step="0.01" value="@Model.StocksCryptoValue" /></label><label>Expected annual growth %<input name="interestRate" type="number" step="0.01" value="@Model.StocksCryptoInterestRate" /></label><label>Monthly contribution<input name="monthlyContribution" type="number" step="0.01" value="@Model.StocksCryptoMonthlyContribution" /></label><button class="primary">Save stocks + crypto</button></form><p class="muted">This is kept separate from your ISA/pot accounts but included in Total value.</p></div></div>
+
 }

@@ -2,9 +2,12 @@
 @{
     var categories = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.CategorySelectList;
     var locations = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.LocationSelectList;
+    var typeItems = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.TypeSelectList;
+    var platformItems = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.PlatformSelectList;
     var conditions = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.Conditions;
     var statuses = (IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.Statuses;
     var tags = (IEnumerable<TagDto>)ViewBag.Tags;
+    var templates = (IEnumerable<Item>)(ViewBag.TemplateItems ?? Enumerable.Empty<Item>());
     var currentImage = ViewBag.CurrentImagePath as string;
 }
 
@@ -23,6 +26,7 @@
             else
             {
                 <div id="imgPreview" class="item-photo-preview item-photo-preview--empty"><i data-lucide="image"></i></div>
+                <p class="small-note muted">Leave this blank unless you have a real item photo. The app will show a clean placeholder instead of guessing an image.</p>
             }
             <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp" data-preview="#imgPreview" />
         </div>
@@ -65,21 +69,92 @@
                 }
             </div>
             <span asp-validation-for="Status" class="field-error"></span>
+            <div class="field full" style="margin-top:12px">
+                <label asp-for="CustomStatus">Custom status label</label>
+                <input asp-for="CustomStatus" placeholder="Optional, e.g. With courier, Awaiting repair, At work" />
+                <p class="small-note muted">Use this when the built-in statuses are not specific enough.</p>
+            </div>
         </div>
     </section>
 
     <aside class="optional-fields-panel">
         <div class="section-heading">Optional details</div>
-        <p class="optional-help">Add these only when you need them. They are kept separate so logging an item stays quick.</p>
+        <p class="optional-help">Add these only when you need them. You can also copy common details from a similar item.</p>
+
+        <details>
+            <summary>Use existing item as a template</summary>
+            <div class="template-panel">
+                <label class="toggle-row">
+                    <input type="checkbox" id="useTemplateToggle" />
+                    <span>Copy from existing item</span>
+                </label>
+                <div id="templateFields" class="form-grid compact-form-grid is-hidden">
+                    <div class="field">
+                        <label>Section / type</label>
+                        <select id="templateTypeFilter">
+                            <option value="">All sections</option>
+                            @foreach (var type in typeItems)
+                            {
+                                <option value="@type.Value">@type.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label asp-for="TemplateItemId">Template item</label>
+                        <select asp-for="TemplateItemId" id="templateItemSelect">
+                            <option value="">— Select an item —</option>
+                            @foreach (var item in templates)
+                            {
+                                <option value="@item.Id"
+                                        data-type="@item.ItemTypeId"
+                                        data-name="@item.Name"
+                                        data-description="@item.Description"
+                                        data-brand="@item.Brand"
+                                        data-model="@item.Model"
+                                        data-manufacturer="@item.Manufacturer"
+                                        data-casetype="@item.CaseType"
+                                        data-mediaformat="@item.MediaFormat"
+                                        data-instruction="@item.Instruction"
+                                        data-memory="@item.Memory"
+                                        data-owner="@item.Owner"
+                                        data-releaseyear="@item.ReleaseYear"
+                                        data-boxed="@item.Boxed"
+                                        data-sell="@item.Sell"
+                                        data-tested="@item.Tested"
+                                        data-purchasefrom="@item.PurchasedFrom"
+                                        data-warrantyinfo="@item.WarrantyInfo"
+                                        data-manualurl="@item.ManualUrl"
+                                        data-category="@item.CategoryId"
+                                        data-location="@item.LocationId"
+                                        data-itemtype="@item.ItemTypeId"
+                                        data-platform="@item.PlatformId"
+                                        data-condition="@item.Condition"
+                                        data-status="@item.Status"
+                                        data-customstatus="@item.CustomStatus">
+                                    @item.Name @(item.ItemType is not null ? $"· {item.ItemType.Name}" : "")
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <p class="small-note muted">This copies the reusable details only. Name, value, serial number and photo stay item-specific unless you change them.</p>
+                </div>
+            </div>
+        </details>
 
         <details open>
             <summary>Organisation</summary>
             <div class="form-grid compact-form-grid">
                 <div class="field">
                     <label asp-for="CategoryId">Category</label>
-                    <select asp-for="CategoryId" asp-items="categories">
-                        <option value="">— None —</option>
-                    </select>
+                    <select asp-for="CategoryId" asp-items="categories"><option value="">— None —</option></select>
+                </div>
+                <div class="field">
+                    <label asp-for="ItemTypeId">Type / section</label>
+                    <select asp-for="ItemTypeId" asp-items="typeItems"><option value="">— None —</option></select>
+                </div>
+                <div class="field">
+                    <label asp-for="PlatformId">Platform</label>
+                    <select asp-for="PlatformId" asp-items="platformItems"><option value="">— None —</option></select>
                 </div>
                 <div class="field">
                     <label asp-for="Condition">Condition</label>
@@ -90,10 +165,7 @@
                     <div class="checkbox-grid">
                         @foreach (var t in tags)
                         {
-                            <label class="checkbox-pill">
-                                <input type="checkbox" name="TagIds" value="@t.Id" checked="@(Model.TagIds.Contains(t.Id))" />
-                                @t.Name
-                            </label>
+                            <label class="checkbox-pill"><input type="checkbox" name="TagIds" value="@t.Id" checked="@(Model.TagIds.Contains(t.Id))" /> @t.Name</label>
                         }
                     </div>
                 </div>
@@ -101,13 +173,40 @@
         </details>
 
         <details>
+            <summary>Add a new location from this screen</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field full"><label asp-for="NewLocationName">New location name</label><input asp-for="NewLocationName" placeholder="e.g. Office cupboard" /></div>
+                <div class="field"><label asp-for="NewLocationRoom">Room</label><input asp-for="NewLocationRoom" /></div>
+                <div class="field"><label asp-for="NewLocationStorageUnit">Storage unit</label><input asp-for="NewLocationStorageUnit" placeholder="Shelf, drawer, box..." /></div>
+                <div class="field full"><label asp-for="NewLocationAddress">Address / notes</label><input asp-for="NewLocationAddress" /></div>
+                <p class="small-note muted">If you fill this in, it will create the location and use it for this item.</p>
+            </div>
+        </details>
+
+        <details>
             <summary>Item identifiers</summary>
             <div class="form-grid compact-form-grid">
-                <div class="field"><label asp-for="Brand">Brand</label><input asp-for="Brand" /></div>
+                <div class="field"><label asp-for="Manufacturer">Manufacturer</label><input asp-for="Manufacturer" placeholder="e.g. Nintendo, Sony, Apple" /></div>
+                <div class="field"><label asp-for="Brand">Brand / range</label><input asp-for="Brand" /></div>
                 <div class="field"><label asp-for="Model">Model</label><input asp-for="Model" /></div>
                 <div class="field"><label asp-for="SerialNumber">Serial Number</label><input asp-for="SerialNumber" /></div>
+                <div class="field"><label asp-for="Memory">Memory / capacity</label><input asp-for="Memory" placeholder="e.g. 64GB, 1TB" /></div>
+                <div class="field"><label asp-for="ReleaseYear">Year</label><input asp-for="ReleaseYear" type="number" min="1800" max="2200" /></div>
+                <div class="field"><label asp-for="Owner">Owner</label><input asp-for="Owner" placeholder="e.g. Lucy" /></div>
                 <div class="field"><label asp-for="Barcode">Barcode</label><input asp-for="Barcode" /></div>
                 <div class="field"><label asp-for="Quantity">Quantity</label><input asp-for="Quantity" type="number" min="0" /></div>
+            </div>
+        </details>
+
+        <details>
+            <summary>Collection details</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field"><label asp-for="CaseType">Case type</label><input asp-for="CaseType" placeholder="e.g. Game Case, Loose" /></div>
+                <div class="field"><label asp-for="MediaFormat">Format</label><input asp-for="MediaFormat" placeholder="e.g. Cartridge, Disc" /></div>
+                <div class="field"><label asp-for="Instruction">Instruction / manual</label><input asp-for="Instruction" placeholder="e.g. Included, Missing" /></div>
+                <div class="field"><label asp-for="Tested">Tested</label><input asp-for="Tested" placeholder="e.g. Fully Working, Untested" /></div>
+                <div class="field"><label asp-for="Boxed">Boxed</label><select asp-for="Boxed"><option value="">— Unknown —</option><option value="true">Yes</option><option value="false">No</option></select></div>
+                <div class="field"><label asp-for="Sell">For selling</label><select asp-for="Sell"><option value="">— Unknown —</option><option value="true">Yes</option><option value="false">No</option></select></div>
             </div>
         </details>
 
@@ -119,6 +218,17 @@
                 <div class="field full"><label asp-for="PurchasedFrom">Purchased From</label><input asp-for="PurchasedFrom" /></div>
                 <div class="field field-checkbox"><input asp-for="IsInsured" type="checkbox" /><label asp-for="IsInsured">Insured</label></div>
                 <div class="field full"><label asp-for="InsurancePolicy">Insurance Policy #</label><input asp-for="InsurancePolicy" /></div>
+            </div>
+        </details>
+
+        <details>
+            <summary>Additional pictures</summary>
+            <div class="form-grid compact-form-grid">
+                <div class="field full">
+                    <label>More photos</label>
+                    <input type="file" name="photos" accept=".jpg,.jpeg,.png,.webp" multiple />
+                    <p class="small-note muted">On new items, add the main photo above. Extra photos can be added after saving from the item view.</p>
+                </div>
             </div>
         </details>
 
