@@ -152,6 +152,20 @@ END
 IF COL_LENGTH('dbo.Tags','Colour') IS NULL 
     ALTER TABLE dbo.Tags ADD Colour nvarchar(50) NULL;
 
+IF OBJECT_ID('dbo.DropdownOptions', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.DropdownOptions (
+        Id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_DropdownOptions PRIMARY KEY,
+        ListKey nvarchar(80) NOT NULL,
+        Value nvarchar(200) NOT NULL,
+        SortOrder int NOT NULL DEFAULT 0,
+        CreatedAt datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
+    );
+END
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_DropdownOptions_ListKey_Value' AND object_id=OBJECT_ID('dbo.DropdownOptions'))
+    CREATE UNIQUE INDEX IX_DropdownOptions_ListKey_Value ON dbo.DropdownOptions(ListKey, Value);
+
+
 IF OBJECT_ID('dbo.ItemTags', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.ItemTags (
@@ -300,7 +314,7 @@ static async Task SeedPersonalVaultLookupsAsync(AppDbContext db)
         ("Books, Music & Film", "book-open", "#f43f5e"), ("Documents", "file-text", "#94a3b8"),
         ("Tools & DIY", "hammer", "#a16207"), ("Garden Equipment", "shovel", "#65a30d"),
         ("Kitchen Appliances", "utensils", "#ef4444"), ("White Goods", "washing-machine", "#0f766e"),
-        ("Furniture", "armchair", "#92400e"), ("Home Decor", "lamp", "#d946ef"), ("Clothing & Bags", "shirt", "#db2777"),
+        ("Furniture", "armchair", "#92400e"), ("Home Decor", "lamp", "#d946ef"), ("Clothing", "shirt", "#db2777"), ("Bags", "briefcase", "#be185d"),
         ("Sports & Outdoor", "tent", "#65a30d"), ("Office Equipment", "briefcase", "#3b82f6"),
         ("Vehicles & Accessories", "car", "#f97316"), ("Household", "home", "#475569"), ("Miscellaneous", "package", "#6b7280")
     };
@@ -311,7 +325,7 @@ static async Task SeedPersonalVaultLookupsAsync(AppDbContext db)
             db.Categories.Add(new Category { Name = c.Name, Icon = c.Icon, Colour = c.Colour, Description = "Personal Vault item category" });
     }
 
-    var types = new[] { "Console", "Game", "Accessory", "Peripheral", "Camera body", "Lens", "Drone", "Computer", "Laptop", "Phone", "Tablet", "Watch", "Storage", "NAS", "Appliance", "Tool", "Furniture", "Document", "Collectable", "Coin", "Jewellery", "Book", "Vinyl", "CD", "DVD", "Blu-ray", "Clothing", "Bag", "Vehicle", "Other" };
+    var types = new[] { "Console", "Game", "Accessory", "Peripheral", "Camera body", "Lens", "Drone", "Computer", "Laptop", "Phone", "Tablet", "Watch", "Storage", "NAS", "Appliance", "Tool", "Furniture", "Document", "Collectable", "Coin", "Jewellery", "Book", "Vinyl", "CD", "DVD", "Blu-ray", "Clothing", "Coat", "Jacket", "T-Shirt", "Shirt", "Jumper", "Hoodie", "Jeans", "Trousers", "Dress", "Suit", "Shoes", "Trainers", "Boots", "Handbag", "Backpack", "Suitcase", "Wallet", "Bag", "Vehicle", "Other" };
     foreach (var type in types)
     {
         if (!await db.ItemTypes.AnyAsync(x => x.Name == type))
@@ -325,7 +339,7 @@ static async Task SeedPersonalVaultLookupsAsync(AppDbContext db)
         ("Sony E-mount", "Lens"), ("Canon RF", "Lens"), ("Nikon Z", "Lens"), ("DJI", "Drone"),
         ("Windows", "Computer"), ("macOS", "Computer"), ("iOS", "Phone"), ("Android", "Phone"),
         ("PlayStation", "Console"), ("Xbox", "Console"), ("Nintendo Switch", "Console"), ("PC", "Game"),
-        ("USB-C", "Peripheral"), ("Thunderbolt", "Peripheral"), ("Network", "Peripheral"), ("Not applicable", "Other")
+        ("USB-C", "Peripheral"), ("Thunderbolt", "Peripheral"), ("Network", "Peripheral"), ("Not applicable", "Other"), ("Wardrobe", "Clothing"), ("Shoe Rack", "Shoes"), ("Bag Storage", "Bag"), ("Everyday Carry", "Bag"), ("Home", "Other"), ("Work", "Other")
     };
 
     foreach (var p in platforms)
@@ -335,5 +349,23 @@ static async Task SeedPersonalVaultLookupsAsync(AppDbContext db)
             db.Platforms.Add(new Platform { Name = p.Name, ItemTypeId = tid, Description = "Personal Vault platform" });
     }
 
+    await db.SaveChangesAsync();
+
+    async Task SeedDropdownAsync(string key, params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!await db.DropdownOptions.AnyAsync(o => o.ListKey == key && o.Value == value))
+                db.DropdownOptions.Add(new DropdownOption { ListKey = key, Value = value });
+        }
+    }
+
+    await SeedDropdownAsync("PurchasedFrom", "Amazon", "eBay", "Royal Mint", "Trading 212", "Currys", "Apple", "CEX", "Facebook Marketplace", "Vinted", "Other");
+    await SeedDropdownAsync("InsuranceProvider", "Home Insurance", "Contents Insurance", "Gadget Insurance", "AppleCare", "Royal Mint", "Other");
+    await SeedDropdownAsync("Manufacturer", "Apple", "Sony", "Nintendo", "Microsoft", "Canon", "Nikon", "DJI", "Royal Mint", "Nike", "Adidas", "Samsung", "Other");
+    await SeedDropdownAsync("Brand", "Apple", "PlayStation", "Xbox", "Nintendo", "Royal Mint", "Nike", "Adidas", "The North Face", "Other");
+    await SeedDropdownAsync("CaseType", "Boxed", "Loose", "Original Box", "Protective Case", "Dust Bag", "Clothes Hanger", "Other");
+    await SeedDropdownAsync("MediaFormat", "Disc", "Cartridge", "Digital", "Paper", "Fabric", "Leather", "Metal", "Other");
+    await SeedDropdownAsync("Instruction", "Included", "Missing", "Digital Manual", "Certificate Included", "Not applicable");
     await db.SaveChangesAsync();
 }

@@ -1,6 +1,6 @@
 namespace FinanceManagerAspNet.Models;
 
-public sealed record AccountBalance(int Id, string Name, decimal Amount, decimal InterestRate, decimal MonthlyContribution, bool IncludeInGlobalGoal, DateTime UpdatedAt);
+public sealed record AccountBalance(int Id, string Name, decimal Amount, decimal InterestRate, decimal MonthlyContribution, bool IncludeInGlobalGoal, DateTime UpdatedAt, bool IncludeInSavingsCommand = false);
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);
 public sealed record IncomeSnapshot(int Year, int Month, decimal Amount, int SickDays, DateTime UpdatedAt);
 
@@ -166,8 +166,21 @@ public sealed record SavingPot(
     string Name,
     decimal TargetAmount,
     decimal MonthlyAmount,
+    string ContributionMode,
+    int Priority,
+    string PotType,
+    string AccessSpeed,
+    decimal InterestRate,
+    DateTime? TargetDate,
+    string? Destination,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt)
+{
+    public bool UsesGlobalContribution => ContributionMode.Equals("Uses global savings schedule", StringComparison.OrdinalIgnoreCase);
+    public bool UsesManualContribution => ContributionMode.Equals("Manual contribution", StringComparison.OrdinalIgnoreCase);
+    public bool IsOneOffFundingOnly => ContributionMode.Equals("One-off funding only", StringComparison.OrdinalIgnoreCase);
+    public bool IsPaused => ContributionMode.Equals("Paused", StringComparison.OrdinalIgnoreCase);
+}
 
 public sealed record SavingPotMonth(
     int Id,
@@ -180,21 +193,171 @@ public sealed record SavingPotMonth(
 
 public sealed class SavingPotRowViewModel
 {
-    public SavingPot Pot { get; set; } = new(0, string.Empty, 0, 0, DateTime.MinValue, DateTime.MinValue);
+    public SavingPot Pot { get; set; } = new(0, string.Empty, 0, 0, "Uses global savings schedule", 1, "Goal", "Immediate", 0, null, null, DateTime.MinValue, DateTime.MinValue);
     public List<SavingPotMonth> Months { get; set; } = [];
+    public decimal ManualSavedBalance { get; set; }
+    public decimal AutoAllocatedBalance { get; set; }
 
-    public decimal SavedBalance => Months.Where(m => m.IsSaved).Sum(m => m.SavedAmount);
+    // Amount actually available to this pot right now. This is 0 until the emergency baseline is complete.
+    public decimal ForecastMonthlyAmount { get; set; }
 
+    // Amount expected to flow to this pot after the emergency baseline is complete.
+    public decimal ForecastMonthlyAfterBaseline { get; set; }
+    public bool EmergencyBaselineComplete { get; set; }
+    public int? EmergencyBaselineMonthsRemaining { get; set; }
+    public int FundingQueuePosition { get; set; }
+
+    public decimal SavedBalance => ManualSavedBalance + AutoAllocatedBalance;
     public decimal Remaining => Math.Max(0, Pot.TargetAmount - SavedBalance);
+    public decimal CompletionPercent => Pot.TargetAmount <= 0 ? 100m : Math.Min(100m, Math.Round((SavedBalance / Pot.TargetAmount) * 100m, 1));
+    public bool IsComplete => Pot.TargetAmount > 0 && SavedBalance >= Pot.TargetAmount;
+    public bool WaitingForEmergencyBaseline => !EmergencyBaselineComplete && !IsComplete;
+    public decimal MonthlyInterestEstimate => Math.Round(SavedBalance * (Pot.InterestRate / 100m) / 12m, 2);
+    public decimal AnnualInterestEstimate => Math.Round(SavedBalance * (Pot.InterestRate / 100m), 2);
+
+    public int? MonthsToTarget
+    {
+        get
+        {
+            if (IsComplete) return 0;
+            if (ForecastMonthlyAfterBaseline <= 0) return null;
+            var potMonths = (int)Math.Ceiling(Remaining / ForecastMonthlyAfterBaseline);
+            return (EmergencyBaselineMonthsRemaining ?? 0) + potMonths;
+        }
+    }
+
+    public DateTime? EstimatedFinishDate => MonthsToTarget.HasValue ? DateTime.Today.AddMonths(MonthsToTarget.Value) : null;
+
+    public int? MonthsUntilTargetDate
+    {
+        get
+        {
+            if (!Pot.TargetDate.HasValue) return null;
+            var target = new DateTime(Pot.TargetDate.Value.Year, Pot.TargetDate.Value.Month, 1);
+            var today = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            return Math.Max(0, ((target.Year - today.Year) * 12) + target.Month - today.Month);
+        }
+    }
+
+    public decimal? RequiredMonthlyToTargetDate
+    {
+        get
+        {
+            if (!MonthsUntilTargetDate.HasValue || MonthsUntilTargetDate.Value <= 0) return null;
+            var usableMonths = Math.Max(0, MonthsUntilTargetDate.Value - (EmergencyBaselineMonthsRemaining ?? 0));
+            if (usableMonths <= 0) return null;
+            return Math.Round(Remaining / usableMonths, 2);
+        }
+    }
+
+    public string EstimatedFinishLabel
+    {
+        get
+        {
+            if (IsComplete) return "Complete";
+            if (WaitingForEmergencyBaseline && !MonthsToTarget.HasValue) return "Waiting for emergency fund";
+            return EstimatedFinishDate?.ToString("MMM yyyy") ?? "No forecast";
+        }
+    }
+
+    public string TargetStatus
+    {
+        get
+        {
+            if (IsComplete) return "Complete";
+            if (!Pot.TargetDate.HasValue) return WaitingForEmergencyBaseline ? "Waiting for emergency fund" : "No target date";
+            if (!EstimatedFinishDate.HasValue) return WaitingForEmergencyBaseline ? "Waiting for emergency fund" : "No forecast";
+            var target = Pot.TargetDate.Value.Date;
+            if (EstimatedFinishDate.Value.Date <= target) return "On track";
+            return "Behind target";
+        }
+    }
+}
+
+public sealed record SavingsContributionChange(
+    int Id,
+    DateTime StartsOn,
+    decimal MonthlyAmount,
+    string? Note,
+    DateTime CreatedAt);
+
+public sealed record ReservedFund(
+    int Id,
+    string Name,
+    decimal Amount,
+    string Category,
+    string AccessSpeed,
+    bool IncludeInNetWorth,
+    bool DeductFromSavingsAllocation,
+    string? Notes,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
+
+
+public sealed class SavingPotForecastAtDate
+{
+    public string Name { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public DateTime? TargetDate { get; set; }
+    public decimal TargetAmount { get; set; }
+    public decimal ProjectedAllocated { get; set; }
+    public decimal Remaining => Math.Max(0, TargetAmount - ProjectedAllocated);
+    public decimal CompletionPercent => TargetAmount <= 0 ? 100m : Math.Min(100m, Math.Round((ProjectedAllocated / TargetAmount) * 100m, 1));
+    public bool IsComplete => TargetAmount > 0 && ProjectedAllocated >= TargetAmount;
+}
+
+public sealed class SavingsRecommendation
+{
+    public string Title { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public int Stars { get; set; } = 3;
+    public string Tone { get; set; } = "info";
 }
 
 public sealed class SavingPotsViewModel
 {
     public int Year { get; set; }
     public decimal EmergencyFundTotal { get; set; }
+    public decimal GrossSelectedFundTotal { get; set; }
+    public decimal ReservedFundsTotal => ReservedFunds.Where(r => r.DeductFromSavingsAllocation).Sum(r => r.Amount);
+    public List<ReservedFund> ReservedFunds { get; set; } = [];
+    public decimal EmergencyBaseline { get; set; } = 12000m;
+    public decimal AvailableOverflow { get; set; }
     public decimal AllocatedToPots { get; set; }
-    public decimal AvailableEmergencyFund => Math.Round(EmergencyFundTotal - AllocatedToPots, 2);
+    public decimal UnallocatedOverflow => Math.Max(0, AvailableOverflow - AllocatedToPots);
+    public decimal EmergencyFundHeld => Math.Min(EmergencyFundTotal, EmergencyBaseline);
+    public decimal EmergencyFundShortfall => Math.Max(0, EmergencyBaseline - EmergencyFundTotal);
+    public decimal EmergencyFundProgress => EmergencyBaseline <= 0 ? 100m : Math.Min(100m, Math.Round((EmergencyFundHeld / EmergencyBaseline) * 100m, 1));
+    public decimal InterestRate { get; set; }
+    public decimal MonthlySavingRate { get; set; }
+    public DateTime? LastUpdated { get; set; }
+    public DateTime OverallTargetDate { get; set; } = new(DateTime.Today.Year, 4, 1);
+    public decimal EmergencyMonthlyInterest => Math.Round(EmergencyFundHeld * (InterestRate / 100m) / 12m, 2);
+    public decimal EmergencyAnnualInterest => Math.Round(EmergencyFundHeld * (InterestRate / 100m), 2);
+    public decimal CurrentFundMonthlyInterest => Math.Round(EmergencyFundTotal * (InterestRate / 100m) / 12m, 2);
+    public decimal CurrentFundAnnualInterest => Math.Round(EmergencyFundTotal * (InterestRate / 100m), 2);
+    public int? MonthsToOverallTarget => OverallTargetDate <= DateTime.Today ? 0 : ((OverallTargetDate.Year - DateTime.Today.Year) * 12) + OverallTargetDate.Month - DateTime.Today.Month;
+    public decimal ProjectedEmergencyByTarget { get; set; }
+    public decimal TotalPotTargets => Pots.Sum(p => p.Pot.TargetAmount);
+    public decimal TotalPotProgress => Pots.Sum(p => p.SavedBalance);
+    public decimal TotalMonthlyPotInterest => Pots.Sum(p => p.MonthlyInterestEstimate);
+    public List<AccountBalance> SavingsSources { get; set; } = [];
+    public List<SavingsContributionChange> ContributionSchedule { get; set; } = [];
+    public DateTime ForecastDate { get; set; } = new(DateTime.Today.Year, 4, 1);
+    public int ForecastMonths => ForecastDate <= DateTime.Today ? 0 : ((ForecastDate.Year - DateTime.Today.Year) * 12) + ForecastDate.Month - DateTime.Today.Month;
+    public decimal ForecastProjectedFundTotal { get; set; }
+    public decimal ForecastProjectedEmergencyHeld => Math.Min(ForecastProjectedFundTotal, EmergencyBaseline);
+    public decimal ForecastProjectedOverflow => Math.Max(0, ForecastProjectedFundTotal - EmergencyBaseline);
+    public decimal ForecastProjectedPotProgress { get; set; }
+    public decimal ForecastProjectedUnallocatedOverflow => Math.Max(0, ForecastProjectedOverflow - ForecastProjectedPotProgress);
+    public List<SavingPotForecastAtDate> ForecastPots { get; set; } = [];
+    public decimal TargetTotalNeeded => EmergencyBaseline + TotalPotTargets;
+    public decimal CurrentTotalShortfall => Math.Max(0, TargetTotalNeeded - EmergencyFundTotal);
+    public decimal ForecastTotalShortfall => Math.Max(0, TargetTotalNeeded - ForecastProjectedFundTotal);
+    public decimal? RequiredMonthlyToFullyFundByForecast => ForecastMonths <= 0 ? null : Math.Round(CurrentTotalShortfall / ForecastMonths, 2);
+    public int BehindPotCount => Pots.Count(p => p.TargetStatus == "Behind target");
     public List<SavingPotRowViewModel> Pots { get; set; } = [];
+    public List<SavingsRecommendation> Recommendations { get; set; } = [];
 }
 
 public sealed class StatisticsViewModel

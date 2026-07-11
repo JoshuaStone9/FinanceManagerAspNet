@@ -1,0 +1,84 @@
+@{
+    ViewData["Title"] = "Vault Settings";
+    var categories = (IEnumerable<Category>)ViewBag.Categories;
+    var itemTypes = (IEnumerable<ItemType>)ViewBag.ItemTypes;
+    var platforms = (IEnumerable<Platform>)ViewBag.Platforms;
+    var options = (IEnumerable<DropdownOption>)ViewBag.DropdownOptions;
+    var optionKeys = new[] { "PurchasedFrom", "InsuranceProvider", "Manufacturer", "Brand", "CaseType", "MediaFormat", "Instruction" };
+}
+
+<section class="hero card">
+    <div>
+        <p class="eyebrow">Personal Vault setup</p>
+        <h1>Dropdowns, categories and platforms</h1>
+        <p class="muted">Grow your own lists so logging future items becomes faster and more consistent.</p>
+    </div>
+</section>
+
+<section class="grid cards-3">
+    <article class="card">
+        <p class="eyebrow">Add category</p>
+        <h2>Categories</h2>
+        <form asp-action="AddCategory" method="post" class="planner-form compact-form">
+            @Html.AntiForgeryToken()
+            <input name="name" placeholder="Clothing, Bags, Documents..." required />
+            <input name="description" placeholder="Description" />
+            <input name="icon" placeholder="Lucide icon, e.g. shirt" />
+            <input name="colour" placeholder="#db2777" />
+            <button class="btn btn-primary" type="submit">Add category</button>
+        </form>
+        <p class="muted small-text">Existing: @string.Join(", ", categories.Select(c => c.Name).Take(12))</p>
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">Add type</p>
+        <h2>Item types</h2>
+        <form asp-action="AddItemType" method="post" class="planner-form compact-form">
+            @Html.AntiForgeryToken()
+            <input name="name" placeholder="Jacket, Hoodie, Handbag..." required />
+            <input name="description" placeholder="Description" />
+            <button class="btn btn-primary" type="submit">Add type</button>
+        </form>
+        <p class="muted small-text">Existing: @string.Join(", ", itemTypes.Select(t => t.Name).Take(14))</p>
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">Add platform</p>
+        <h2>Platforms / contexts</h2>
+        <form asp-action="AddPlatform" method="post" class="planner-form compact-form">
+            @Html.AntiForgeryToken()
+            <input name="name" placeholder="Wardrobe, Shoe Rack, Royal Mint..." required />
+            <select name="itemTypeId"><option value="">No linked type</option>@foreach (var t in itemTypes) { <option value="@t.Id">@t.Name</option> }</select>
+            <input name="description" placeholder="Description" />
+            <button class="btn btn-primary" type="submit">Add platform</button>
+        </form>
+        <p class="muted small-text">Platforms can now be used for general items, not just games/electronics.</p>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head"><div><p class="eyebrow">Reusable dropdown values</p><h2>Quick-add values</h2><p class="muted">These appear as suggestions on the Add/Edit Item form. You can still type a custom value any time.</p></div></div>
+    <form asp-action="AddDropdownOption" method="post" class="planner-form compact-form">
+        @Html.AntiForgeryToken()
+        <select name="listKey">@foreach (var k in optionKeys) { <option value="@k">@k</option> }</select>
+        <input name="value" placeholder="New value" required />
+        <button class="btn btn-primary" type="submit">Add option</button>
+    </form>
+    <div class="grid cards-3">
+        @foreach (var group in options.GroupBy(o => o.ListKey))
+        {
+            <article class="card mini-card">
+                <p class="eyebrow">@group.Key</p>
+                @foreach (var option in group)
+                {
+                    <form asp-action="DeleteDropdownOption" method="post" class="inline-delete-form">
+                        @Html.AntiForgeryToken()
+                        <span>@option.Value</span>
+                        <input type="hidden" name="id" value="@option.Id" />
+                        <button class="link-danger" type="submit">Remove</button>
+                    </form>
+                }
+            </article>
+        }
+    </div>
+</section>

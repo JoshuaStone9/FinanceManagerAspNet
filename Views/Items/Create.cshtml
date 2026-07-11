@@ -19,3 +19,28 @@
         <a class="btn" asp-action="Index">Cancel</a>
     </div>
 </form>
+
+
+<script id="unsavedChangesGuard">
+(function () {
+    const form = document.querySelector('form.form-card');
+    if (!form) return;
+    let dirty = false;
+    form.querySelectorAll('input, textarea, select').forEach(el => {
+        el.addEventListener('change', () => dirty = true);
+        el.addEventListener('input', () => dirty = true);
+    });
+    form.addEventListener('submit', () => dirty = false);
+    document.querySelectorAll('a').forEach(a => {
+        a.addEventListener('click', function (event) {
+            if (!dirty) return;
+            if (!confirm('You have unsaved item details. Leave this page and discard changes?')) event.preventDefault();
+        });
+    });
+    window.addEventListener('beforeunload', function (event) {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+})();
+</script>

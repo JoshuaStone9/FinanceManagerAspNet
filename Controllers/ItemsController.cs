@@ -41,6 +41,7 @@ public class ItemsController(
         ViewBag.Categories = categories;
         ViewBag.Locations = locations;
         ViewBag.Tags = tags;
+        ViewBag.DropdownOptions = await db.DropdownOptions.OrderBy(o => o.ListKey).ThenBy(o => o.SortOrder).ThenBy(o => o.Value).ToListAsync();
         ViewBag.Types = types.Select(Mapper.ToDto);
         ViewBag.Platforms = platforms.Select(Mapper.ToDto);
         ViewBag.SidebarCategories = categories;
@@ -329,6 +330,7 @@ public class ItemsController(
                 l.Id.ToString()));
 
         ViewBag.Tags = tags;
+        ViewBag.DropdownOptions = await db.DropdownOptions.OrderBy(o => o.ListKey).ThenBy(o => o.SortOrder).ThenBy(o => o.Value).ToListAsync();
 
         var types = await db.ItemTypes.Include(t => t.Items).OrderBy(t => t.Name).ToListAsync();
         var platforms = await db.Platforms.Include(p => p.ItemType).Include(p => p.Items).OrderBy(p => p.Name).ToListAsync();

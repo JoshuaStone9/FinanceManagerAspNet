@@ -43,6 +43,26 @@ CREATE TABLE dbo.app_login(app_login_id int NOT NULL CONSTRAINT PK_app_login PRI
 IF OBJECT_ID('dbo.account_balances','U') IS NULL
 CREATE TABLE dbo.account_balances(account_balance_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, include_in_global_goal bit NOT NULL DEFAULT 1, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
+IF COL_LENGTH('dbo.account_balances','include_in_savings_command') IS NULL ALTER TABLE dbo.account_balances ADD include_in_savings_command bit NOT NULL CONSTRAINT DF_account_balances_include_in_savings_command DEFAULT 0;
+
+IF OBJECT_ID('dbo.reserved_funds','U') IS NULL
+CREATE TABLE dbo.reserved_funds(
+    reserved_fund_id int IDENTITY(1,1) PRIMARY KEY,
+    [name] nvarchar(150) NOT NULL,
+    amount decimal(18,2) NOT NULL DEFAULT 0,
+    category nvarchar(80) NOT NULL DEFAULT 'Other',
+    access_speed nvarchar(80) NOT NULL DEFAULT 'Within 1 week',
+    include_in_net_worth bit NOT NULL DEFAULT 1,
+    deduct_from_savings_allocation bit NOT NULL DEFAULT 1,
+    notes nvarchar(500) NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+IF OBJECT_ID('dbo.reserved_funds','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.reserved_funds WHERE [name] = 'Moneybox Deposit')
+INSERT INTO dbo.reserved_funds([name], amount, category, access_speed, include_in_net_worth, deduct_from_savings_allocation, notes)
+VALUES('Moneybox Deposit', 8000, 'House Deposit', 'Moneybox / LISA', 1, 1, 'Reserved for Moneybox house deposit, excluded from savings allocation but still part of net worth.');
+
 IF OBJECT_ID('dbo.account_balance_history','U') IS NULL
 CREATE TABLE dbo.account_balance_history(history_id int IDENTITY(1,1) PRIMARY KEY, account_balance_id int NULL, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
@@ -51,6 +71,14 @@ CREATE TABLE dbo.monthly_income_stats(income_id int IDENTITY(1,1) PRIMARY KEY, [
 
 IF OBJECT_ID('dbo.saving_pots','U') IS NULL
 CREATE TABLE dbo.saving_pots(saving_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, target_amount decimal(18,2) NOT NULL, monthly_amount decimal(18,2) NOT NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+
+IF COL_LENGTH('dbo.saving_pots','priority') IS NULL ALTER TABLE dbo.saving_pots ADD [priority] int NOT NULL DEFAULT 1;
+IF COL_LENGTH('dbo.saving_pots','pot_type') IS NULL ALTER TABLE dbo.saving_pots ADD pot_type nvarchar(80) NOT NULL DEFAULT 'Goal';
+IF COL_LENGTH('dbo.saving_pots','access_speed') IS NULL ALTER TABLE dbo.saving_pots ADD access_speed nvarchar(80) NOT NULL DEFAULT 'Immediate';
+IF COL_LENGTH('dbo.saving_pots','interest_rate') IS NULL ALTER TABLE dbo.saving_pots ADD interest_rate decimal(9,4) NOT NULL DEFAULT 0;
+IF COL_LENGTH('dbo.saving_pots','target_date') IS NULL ALTER TABLE dbo.saving_pots ADD target_date date NULL;
+IF COL_LENGTH('dbo.saving_pots','destination') IS NULL ALTER TABLE dbo.saving_pots ADD destination nvarchar(160) NULL;
+IF COL_LENGTH('dbo.saving_pots','contribution_mode') IS NULL ALTER TABLE dbo.saving_pots ADD contribution_mode nvarchar(80) NOT NULL CONSTRAINT DF_saving_pots_contribution_mode DEFAULT 'Uses global savings schedule';
 
 IF OBJECT_ID('dbo.saving_pot_months','U') IS NULL
 CREATE TABLE dbo.saving_pot_months(saving_pot_month_id int IDENTITY(1,1) PRIMARY KEY, saving_pot_id int NOT NULL, [year] int NOT NULL, [month] int NOT NULL, is_saved bit NOT NULL DEFAULT 0, saved_amount decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT FK_saving_pot_months_pots FOREIGN KEY(saving_pot_id) REFERENCES dbo.saving_pots(saving_pot_id) ON DELETE CASCADE, CONSTRAINT UQ_saving_pot_months UNIQUE(saving_pot_id,[year],[month]));
@@ -67,6 +95,15 @@ CREATE TABLE dbo.saving_pot_extras(
     note nvarchar(250) NULL,
     created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT FK_saving_pot_extras_pots FOREIGN KEY(saving_pot_id) REFERENCES dbo.saving_pots(saving_pot_id) ON DELETE CASCADE
+);
+
+IF OBJECT_ID('dbo.savings_contribution_changes','U') IS NULL
+CREATE TABLE dbo.savings_contribution_changes(
+    savings_contribution_change_id int IDENTITY(1,1) PRIMARY KEY,
+    starts_on date NOT NULL,
+    monthly_amount decimal(18,2) NOT NULL,
+    note nvarchar(250) NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
 UPDATE m
@@ -192,11 +229,26 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
     public async Task<List<AccountBalance>> GetAccountsAsync(decimal emergencyFund)
     {
         await EnsureModernTablesAsync();
-        var accounts = new List<AccountBalance> { new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue) };
+        var includeEmergency = await GetDecimalSettingAsync("SavingsIncludeEmergencyFund", 1m) == 1m;
+        var accounts = new List<AccountBalance>
+        {
+            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency)
+        };
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at FROM dbo.account_balances ORDER BY [name]", con);
+        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command FROM dbo.account_balances ORDER BY [name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
-        while (await r.ReadAsync()) accounts.Add(new AccountBalance(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetBoolean(5), r.GetDateTime(6)));
+        while (await r.ReadAsync())
+        {
+            accounts.Add(new AccountBalance(
+                r.GetInt32(0),
+                r.GetString(1),
+                r.GetDecimal(2),
+                r.GetDecimal(3),
+                r.GetDecimal(4),
+                r.GetBoolean(5),
+                r.GetDateTime(6),
+                r.GetBoolean(7)));
+        }
         return accounts;
     }
 
@@ -215,6 +267,75 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
         await EnsureModernTablesAsync();
         await ExecuteAsync(@"MERGE dbo.monthly_income_stats AS t USING (SELECT @year y,@month m) AS s ON t.[year]=s.y AND t.[month]=s.m WHEN MATCHED THEN UPDATE SET amount=@amount,sick_days=@sick,updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([year],[month],amount,sick_days) VALUES(@year,@month,@amount,@sick);", ("@year", year), ("@month", month), ("@amount", amount), ("@sick", sickDays));
         await ExecuteAsync(@"MERGE dbo.monthly_allowance AS t USING (SELECT @month m) AS s ON t.month_id=s.m WHEN MATCHED THEN UPDATE SET amount=@amount WHEN NOT MATCHED THEN INSERT(month_id, amount) VALUES(@month,@amount);", ("@month", month), ("@amount", amount));
+    }
+
+
+    public async Task<List<SavingsContributionChange>> GetSavingsContributionChangesAsync()
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<SavingsContributionChange>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT savings_contribution_change_id, starts_on, monthly_amount, note, created_at FROM dbo.savings_contribution_changes ORDER BY starts_on", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new SavingsContributionChange(
+                r.GetInt32(0),
+                r.GetDateTime(1),
+                r.GetDecimal(2),
+                r.IsDBNull(3) ? null : r.GetString(3),
+                r.GetDateTime(4)));
+        }
+        return list;
+    }
+
+    public async Task AddSavingsContributionChangeAsync(DateTime startsOn, decimal monthlyAmount, string? note)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("INSERT INTO dbo.savings_contribution_changes(starts_on, monthly_amount, note) VALUES(@startsOn, @monthlyAmount, @note)",
+            ("@startsOn", startsOn.Date),
+            ("@monthlyAmount", monthlyAmount),
+            ("@note", DbValue(note)));
+    }
+
+    public async Task DeleteSavingsContributionChangeAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("DELETE FROM dbo.savings_contribution_changes WHERE savings_contribution_change_id=@id", ("@id", id));
+    }
+
+    public async Task SaveManualEmergencyFundUpdateAsync(decimal newTotal, string? reason)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount, updated_at=SYSUTCDATETIME() ELSE INSERT INTO dbo.emergency_fund(amount, updated_at) VALUES(@amount, SYSUTCDATETIME())", ("@amount", newTotal));
+        var rate = await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m);
+        await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(NULL,@name,@amount,@rate,0)",
+            ("@name", string.IsNullOrWhiteSpace(reason) ? "Emergency Fund manual update" : $"Emergency Fund manual update - {reason.Trim()}"),
+            ("@amount", newTotal),
+            ("@rate", rate));
+    }
+
+    public async Task SaveSavingsSourcesAsync(bool includeEmergencyFund, IReadOnlyCollection<int> accountIds)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"MERGE dbo.finance_settings AS t USING (SELECT @key AS [key]) AS s ON t.[key]=s.[key] WHEN MATCHED THEN UPDATE SET [value]=@value, updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([key],[value]) VALUES(@key,@value);",
+            ("@key", "SavingsIncludeEmergencyFund"),
+            ("@value", includeEmergencyFund ? "1" : "0"));
+
+        await ExecuteAsync("UPDATE dbo.account_balances SET include_in_savings_command = 0");
+        var ids = accountIds.Distinct().Where(id => id > 0).ToArray();
+        if (ids.Length == 0) return;
+
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        var parameterNames = ids.Select((_, index) => $"@id{index}").ToArray();
+        await using var cmd = new SqlCommand($"UPDATE dbo.account_balances SET include_in_savings_command = 1 WHERE account_balance_id IN ({string.Join(",", parameterNames)})", con);
+        for (var i = 0; i < ids.Length; i++)
+        {
+            cmd.Parameters.AddWithValue(parameterNames[i], ids[i]);
+        }
+        await cmd.ExecuteNonQueryAsync();
     }
 
     public async Task SaveAccountAsync(int id, string name, decimal amount, decimal rate, decimal monthly, bool include)
@@ -714,11 +835,29 @@ WHEN NOT MATCHED THEN
         await EnsureModernTablesAsync();
         var list = new List<SavingPot>();
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT saving_pot_id,[name],target_amount,monthly_amount,created_at,updated_at FROM dbo.saving_pots ORDER BY [name]", con);
+        await using var cmd = new SqlCommand(@"SELECT saving_pot_id,[name],target_amount,monthly_amount,
+       ISNULL(contribution_mode,'Uses global savings schedule'),
+       ISNULL([priority],1),ISNULL(pot_type,'Goal'),ISNULL(access_speed,'Immediate'),ISNULL(interest_rate,0),target_date,destination,
+       created_at,updated_at
+FROM dbo.saving_pots
+ORDER BY [priority], CASE WHEN target_date IS NULL THEN 1 ELSE 0 END, target_date, created_at", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
         {
-            list.Add(new SavingPot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDateTime(4), r.GetDateTime(5)));
+            list.Add(new SavingPot(
+                r.GetInt32(0),
+                r.GetString(1),
+                r.GetDecimal(2),
+                r.GetDecimal(3),
+                r.GetString(4),
+                r.GetInt32(5),
+                r.GetString(6),
+                r.GetString(7),
+                r.GetDecimal(8),
+                r.IsDBNull(9) ? null : r.GetDateTime(9),
+                r.IsDBNull(10) ? null : r.GetString(10),
+                r.GetDateTime(11),
+                r.GetDateTime(12)));
         }
         return list;
     }
@@ -780,18 +919,77 @@ SELECT
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }
 
-    public async Task SaveSavingPotAsync(int id, string name, decimal targetAmount, decimal monthlyAmount)
+    public async Task SaveSavingPotAsync(int id, string name, decimal targetAmount, decimal monthlyAmount, string contributionMode = "Uses global savings schedule", int priority = 1, string potType = "Goal", string accessSpeed = "Immediate", decimal interestRate = 0m, DateTime? targetDate = null, string? destination = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
         await EnsureModernTablesAsync();
+        priority = Math.Max(1, priority);
+        potType = string.IsNullOrWhiteSpace(potType) ? "Goal" : potType.Trim();
+        accessSpeed = string.IsNullOrWhiteSpace(accessSpeed) ? "Immediate" : accessSpeed.Trim();
+        var allowedContributionModes = new[] { "Uses global savings schedule", "Manual contribution", "One-off funding only", "Paused" };
+        contributionMode = allowedContributionModes.Contains(contributionMode?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            ? allowedContributionModes.First(x => x.Equals(contributionMode!.Trim(), StringComparison.OrdinalIgnoreCase))
+            : "Uses global savings schedule";
+        if (!contributionMode.Equals("Manual contribution", StringComparison.OrdinalIgnoreCase)) monthlyAmount = 0m;
         if (id == 0)
         {
-            await ExecuteAsync("INSERT INTO dbo.saving_pots([name],target_amount,monthly_amount) VALUES(@name,@target,@monthly)", ("@name", name.Trim()), ("@target", targetAmount), ("@monthly", monthlyAmount));
+            await ExecuteAsync(@"INSERT INTO dbo.saving_pots([name],target_amount,monthly_amount,contribution_mode,[priority],pot_type,access_speed,interest_rate,target_date,destination)
+VALUES(@name,@target,@monthly,@contributionMode,@priority,@potType,@accessSpeed,@interestRate,@targetDate,@destination)",
+                ("@name", name.Trim()), ("@target", targetAmount), ("@monthly", monthlyAmount), ("@contributionMode", contributionMode), ("@priority", priority), ("@potType", potType), ("@accessSpeed", accessSpeed), ("@interestRate", interestRate), ("@targetDate", targetDate.HasValue ? targetDate.Value.Date : (object)DBNull.Value), ("@destination", DbValue(destination)));
         }
         else
         {
-            await ExecuteAsync("UPDATE dbo.saving_pots SET [name]=@name,target_amount=@target,monthly_amount=@monthly,updated_at=SYSUTCDATETIME() WHERE saving_pot_id=@id", ("@id", id), ("@name", name.Trim()), ("@target", targetAmount), ("@monthly", monthlyAmount));
+            await ExecuteAsync(@"UPDATE dbo.saving_pots
+SET [name]=@name,target_amount=@target,monthly_amount=@monthly,contribution_mode=@contributionMode,[priority]=@priority,pot_type=@potType,access_speed=@accessSpeed,interest_rate=@interestRate,target_date=@targetDate,destination=@destination,updated_at=SYSUTCDATETIME()
+WHERE saving_pot_id=@id", ("@id", id), ("@name", name.Trim()), ("@target", targetAmount), ("@monthly", monthlyAmount), ("@contributionMode", contributionMode), ("@priority", priority), ("@potType", potType), ("@accessSpeed", accessSpeed), ("@interestRate", interestRate), ("@targetDate", targetDate.HasValue ? targetDate.Value.Date : (object)DBNull.Value), ("@destination", DbValue(destination)));
         }
+    }
+
+
+    public async Task<List<ReservedFund>> GetReservedFundsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<ReservedFund>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"SELECT reserved_fund_id,[name],amount,category,access_speed,include_in_net_worth,deduct_from_savings_allocation,notes,created_at,updated_at FROM dbo.reserved_funds ORDER BY category,[name]", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new ReservedFund(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetString(3), r.GetString(4), r.GetBoolean(5), r.GetBoolean(6), r.IsDBNull(7) ? null : r.GetString(7), r.GetDateTime(8), r.GetDateTime(9)));
+        }
+        return list;
+    }
+
+    public async Task SaveReservedFundAsync(int id, string name, decimal amount, string category, string accessSpeed, bool includeInNetWorth, bool deductFromSavingsAllocation, string? notes)
+    {
+        await EnsureModernTablesAsync();
+        name = string.IsNullOrWhiteSpace(name) ? "Reserved fund" : name.Trim();
+        category = string.IsNullOrWhiteSpace(category) ? "Other" : category.Trim();
+        accessSpeed = string.IsNullOrWhiteSpace(accessSpeed) ? "Within 1 week" : accessSpeed.Trim();
+        if (id == 0)
+        {
+            await ExecuteAsync(@"INSERT INTO dbo.reserved_funds([name],amount,category,access_speed,include_in_net_worth,deduct_from_savings_allocation,notes)
+VALUES(@name,@amount,@category,@access,@networth,@deduct,@notes)", ("@name", name), ("@amount", Math.Max(0, amount)), ("@category", category), ("@access", accessSpeed), ("@networth", includeInNetWorth), ("@deduct", deductFromSavingsAllocation), ("@notes", DbValue(notes)));
+        }
+        else
+        {
+            await ExecuteAsync(@"UPDATE dbo.reserved_funds SET [name]=@name,amount=@amount,category=@category,access_speed=@access,include_in_net_worth=@networth,deduct_from_savings_allocation=@deduct,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserved_fund_id=@id", ("@id", id), ("@name", name), ("@amount", Math.Max(0, amount)), ("@category", category), ("@access", accessSpeed), ("@networth", includeInNetWorth), ("@deduct", deductFromSavingsAllocation), ("@notes", DbValue(notes)));
+        }
+    }
+
+    public async Task DeleteReservedFundAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("DELETE FROM dbo.reserved_funds WHERE reserved_fund_id=@id", ("@id", id));
+    }
+
+    public async Task SaveSavingsBrainSettingsAsync(decimal emergencyBaseline, decimal monthlySavingRate, DateTime overallTargetDate)
+    {
+        await SaveDecimalSettingAsync("EmergencyFundBaseline", emergencyBaseline);
+        await SaveDecimalSettingAsync("SavingsMonthlyRate", monthlySavingRate);
+        await SaveDecimalSettingAsync("SavingsOverallTargetYear", overallTargetDate.Year);
+        await SaveDecimalSettingAsync("SavingsOverallTargetMonth", overallTargetDate.Month);
     }
 
     public async Task DeleteSavingPotAsync(int id)

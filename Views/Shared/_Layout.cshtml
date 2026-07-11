@@ -1,7 +1,7 @@
 @{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
     var action = ViewContext.RouteData.Values["action"]?.ToString();
-    var isVault = controller == "Items" || controller == "Locations";
+    var isVault = controller == "Items" || controller == "Locations" || controller == "VaultSettings";
     var isLoggedIn = User.Identity?.IsAuthenticated == true;
 }
 <!doctype html>
@@ -46,6 +46,9 @@
                     </a>
                     <a class="nav-link @(controller == "Locations" ? "active" : "")" asp-controller="Locations" asp-action="Index">
                         <i data-lucide="map-pin"></i> <span>Locations</span>
+                    </a>
+                    <a class="nav-link @(controller == "VaultSettings" ? "active" : "")" asp-controller="VaultSettings" asp-action="Index">
+                        <i data-lucide="sliders-horizontal"></i> <span>Vault Settings</span>
                     </a>
                 }
             </nav>

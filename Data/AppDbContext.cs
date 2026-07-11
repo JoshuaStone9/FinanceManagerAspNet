@@ -15,10 +15,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ItemPhoto> ItemPhotos => Set<ItemPhoto>();
     public DbSet<MaintenanceLog> MaintenanceLogs => Set<MaintenanceLog>();
     public DbSet<LoanRecord> LoanRecords => Set<LoanRecord>();
+    public DbSet<DropdownOption> DropdownOptions => Set<DropdownOption>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
         base.OnModelCreating(model);
+
+        model.Entity<DropdownOption>()
+            .ToTable("DropdownOptions");
+
+        model.Entity<DropdownOption>()
+            .HasIndex(o => new { o.ListKey, o.Value })
+            .IsUnique();
 
         model.Entity<Tag>()
             .ToTable("Tags");

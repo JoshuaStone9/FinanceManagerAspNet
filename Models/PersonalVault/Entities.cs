@@ -197,3 +197,13 @@ public class LoanRecord
     public string? Notes { get; set; }
     public bool IsReturned => ReturnedOn.HasValue;
 }
+
+
+public class DropdownOption
+{
+    public int Id { get; set; }
+    public required string ListKey { get; set; }
+    public required string Value { get; set; }
+    public int SortOrder { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
