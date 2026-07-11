@@ -22,6 +22,8 @@ public sealed class DashboardViewModel
     public DateTime MonthStart => new(Year, Month, 1);
     public DateTime PreviousMonth => MonthStart.AddMonths(-1);
     public DateTime NextMonth => MonthStart.AddMonths(1);
+    // Legacy forecast fields are retained for compatibility with the Statistics page,
+    // but are no longer used by the post-move monthly dashboard.
     public decimal MonthlySavingTarget { get; set; }
     public decimal GlobalGoal { get; set; }
     public decimal MonthlyIncome { get; set; }
@@ -30,10 +32,10 @@ public sealed class DashboardViewModel
     public decimal ExpensesTotal { get; set; }
     public decimal InvestmentsTotal { get; set; }
     public decimal SavingsTotal { get; set; }
-    public decimal GrandOutgoings => BillsTotal + ExpensesTotal + InvestmentsTotal;
-    public decimal RemainingFund => MonthlyIncome - GrandOutgoings + SavingsTotal;
-    public decimal CarryOverAmount => Math.Abs(RemainingFund - MonthlySavingTarget);
-    public bool IsAhead => RemainingFund >= MonthlySavingTarget;
+    public decimal TotalAllocated => BillsTotal + ExpensesTotal + InvestmentsTotal + SavingsTotal;
+    public decimal RemainingFund => MonthlyIncome - TotalAllocated;
+    public bool IsOverBudget => RemainingFund < 0;
+    public decimal OverspendAmount => Math.Max(0, -RemainingFund);
     public decimal TotalGoalBalance { get; set; }
     public decimal VaultTotalValue { get; set; }
     public int VaultItemCount { get; set; }
@@ -362,11 +364,12 @@ public sealed class SavingPotsViewModel
 
 public sealed class StatisticsViewModel
 {
+    // Retained for the existing long-term statistics page. The monthly dashboard no longer uses a forced target.
+    public decimal GlobalGoal { get; set; }
+    public decimal MonthlySavingTarget { get; set; }
     public decimal ManualAverageIncome { get; set; }
     public decimal CalculatedSalaryEstimate { get; set; }
     public decimal AverageSavingPace { get; set; }
-    public decimal MonthlySavingTarget { get; set; }
-    public decimal GlobalGoal { get; set; }
     public decimal TotalNow { get; set; }
     public decimal Remaining { get; set; }
     public DateTime AprilTarget { get; set; }
@@ -399,4 +402,46 @@ public sealed class StatisticsViewModel
     public decimal TotalValueNow { get; set; }
     public decimal TotalValueByApril { get; set; }
     public decimal AvailableEmergencyFundAfterPots => Math.Round(HouseGoal.EmergencyFundStillNeededWithInterest - AllocatedToSavingPots, 2);
+}
+public sealed record HouseholdReserve(
+    decimal Balance,
+    decimal InterestRate,
+    string Provider,
+    DateTime UpdatedAt);
+
+public sealed record ReservePot(
+    int Id,
+    string Name,
+    decimal AllocatedAmount,
+    decimal DefaultMonthlyContribution,
+    decimal? TargetAmount,
+    DateTime? DueDate,
+    int Priority,
+    bool IsActive,
+    string? Notes,
+    DateTime UpdatedAt)
+{
+    public decimal RemainingToTarget => TargetAmount.HasValue ? Math.Max(0, TargetAmount.Value - AllocatedAmount) : 0m;
+    public decimal? SuggestedMonthlyContribution
+    {
+        get
+        {
+            if (!TargetAmount.HasValue || !DueDate.HasValue || RemainingToTarget <= 0) return null;
+            var firstOfThisMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            var firstOfDueMonth = new DateTime(DueDate.Value.Year, DueDate.Value.Month, 1);
+            var months = Math.Max(1, ((firstOfDueMonth.Year - firstOfThisMonth.Year) * 12) + firstOfDueMonth.Month - firstOfThisMonth.Month);
+            return Math.Round(RemainingToTarget / months, 2);
+        }
+    }
+}
+
+public sealed class HouseholdReserveViewModel
+{
+    public HouseholdReserve Reserve { get; set; } = new(0, 0, "Money market fund", DateTime.MinValue);
+    public List<ReservePot> Pots { get; set; } = [];
+    public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => p.AllocatedAmount);
+    public decimal UnallocatedBalance => Reserve.Balance - TotalAllocated;
+    public decimal TotalDefaultMonthlyContributions => Pots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);
+    public decimal EstimatedMonthlyInterest => Math.Round(Reserve.Balance * (Reserve.InterestRate / 100m) / 12m, 2);
+    public bool IsOverAllocated => UnallocatedBalance < 0;
 }

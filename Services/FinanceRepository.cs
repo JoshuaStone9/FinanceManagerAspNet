@@ -69,6 +69,30 @@ CREATE TABLE dbo.account_balance_history(history_id int IDENTITY(1,1) PRIMARY KE
 IF OBJECT_ID('dbo.monthly_income_stats','U') IS NULL
 CREATE TABLE dbo.monthly_income_stats(income_id int IDENTITY(1,1) PRIMARY KEY, [year] int NOT NULL, [month] int NOT NULL, amount decimal(18,2) NOT NULL, sick_days int NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT UQ_monthly_income_stats UNIQUE([year],[month]));
 
+IF OBJECT_ID('dbo.household_reserve','U') IS NULL
+CREATE TABLE dbo.household_reserve(household_reserve_id int NOT NULL CONSTRAINT PK_household_reserve PRIMARY KEY DEFAULT 1, balance decimal(18,2) NOT NULL DEFAULT 0, interest_rate decimal(9,4) NOT NULL DEFAULT 0, provider nvarchar(160) NOT NULL DEFAULT 'Money market fund', updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT CK_household_reserve_single_row CHECK (household_reserve_id = 1));
+
+IF NOT EXISTS (SELECT 1 FROM dbo.household_reserve WHERE household_reserve_id = 1)
+INSERT INTO dbo.household_reserve(household_reserve_id,balance,interest_rate,provider)
+SELECT 1, ISNULL((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0), 0, 'Money market fund';
+
+IF OBJECT_ID('dbo.reserve_pots','U') IS NULL
+CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+
+IF NOT EXISTS (SELECT 1 FROM dbo.reserve_pots)
+BEGIN
+    INSERT INTO dbo.reserve_pots([name],default_monthly_contribution,priority,notes) VALUES
+    ('Emergency reserve',0,1,'Core emergency money held inside the single household reserve.'),
+    ('MOT and servicing',50,2,'Annual MOT and routine servicing.'),
+    ('Car insurance',0,3,'Set a target and due date when the renewal quote is known.'),
+    ('Car repairs and tyres',40,4,'Unexpected repairs, tyres and maintenance.'),
+    ('Home repairs',50,5,'Repairs and maintenance for the house.'),
+    ('Wear and tear',25,6,'Furniture, appliances and replacements.'),
+    ('Holidays',200,7,'Holiday spending reserve.'),
+    ('Gifts',50,8,'Birthdays and Christmas.'),
+    ('Unallocated reserve',0,99,'Any surplus not yet assigned to another virtual pot.');
+END;
+
 IF OBJECT_ID('dbo.saving_pots','U') IS NULL
 CREATE TABLE dbo.saving_pots(saving_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, target_amount decimal(18,2) NOT NULL, monthly_amount decimal(18,2) NOT NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
@@ -1043,4 +1067,57 @@ VALUES(@potId, @amount, @date, @note)",
         ("@date", date.Date),
         ("@note", DbValue(note)));
     }
+
+    public async Task<HouseholdReserve> GetHouseholdReserveAsync()
+    {
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT balance,interest_rate,provider,updated_at FROM dbo.household_reserve WHERE household_reserve_id=1", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        return await r.ReadAsync()
+            ? new HouseholdReserve(r.GetDecimal(0), r.GetDecimal(1), r.GetString(2), r.GetDateTime(3))
+            : new HouseholdReserve(0, 0, "Money market fund", DateTime.MinValue);
+    }
+
+    public async Task SaveHouseholdReserveAsync(decimal balance, decimal interestRate, string? provider)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"MERGE dbo.household_reserve AS t USING (SELECT 1 AS id) AS s ON t.household_reserve_id=s.id
+WHEN MATCHED THEN UPDATE SET balance=@balance, interest_rate=@rate, provider=@provider, updated_at=SYSUTCDATETIME()
+WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider) VALUES(1,@balance,@rate,@provider);",
+            ("@balance", Math.Max(0,balance)), ("@rate", Math.Max(0,interestRate)), ("@provider", string.IsNullOrWhiteSpace(provider) ? "Money market fund" : provider.Trim()));
+    }
+
+    public async Task<List<ReservePot>> GetReservePotsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<ReservePot>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,target_amount,due_date,priority,is_active,notes,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+            list.Add(new ReservePot(r.GetInt32(0),r.GetString(1),r.GetDecimal(2),r.GetDecimal(3),r.IsDBNull(4)?null:r.GetDecimal(4),r.IsDBNull(5)?null:r.GetDateTime(5),r.GetInt32(6),r.GetBoolean(7),r.IsDBNull(8)?null:r.GetString(8),r.GetDateTime(9)));
+        return list;
+    }
+
+    public async Task SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal monthlyContribution, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
+    {
+        await EnsureModernTablesAsync();
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
+        if (id <= 0)
+            await ExecuteAsync("INSERT INTO dbo.reserve_pots([name],allocated_amount,default_monthly_contribution,target_amount,due_date,priority,is_active,notes) VALUES(@name,@allocated,@monthly,@target,@due,@priority,@active,@notes)",
+                ("@name",name.Trim()),("@allocated",Math.Max(0,allocatedAmount)),("@monthly",Math.Max(0,monthlyContribution)),("@target",targetAmount.HasValue?(object)Math.Max(0,targetAmount.Value):DBNull.Value),("@due",dueDate.HasValue?(object)dueDate.Value.Date:DBNull.Value),("@priority",Math.Max(1,priority)),("@active",isActive),("@notes",DbValue(notes)));
+        else
+            await ExecuteAsync("UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,default_monthly_contribution=@monthly,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id",
+                ("@id",id),("@name",name.Trim()),("@allocated",Math.Max(0,allocatedAmount)),("@monthly",Math.Max(0,monthlyContribution)),("@target",targetAmount.HasValue?(object)Math.Max(0,targetAmount.Value):DBNull.Value),("@due",dueDate.HasValue?(object)dueDate.Value.Date:DBNull.Value),("@priority",Math.Max(1,priority)),("@active",isActive),("@notes",DbValue(notes)));
+    }
+
+    public async Task DeleteReservePotAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id",id));
+    }
+
 }

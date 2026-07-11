@@ -1,101 +1,83 @@
 using FinanceManagerAspNet.Models;
 using FinanceManagerAspNet.Services;
-using FinanceManagerAspNet.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class DashboardController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config, AppDbContext vaultDb) : Controller
+public sealed class DashboardController(FinanceRepository repo, IConfiguration config) : Controller
 {
     public async Task<IActionResult> Index(int? year, int? month)
     {
         var now = DateTime.Today;
-        var y = year ?? now.Year; var m = month ?? now.Month;
+        var y = year ?? now.Year;
+        var m = month ?? now.Month;
         await repo.EnsureModernTablesAsync();
-        var fallbackIncome = decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var di) ? di : 3500m;
-        var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt) ? mt : 1200m;
-        var globalGoal = decimal.TryParse(config["FinanceSettings:GlobalGoal"], out var gg) ? gg : 20000m;
+
+        var fallbackIncome = decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var defaultIncome)
+            ? defaultIncome
+            : 3600m;
         var income = await repo.GetIncomeAsync(y, m);
-        var allowance = income?.Amount ?? await repo.GetMonthlyAllowanceAsync(m, fallbackIncome);
-        var emergency = await repo.GetEmergencyFundAsync();
-        var accounts = await repo.GetAccountsAsync(emergency);
-        var targetDate = new DateTime(now.Year + (now.Month > 4 ? 1 : 0), 4, 30);
-        var monthsToApril = Math.Max(0, ((targetDate.Year - now.Year) * 12) + targetDate.Month - now.Month);
+        var monthlyIncome = income?.Amount ?? await repo.GetMonthlyAllowanceAsync(m, fallbackIncome);
+
         var bills = await repo.GetRowsAsync("bills", m, y);
         var expenses = await repo.GetRowsAsync("extra_expenses", m, y);
         var investments = await repo.GetRowsAsync("investments", m, y);
-        var savings = await repo.GetRowsAsync("savings", m, y);
-        var totalGoalBalance = accounts.Where(a => a.IncludeInGlobalGoal).Sum(a => a.Amount);
-        var vaultInvestedCategoryNames = new[] { "Coins & Bullion", "Coins", "Bullion", "Gold", "Silver" };
-        var vaultItemsForFinance = vaultDb.Items
-            .Where(i => i.Category == null || !vaultInvestedCategoryNames.Contains(i.Category.Name));
-        var vaultItemCount = await vaultItemsForFinance.CountAsync();
-        var vaultTotalValue = await vaultItemsForFinance.SumAsync(i => i.CurrentValue ?? 0);
-        var stocksCrypto = await repo.GetStocksCryptoAsync();
-        var assetSummary = await repo.GetAssetSummaryAsync();
-        var projectedStocksCrypto = calc.CompoundMonthly(assetSummary.TotalValue, assetSummary.WeightedGrowthRate, assetSummary.MonthlyContribution, monthsToApril);
+        var reserveAllocations = await repo.GetRowsAsync("savings", m, y);
+        var reserve = await repo.GetHouseholdReserveAsync();
+        var reservePots = await repo.GetReservePotsAsync();
+
         var vm = new DashboardViewModel
         {
-            Year = y, Month = m, MonthlyIncome = allowance, SickDays = income?.SickDays ?? 0,
-            MonthlySavingTarget = monthlyTarget, GlobalGoal = globalGoal,
-            Bills = bills, Expenses = expenses, Investments = investments, Savings = savings,
-            BillsTotal = bills.Sum(x=>x.Amount), ExpensesTotal = expenses.Sum(x=>x.Amount), InvestmentsTotal = investments.Sum(x=>x.Amount), SavingsTotal = savings.Sum(x=>x.Amount),
-            Accounts = accounts, TotalGoalBalance = totalGoalBalance, VaultItemCount = vaultItemCount, VaultTotalValue = vaultTotalValue, StocksCryptoValue = stocksCrypto.Amount, LiveAssetsValue = assetSummary.TotalValue, LiveAssetsMonthlyContribution = assetSummary.MonthlyContribution, LiveAssetsGrowthRate = assetSummary.WeightedGrowthRate, LiveAssetsLastUpdated = assetSummary.LastUpdated, StocksCryptoInterestRate = stocksCrypto.Rate, StocksCryptoMonthlyContribution = stocksCrypto.Monthly, ProjectedStocksCryptoByGoalDate = projectedStocksCrypto, TargetDate = targetDate,
-            ProjectedWithoutInterestByGoalDate = calc.ProjectAccountsWithoutInterest(accounts, monthsToApril, monthlyTarget),
-            ProjectedWithInterestByGoalDate = calc.ProjectAccounts(accounts, monthsToApril, monthlyTarget),
-            ProjectedInterestByGoalDate = calc.ProjectAccounts(accounts, monthsToApril, monthlyTarget) - calc.ProjectAccountsWithoutInterest(accounts, monthsToApril, monthlyTarget),
-            ProjectedSalarySavingsByGoalDate = calc.ProjectSalarySavings(monthlyTarget, monthsToApril),
-            LastModified = accounts.Select(a => new LastModifiedInfo(a.Name, a.UpdatedAt == DateTime.MinValue ? null : a.UpdatedAt)).ToList()
+            Year = y,
+            Month = m,
+            MonthlyIncome = monthlyIncome,
+            SickDays = income?.SickDays ?? 0,
+            Bills = bills,
+            Expenses = expenses,
+            Investments = investments,
+            Savings = reserveAllocations,
+            BillsTotal = bills.Sum(x => x.Amount),
+            ExpensesTotal = expenses.Sum(x => x.Amount),
+            InvestmentsTotal = investments.Sum(x => x.Amount),
+            SavingsTotal = reserveAllocations.Sum(x => x.Amount),
+            TotalGoalBalance = reserve.Balance,
+            Accounts = [],
+            LastModified = [new LastModifiedInfo("Household reserve", reserve.UpdatedAt)]
         };
-        var pace = Math.Max(0, vm.RemainingFund);
-        vm.MonthsToGoalAtCurrentPace = calc.MonthsToGoal(totalGoalBalance, globalGoal, pace);
+
+        ViewBag.ReserveProvider = reserve.Provider;
+        ViewBag.ReserveInterestRate = reserve.InterestRate;
+        var reserveAllocated = reservePots.Where(p => p.IsActive).Sum(p => p.AllocatedAmount);
+        ViewBag.ReserveAllocated = reserveAllocated;
+        ViewBag.ReserveUnallocated = reserve.Balance - reserveAllocated;
+        ViewBag.DefaultReserveContribution = reservePots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);
         return View(vm);
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveIncome(int year, int month, decimal amount, int sickDays)
     {
-        if (!CanEdit()) return LoginRedirect(); await repo.SaveIncomeAsync(year, month, amount, sickDays); return RedirectToAction(nameof(Index), new { year, month }); }
-
-    [HttpPost]
-    public async Task<IActionResult> SaveAccount(int year, int month, int id, string name, decimal amount, decimal interestRate, decimal monthlyContribution, bool includeInGlobalGoal = true)
-    {
-        if (!CanEdit()) return LoginRedirect(); await repo.SaveAccountAsync(id, name, amount, interestRate, monthlyContribution, includeInGlobalGoal); return RedirectToAction(nameof(Index), new { year, month }); }
-
-
-
-
-
-    [HttpPost]
-    public async Task<IActionResult> DeleteAccount(int year, int month, int id)
-    {
         if (!CanEdit()) return LoginRedirect();
-        await repo.DeleteAccountAsync(id);
+        await repo.SaveIncomeAsync(year, month, Math.Max(0, amount), Math.Max(0, sickDays));
         return RedirectToAction(nameof(Index), new { year, month });
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        await repo.AddPaymentAsync(source, name, Math.Max(0, amount), date == default ? new DateTime(year, month, 1) : date, category, type, length, notes);
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeletePayment(int year, int month, string source, int id)
     {
         if (!CanEdit()) return LoginRedirect();
         await repo.DeletePaymentAsync(source, id);
-        return RedirectToAction(nameof(Index), new { year, month });
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> SaveStocksCrypto(int year, int month, decimal amount, decimal interestRate, decimal monthlyContribution)
-    {
-        if (!CanEdit()) return LoginRedirect();
-        await repo.SaveStocksCryptoAsync(amount, interestRate, monthlyContribution);
-        return RedirectToAction(nameof(Index), new { year, month });
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
-    {
-        if (!CanEdit()) return LoginRedirect();
-        await repo.AddPaymentAsync(source, name, amount, date, category, type, length, notes);
         return RedirectToAction(nameof(Index), new { year, month });
     }
 
@@ -105,29 +87,42 @@ public sealed class DashboardController(FinanceRepository repo, FinanceCalculato
         if (!CanEdit()) return LoginRedirect();
         var item = await repo.GetPaymentAsync(source, id);
         if (item is null) return NotFound();
+        ViewBag.Year = year;
+        ViewBag.Month = month;
         return View(item);
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditPayment(int year, int month, string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
     {
         if (!CanEdit()) return LoginRedirect();
-        await repo.UpdatePaymentAsync(source, id, name, amount, date, category, type, length, notes);
+        await repo.UpdatePaymentAsync(source, id, name, Math.Max(0, amount), date, category, type, length, notes);
         return RedirectToAction(nameof(Index), new { year, month });
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> CarryOver(int year, int month, string[] sections)
     {
         if (!CanEdit()) return LoginRedirect();
-        var carryAmount = await repo.CarryOverAsync(year, month, sections);
+        await repo.CarryOverAsync(year, month, sections);
         var next = new DateTime(year, month, 1).AddMonths(1);
-        TempData["CarryMessage"] = carryAmount == 0 ? "No carry amount generated." : (carryAmount < 0 ? $"Shortfall carried: {Math.Abs(carryAmount):C}" : $"Surplus carried: {carryAmount:C}");
+        TempData["CarryMessage"] = $"Selected monthly items copied to {next:MMMM yyyy}.";
         return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AllocateRemainingToReserve(int year, int month, decimal amount)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        if (amount <= 0) return RedirectToAction(nameof(Index), new { year, month });
+        await repo.AddPaymentAsync("savings", "Remaining monthly surplus", amount, new DateTime(year, month, 1), null, null, null, "Allocated to the household reserve");
+        TempData["Success"] = $"£{amount:N2} allocated to the household reserve for this month.";
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
+
     private bool CanEdit() => User.Identity?.IsAuthenticated == true;
-
     private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
-
 }

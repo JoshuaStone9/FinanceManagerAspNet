@@ -341,7 +341,7 @@ public class TagService(ITagRepository repo) : ITagService
 
 // ─── ImageService ─────────────────────────────────────────────────────────────
 
-public class ImageService(IConfiguration config, IWebHostEnvironment env, ILogger<ImageService> logger) : IImageService
+public class ImageService(IWebHostEnvironment env, ILogger<ImageService> logger) : IImageService
 {
     private static readonly string[] AllowedExts = [".jpg", ".jpeg", ".png", ".webp"];
     private const long MaxSize = 5 * 1024 * 1024; // 5 MB
