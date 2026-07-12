@@ -104,7 +104,55 @@ INSERT INTO dbo.household_reserve(household_reserve_id,balance,interest_rate,pro
 SELECT 1, ISNULL((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0), 0, 'Money market fund';
 
 IF OBJECT_ID('dbo.reserve_pots','U') IS NULL
-CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, intended_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, funding_frequency nvarchar(30) NOT NULL DEFAULT 'Monthly', expected_funding_day int NULL, carry_forward_shortfalls bit NOT NULL DEFAULT 1, carry_excess_forward bit NOT NULL DEFAULT 0, funding_paused_until date NULL, funding_pause_reason nvarchar(300) NULL, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+
+IF COL_LENGTH('dbo.reserve_pots','intended_monthly_contribution') IS NULL ALTER TABLE dbo.reserve_pots ADD intended_monthly_contribution decimal(18,2) NOT NULL CONSTRAINT DF_reserve_pots_intended_monthly_contribution DEFAULT 0;
+IF COL_LENGTH('dbo.reserve_pots','funding_frequency') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_frequency nvarchar(30) NOT NULL CONSTRAINT DF_reserve_pots_funding_frequency DEFAULT 'Monthly';
+IF COL_LENGTH('dbo.reserve_pots','expected_funding_day') IS NULL ALTER TABLE dbo.reserve_pots ADD expected_funding_day int NULL;
+IF COL_LENGTH('dbo.reserve_pots','carry_forward_shortfalls') IS NULL ALTER TABLE dbo.reserve_pots ADD carry_forward_shortfalls bit NOT NULL CONSTRAINT DF_reserve_pots_carry_forward_shortfalls DEFAULT 1;
+IF COL_LENGTH('dbo.reserve_pots','carry_excess_forward') IS NULL ALTER TABLE dbo.reserve_pots ADD carry_excess_forward bit NOT NULL CONSTRAINT DF_reserve_pots_carry_excess_forward DEFAULT 0;
+IF COL_LENGTH('dbo.reserve_pots','funding_paused_until') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_until date NULL;
+IF COL_LENGTH('dbo.reserve_pots','funding_pause_reason') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_pause_reason nvarchar(300) NULL;
+IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
+
+UPDATE p
+SET funding_plan_start_date = COALESCE(
+    (SELECT MIN(CAST(s.[date] AS date)) FROM dbo.savings s WHERE s.[name] = p.[name] AND s.amount > 0),
+    CAST('2026-01-01' AS date))
+FROM dbo.reserve_pots p
+WHERE p.funding_plan_start_date IS NULL;
+
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NULL
+CREATE TABLE dbo.reserve_pot_monthly_funding(
+    reserve_pot_monthly_funding_id int IDENTITY(1,1) PRIMARY KEY,
+    reserve_pot_id int NOT NULL,
+    [year] int NOT NULL,
+    [month] int NOT NULL,
+    expected_amount decimal(18,2) NOT NULL DEFAULT 0,
+    actual_amount decimal(18,2) NOT NULL DEFAULT 0,
+    [status] nvarchar(40) NOT NULL DEFAULT 'Pending',
+    is_paused bit NOT NULL DEFAULT 0,
+    reviewed_at datetime2 NULL,
+    note nvarchar(500) NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_reserve_pot_monthly_funding_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_reserve_pot_monthly_funding UNIQUE(reserve_pot_id,[year],[month])
+);
+
+IF OBJECT_ID('dbo.finance_events','U') IS NULL
+CREATE TABLE dbo.finance_events(
+    finance_event_id bigint IDENTITY(1,1) PRIMARY KEY,
+    occurred_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    area nvarchar(80) NOT NULL,
+    event_type nvarchar(100) NOT NULL,
+    entity_type nvarchar(80) NOT NULL,
+    entity_id int NULL,
+    title nvarchar(220) NOT NULL,
+    [description] nvarchar(1000) NULL,
+    amount decimal(18,2) NULL,
+    source nvarchar(40) NOT NULL DEFAULT 'System'
+);
 
 
 
@@ -850,6 +898,16 @@ WHERE household_reserve_id = 1;
 """, ("@amount", amount));
 
         await SyncReservePotContributionAverageAsync(name.Trim());
+        var potIdObj = await ScalarAsync("SELECT TOP 1 reserve_pot_id FROM dbo.reserve_pots WHERE [name]=@name", ("@name", name.Trim()));
+        if (potIdObj is not null && potIdObj != DBNull.Value)
+        {
+            var potId = Convert.ToInt32(potIdObj);
+            await AddFinanceEventAsync("Household Reserve", amount > 0 ? "ContributionAdded" : "ContributionReversed", "ReservePot", potId,
+                $"{name.Trim()} {(amount > 0 ? "funded" : "adjusted")}",
+                amount > 0 ? "A dashboard household reserve allocation was recorded." : "A previous dashboard allocation was reversed or edited.",
+                Math.Abs(amount), "Dashboard");
+            await RebuildReservePotFundingHistoryAsync(potId);
+        }
     }
 
     public async Task SyncReservePotContributionAverageAsync(string name)
@@ -1367,28 +1425,207 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
         var list = new List<ReservePot>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,target_amount,due_date,priority,is_active,notes,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
+        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
-            list.Add(new ReservePot(r.GetInt32(0),r.GetString(1),r.GetDecimal(2),r.GetDecimal(3),r.IsDBNull(4)?null:r.GetDecimal(4),r.IsDBNull(5)?null:r.GetDateTime(5),r.GetInt32(6),r.GetBoolean(7),r.IsDBNull(8)?null:r.GetString(8),r.GetDateTime(9)));
+            list.Add(new ReservePot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetInt32(6), r.GetBoolean(7), r.GetBoolean(8), r.IsDBNull(9) ? null : r.GetDateTime(9), r.IsDBNull(10) ? null : r.GetString(10), r.GetDateTime(11), r.IsDBNull(12) ? null : r.GetDecimal(12), r.IsDBNull(13) ? null : r.GetDateTime(13), r.GetInt32(14), r.GetBoolean(15), r.IsDBNull(16) ? null : r.GetString(16), r.GetDateTime(17)));
         return list;
     }
 
-    public async Task SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal monthlyContribution, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
+    public async Task<int> SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal monthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
     {
         await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
+
+        var allowedFrequencies = new[] { "Monthly", "Weekly", "Irregular" };
+        var normalisedFrequency = allowedFrequencies.Contains(fundingFrequency, StringComparer.OrdinalIgnoreCase)
+            ? allowedFrequencies.First(x => x.Equals(fundingFrequency, StringComparison.OrdinalIgnoreCase))
+            : "Monthly";
+
+        if (expectedFundingDay is < 1 or > 31)
+            throw new ArgumentOutOfRangeException(nameof(expectedFundingDay), "Expected funding day must be between 1 and 31.");
+
+        var parameters = new (string, object)[]
+        {
+            ("@name", name.Trim()),
+            ("@allocated", Math.Max(0, allocatedAmount)),
+            ("@monthly", Math.Max(0, monthlyContribution)),
+            ("@intended", Math.Max(0, intendedMonthlyContribution)),
+            ("@frequency", normalisedFrequency),
+            ("@fundingDay", expectedFundingDay.HasValue ? expectedFundingDay.Value : DBNull.Value),
+            ("@carryForward", carryForwardShortfalls),
+            ("@carryExcess", carryExcessForward),
+            ("@pausedUntil", fundingPausedUntil.HasValue ? fundingPausedUntil.Value.Date : DBNull.Value),
+            ("@pauseReason", DbValue(fundingPauseReason)),
+            ("@planStart", (fundingPlanStartDate ?? DateTime.Today).Date),
+            ("@target", targetAmount.HasValue ? Math.Max(0, targetAmount.Value) : DBNull.Value),
+            ("@due", dueDate.HasValue ? dueDate.Value.Date : DBNull.Value),
+            ("@priority", Math.Max(1, priority)),
+            ("@active", isActive),
+            ("@notes", DbValue(notes))
+        };
+
         if (id <= 0)
-            await ExecuteAsync("INSERT INTO dbo.reserve_pots([name],allocated_amount,default_monthly_contribution,target_amount,due_date,priority,is_active,notes) VALUES(@name,@allocated,@monthly,@target,@due,@priority,@active,@notes)",
-                ("@name",name.Trim()),("@allocated",Math.Max(0,allocatedAmount)),("@monthly",Math.Max(0,monthlyContribution)),("@target",targetAmount.HasValue?(object)Math.Max(0,targetAmount.Value):DBNull.Value),("@due",dueDate.HasValue?(object)dueDate.Value.Date:DBNull.Value),("@priority",Math.Max(1,priority)),("@active",isActive),("@notes",DbValue(notes)));
+        {
+            await ExecuteAsync(@"INSERT INTO dbo.reserve_pots([name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes)
+VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,@carryExcess,@pausedUntil,@pauseReason,@planStart,@target,@due,@priority,@active,@notes)", parameters);
+            id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 reserve_pot_id FROM dbo.reserve_pots WHERE [name]=@name ORDER BY reserve_pot_id DESC", ("@name", name.Trim())));
+            await AddFinanceEventAsync("Household Reserve", "PotCreated", "ReservePot", id, $"{name.Trim()} created", "A new virtual allocation was created.", allocatedAmount, "User");
+        }
         else
-            await ExecuteAsync("UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,default_monthly_contribution=@monthly,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id",
-                ("@id",id),("@name",name.Trim()),("@allocated",Math.Max(0,allocatedAmount)),("@monthly",Math.Max(0,monthlyContribution)),("@target",targetAmount.HasValue?(object)Math.Max(0,targetAmount.Value):DBNull.Value),("@due",dueDate.HasValue?(object)dueDate.Value.Date:DBNull.Value),("@priority",Math.Max(1,priority)),("@active",isActive),("@notes",DbValue(notes)));
+        {
+            await ExecuteAsync(@"UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,default_monthly_contribution=@monthly,intended_monthly_contribution=@intended,funding_frequency=@frequency,expected_funding_day=@fundingDay,carry_forward_shortfalls=@carryForward,carry_excess_forward=@carryExcess,funding_paused_until=@pausedUntil,funding_pause_reason=@pauseReason,funding_plan_start_date=@planStart,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", parameters.Append(("@id", (object)id)).ToArray());
+            await AddFinanceEventAsync("Household Reserve", "PotUpdated", "ReservePot", id, $"{name.Trim()} updated", "Funding settings or allocation details were changed.", allocatedAmount, "User");
+        }
+
+        await RebuildReservePotFundingHistoryAsync(id);
+        return id;
+    }
+
+    public async Task<Dictionary<int, ReservePotFundingSummary>> GetReservePotFundingSummariesAsync(List<ReservePot>? pots = null)
+    {
+        await EnsureModernTablesAsync();
+        pots ??= await GetReservePotsAsync();
+        var result = new Dictionary<int, ReservePotFundingSummary>();
+        foreach (var pot in pots)
+        {
+            await RebuildReservePotFundingHistoryAsync(pot.Id);
+            result[pot.Id] = await GetReservePotFundingSummaryAsync(pot);
+        }
+        return result;
+    }
+
+    public async Task<DateTime?> GetFirstReservePotContributionDateAsync(string potName)
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync("SELECT MIN(CAST([date] AS date)) FROM dbo.savings WHERE [name]=@name AND amount>0", ("@name", potName));
+        return value is null || value == DBNull.Value ? null : Convert.ToDateTime(value);
+    }
+
+    public async Task RebuildReservePotFundingHistoryAsync(int potId, DateTime? overrideStartDate = null)
+    {
+        await EnsureModernTablesAsync();
+        var pot = (await GetReservePotsAsync()).FirstOrDefault(x => x.Id == potId);
+        if (pot is null) return;
+
+        var start = new DateTime((overrideStartDate ?? pot.FundingPlanStartDate).Year, (overrideStartDate ?? pot.FundingPlanStartDate).Month, 1);
+        var current = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        if (start > current) start = current;
+
+        if (overrideStartDate.HasValue)
+            await ExecuteAsync("UPDATE dbo.reserve_pots SET funding_plan_start_date=@start,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", ("@start", overrideStartDate.Value.Date), ("@id", potId));
+
+        var oldStatuses = new Dictionary<(int Year,int Month),string>();
+        await using (var con = new SqlConnection(ConnStr))
+        {
+            await con.OpenAsync();
+            await using var cmd = new SqlCommand("SELECT [year],[month],[status] FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id", con);
+            cmd.Parameters.AddWithValue("@id", potId);
+            await using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync()) oldStatuses[(r.GetInt32(0),r.GetInt32(1))] = r.GetString(2);
+        }
+
+        for (var month = start; month <= current; month = month.AddMonths(1))
+        {
+            var next = month.AddMonths(1);
+            var actual = Convert.ToDecimal(await ScalarAsync("SELECT ISNULL(SUM(amount),0) FROM dbo.savings WHERE [name]=@name AND [date]>=@start AND [date]<@end AND amount>0", ("@name", pot.Name), ("@start", month), ("@end", next)) ?? 0m);
+            var paused = pot.IsFundingPaused && month == current;
+            var expected = !pot.IsActive || paused || pot.FundingFrequency == "Irregular" ? 0m : pot.IntendedMonthlyContribution;
+            string status;
+            if (!pot.IsActive) status = "Inactive";
+            else if (paused) status = "Paused";
+            else if (expected <= 0) status = "Not configured";
+            else if (actual >= expected) status = actual > expected ? "Overfunded" : "Funded";
+            else if (month < current) status = actual > 0 ? "Partially funded" : "Missed";
+            else
+            {
+                var dueDay = Math.Min(pot.ExpectedFundingDay ?? DateTime.DaysInMonth(month.Year, month.Month), DateTime.DaysInMonth(month.Year, month.Month));
+                var dueDate = new DateTime(month.Year, month.Month, dueDay);
+                status = actual > 0 ? (DateTime.Today > dueDate ? "Partially funded" : "In progress") : (DateTime.Today > dueDate ? "Overdue" : "Pending");
+            }
+
+            await ExecuteAsync(@"MERGE dbo.reserve_pot_monthly_funding AS t
+USING (SELECT @potId reserve_pot_id,@year [year],@month [month]) s
+ON t.reserve_pot_id=s.reserve_pot_id AND t.[year]=s.[year] AND t.[month]=s.[month]
+WHEN MATCHED THEN UPDATE SET expected_amount=@expected,actual_amount=@actual,[status]=@status,is_paused=@paused,updated_at=SYSUTCDATETIME()
+WHEN NOT MATCHED THEN INSERT(reserve_pot_id,[year],[month],expected_amount,actual_amount,[status],is_paused)
+VALUES(@potId,@year,@month,@expected,@actual,@status,@paused);",
+                ("@potId",potId),("@year",month.Year),("@month",month.Month),("@expected",expected),("@actual",actual),("@status",status),("@paused",paused));
+
+            if (oldStatuses.TryGetValue((month.Year,month.Month), out var old) && old != status && status is "Missed" or "Overdue" or "Funded")
+                await AddFinanceEventAsync("Household Reserve", $"Funding{status.Replace(" ", string.Empty)}", "ReservePot", potId, $"{pot.Name}: {status}", $"{month:MMMM yyyy}: expected {expected:C}, actual {actual:C}.", actual, "System");
+        }
+
+        await ExecuteAsync("DELETE FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id AND DATEFROMPARTS([year],[month],1)<@start", ("@id",potId),("@start",start));
+    }
+
+    private async Task<ReservePotFundingSummary> GetReservePotFundingSummaryAsync(ReservePot pot)
+    {
+        var months = new List<ReservePotFundingMonth>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT [year],[month],expected_amount,actual_amount,actual_amount-expected_amount,[status],is_paused,updated_at FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id ORDER BY [year],[month]", con);
+        cmd.Parameters.AddWithValue("@id", pot.Id);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) months.Add(new ReservePotFundingMonth(r.GetInt32(0),r.GetInt32(1),r.GetDecimal(2),r.GetDecimal(3),r.GetDecimal(4),r.GetString(5),r.GetBoolean(6),r.GetDateTime(7)));
+
+        var current = months.LastOrDefault(x => x.Year == DateTime.Today.Year && x.Month == DateTime.Today.Month);
+        var expectedTotal = months.Sum(x => x.ExpectedAmount);
+        var actualTotal = months.Sum(x => x.ActualAmount);
+        var outstanding = pot.CarryForwardShortfalls ? Math.Max(0, expectedTotal - actualTotal) : (current?.Shortfall ?? 0);
+        var expectedBalanceToday = Math.Max(0, pot.AllocatedAmount + outstanding);
+        decimal? requiredMonthly = null, projectedShortfall = null, extraRequired = null;
+        decimal projected = pot.AllocatedAmount;
+        if (pot.TargetAmount.HasValue && pot.DueDate.HasValue && pot.DueDate.Value.Date >= DateTime.Today)
+        {
+            var monthsRemaining = Math.Max(1, ((pot.DueDate.Value.Year-DateTime.Today.Year)*12)+pot.DueDate.Value.Month-DateTime.Today.Month+1);
+            requiredMonthly = Math.Round(Math.Max(0,pot.TargetAmount.Value-pot.AllocatedAmount)/monthsRemaining,2);
+            projected = Math.Round(pot.AllocatedAmount + pot.IntendedMonthlyContribution*monthsRemaining,2);
+            projectedShortfall = Math.Max(0,pot.TargetAmount.Value-projected);
+            extraRequired = Math.Max(0,requiredMonthly.Value-pot.IntendedMonthlyContribution);
+        }
+        var status = current?.Status ?? (pot.IsActive ? "Not configured" : "Inactive");
+        var css = status switch { "Funded" or "Overfunded" => "good", "Pending" or "In progress" or "Paused" => "warn", "Overdue" or "Missed" or "Partially funded" => "bad", _ => "muted" };
+        return new ReservePotFundingSummary
+        {
+            PotId=pot.Id, CurrentStatus=status, StatusCssClass=css,
+            CurrentMonthExpected=current?.ExpectedAmount ?? 0, CurrentMonthActual=current?.ActualAmount ?? 0,
+            OutstandingRecovery=outstanding, ExpectedBalanceToday=expectedBalanceToday, ActualBalance=pot.AllocatedAmount,
+            MissedMonths=months.Count(x=>x.Status=="Missed"), PartiallyFundedMonths=months.Count(x=>x.Status=="Partially funded"),
+            ProjectedBalanceByDueDate=projected, ProjectedShortfall=projectedShortfall, RequiredMonthlyContribution=requiredMonthly,
+            AdditionalMonthlyContributionRequired=extraRequired, Months=months.OrderByDescending(x=>x.Year).ThenByDescending(x=>x.Month).ToList()
+        };
+    }
+
+    public async Task AddFinanceEventAsync(string area, string eventType, string entityType, int? entityId, string title, string? description, decimal? amount, string source)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source) VALUES(@area,@type,@entityType,@entityId,@title,@description,@amount,@source)",
+            ("@area",area),("@type",eventType),("@entityType",entityType),("@entityId",entityId.HasValue?entityId.Value:DBNull.Value),("@title",title),("@description",DbValue(description)),("@amount",amount.HasValue?amount.Value:DBNull.Value),("@source",source));
+    }
+
+    public async Task<List<FinanceEventRow>> GetFinanceEventsAsync(int? potId = null, string? eventType = null, DateTime? from = null, DateTime? to = null)
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<FinanceEventRow>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        var sql = "SELECT finance_event_id,occurred_at,area,event_type,entity_type,entity_id,title,[description],amount,source FROM dbo.finance_events WHERE (@potId IS NULL OR (entity_type='ReservePot' AND entity_id=@potId)) AND (@eventType IS NULL OR event_type=@eventType) AND (@from IS NULL OR occurred_at>=@from) AND (@to IS NULL OR occurred_at<DATEADD(day,1,@to)) ORDER BY occurred_at DESC";
+        await using var cmd = new SqlCommand(sql, con);
+        cmd.Parameters.AddWithValue("@potId", potId.HasValue ? potId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("@eventType", string.IsNullOrWhiteSpace(eventType) ? DBNull.Value : eventType);
+        cmd.Parameters.AddWithValue("@from", from.HasValue ? from.Value.Date : DBNull.Value);
+        cmd.Parameters.AddWithValue("@to", to.HasValue ? to.Value.Date : DBNull.Value);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync()) list.Add(new FinanceEventRow(r.GetInt64(0),r.GetDateTime(1),r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetInt32(5),r.GetString(6),r.IsDBNull(7)?null:r.GetString(7),r.IsDBNull(8)?null:r.GetDecimal(8),r.GetString(9)));
+        return list;
     }
 
     public async Task DeleteReservePotAsync(int id)
     {
         await EnsureModernTablesAsync();
+        var pot = (await GetReservePotsAsync()).FirstOrDefault(x => x.Id == id);
+        if (pot is not null) await AddFinanceEventAsync("Household Reserve", "PotDeleted", "ReservePot", id, $"{pot.Name} deleted", "The virtual allocation was deleted.", pot.AllocatedAmount, "User");
         await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id",id));
     }
 

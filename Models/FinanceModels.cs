@@ -422,6 +422,14 @@ public sealed record ReservePot(
     string Name,
     decimal AllocatedAmount,
     decimal DefaultMonthlyContribution,
+    decimal IntendedMonthlyContribution,
+    string FundingFrequency,
+    int? ExpectedFundingDay,
+    bool CarryForwardShortfalls,
+    bool CarryExcessForward,
+    DateTime? FundingPausedUntil,
+    string? FundingPauseReason,
+    DateTime FundingPlanStartDate,
     decimal? TargetAmount,
     DateTime? DueDate,
     int Priority,
@@ -429,6 +437,11 @@ public sealed record ReservePot(
     string? Notes,
     DateTime UpdatedAt)
 {
+    public bool IsFundingPaused => FundingPausedUntil.HasValue && FundingPausedUntil.Value.Date >= DateTime.Today;
+    public string FundingPlanLabel => FundingFrequency == "Irregular"
+        ? "Fund when available"
+        : $"{IntendedMonthlyContribution:C} {FundingFrequency.ToLowerInvariant()}";
+
     public decimal RemainingToTarget => TargetAmount.HasValue ? Math.Max(0, TargetAmount.Value - AllocatedAmount) : 0m;
 
     public int? MonthsUntilDue
@@ -470,10 +483,69 @@ public sealed record ReservePot(
     }
 }
 
+
+public sealed record ReservePotFundingMonth(
+    int Year,
+    int Month,
+    decimal ExpectedAmount,
+    decimal ActualAmount,
+    decimal Difference,
+    string Status,
+    bool IsPaused,
+    DateTime UpdatedAt)
+{
+    public string MonthLabel => new DateTime(Year, Month, 1).ToString("MMMM yyyy");
+    public decimal Shortfall => Math.Max(0, ExpectedAmount - ActualAmount);
+    public decimal Excess => Math.Max(0, ActualAmount - ExpectedAmount);
+}
+
+public sealed class ReservePotFundingSummary
+{
+    public int PotId { get; set; }
+    public string CurrentStatus { get; set; } = "Not configured";
+    public string StatusCssClass { get; set; } = "muted";
+    public decimal CurrentMonthExpected { get; set; }
+    public decimal CurrentMonthActual { get; set; }
+    public decimal CurrentMonthRemaining => Math.Max(0, CurrentMonthExpected - CurrentMonthActual);
+    public decimal OutstandingRecovery { get; set; }
+    public decimal ExpectedBalanceToday { get; set; }
+    public decimal ActualBalance { get; set; }
+    public int MissedMonths { get; set; }
+    public int PartiallyFundedMonths { get; set; }
+    public decimal ProjectedBalanceByDueDate { get; set; }
+    public decimal? ProjectedShortfall { get; set; }
+    public decimal? RequiredMonthlyContribution { get; set; }
+    public decimal? AdditionalMonthlyContributionRequired { get; set; }
+    public List<ReservePotFundingMonth> Months { get; set; } = [];
+}
+
+public sealed record FinanceEventRow(
+    long Id,
+    DateTime OccurredAt,
+    string Area,
+    string EventType,
+    string EntityType,
+    int? EntityId,
+    string Title,
+    string? Description,
+    decimal? Amount,
+    string Source);
+
+public sealed class FinanceEventsViewModel
+{
+    public int? PotId { get; set; }
+    public string? EventType { get; set; }
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
+    public List<ReservePot> Pots { get; set; } = [];
+    public List<FinanceEventRow> Events { get; set; } = [];
+}
+
 public sealed class HouseholdReserveViewModel
 {
     public HouseholdReserve Reserve { get; set; } = new(0, 0, "Money market fund", DateTime.MinValue);
     public List<ReservePot> Pots { get; set; } = [];
+    public Dictionary<int, ReservePotFundingSummary> FundingSummaries { get; set; } = [];
     public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => p.AllocatedAmount);
     public decimal UnallocatedBalance => Reserve.Balance - TotalAllocated;
     public decimal TotalDefaultMonthlyContributions => Pots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);

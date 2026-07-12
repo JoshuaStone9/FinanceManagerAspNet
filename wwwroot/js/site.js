@@ -113,3 +113,25 @@ templateItemSelect?.addEventListener('change', () => {
         if (statusRadio) statusRadio.checked = true;
     }
 });
+
+// ── Preserve page position after edits/saves ───────────────────────────────
+// Applies across Finance Manager so users return to the same context after a POST/redirect.
+document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(form => {
+    form.addEventListener('submit', () => {
+        try {
+            sessionStorage.setItem(`scroll:${window.location.pathname}`, String(window.scrollY));
+        } catch { /* storage may be unavailable */ }
+    });
+});
+
+window.addEventListener('load', () => {
+    if (window.location.hash) return; // explicit anchors take priority
+    try {
+        const key = `scroll:${window.location.pathname}`;
+        const value = sessionStorage.getItem(key);
+        if (value !== null) {
+            sessionStorage.removeItem(key);
+            window.scrollTo({ top: Number(value) || 0, behavior: 'instant' });
+        }
+    } catch { /* storage may be unavailable */ }
+});
