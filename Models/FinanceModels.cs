@@ -398,5 +398,15 @@ public sealed class StatisticsViewModel
     public decimal ProjectedStocksCryptoByApril { get; set; }
     public decimal TotalValueNow { get; set; }
     public decimal TotalValueByApril { get; set; }
+    public List<int> SelectedAccountIds { get; set; } = [];
+    public DateTime GoalDate { get; set; }
+    public decimal SelectedTotalNow { get; set; }
+    public decimal SelectedProjectedWithoutInterest { get; set; }
+    public decimal SelectedProjectedWithInterest { get; set; }
+    public decimal DeductFromSelectedTotal { get; set; }
+    public decimal CurrentMonthVariance { get; set; }
+    public decimal CurrentMonthShortfall => Math.Max(0, -CurrentMonthVariance);
+    public decimal CurrentMonthOversaved => Math.Max(0, CurrentMonthVariance);
+    public decimal SelectedProjectedAfterCurrentMonth => Math.Max(0, SelectedProjectedWithInterest + CurrentMonthVariance);
     public decimal AvailableEmergencyFundAfterPots => Math.Round(HouseGoal.EmergencyFundStillNeededWithInterest - AllocatedToSavingPots, 2);
 }

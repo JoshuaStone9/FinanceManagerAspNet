@@ -18,7 +18,10 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         decimal? standaloneInterestAmount,
         decimal? standaloneInterestRate,
         decimal? standaloneMonthlyContribution,
-        int? standaloneMonths)
+        int? standaloneMonths,
+        List<int>? selectedAccountIds,
+        DateTime? goalDate,
+        decimal? deductFromTotal)
     {
         await repo.EnsureModernTablesAsync();
 
@@ -28,8 +31,15 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
 
         var goal = decimal.TryParse(config["FinanceSettings:GlobalGoal"], out var gg) ? gg : 20000m;
         var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt) ? mt : 1200m;
-        var target = new DateTime(DateTime.Today.Year + (DateTime.Today.Month > 4 ? 1 : 0), 4, 30);
+        var defaultTarget = new DateTime(DateTime.Today.Year + (DateTime.Today.Month > 4 ? 1 : 0), 4, 30);
+        var target = (goalDate ?? defaultTarget).Date;
         var months = Math.Max(0, ((target.Year - DateTime.Today.Year) * 12) + target.Month - DateTime.Today.Month);
+
+        selectedAccountIds ??= [];
+        var validIds = accounts.Select(a => a.Id).ToHashSet();
+        var selectedIds = selectedAccountIds.Where(validIds.Contains).Distinct().ToList();
+        if (selectedIds.Count == 0 && accounts.Count > 0) selectedIds.Add((accounts.FirstOrDefault(a => a.Id != 0) ?? accounts[0]).Id);
+        var selectedAccounts = accounts.Where(a => selectedIds.Contains(a.Id)).ToList();
 
         var included = accounts.Where(a => a.IncludeInGlobalGoal).ToList();
         var total = included.Sum(a => a.Amount);
@@ -78,6 +88,55 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             .OrderByDescending(a => a.UpdatedAt)
             .ToList();
 
+        var now = DateTime.Today;
+        var fallbackIncome = decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var di) ? di : 3500m;
+        var currentIncome = await repo.GetIncomeAsync(now.Year, now.Month);
+        var currentAllowance = currentIncome?.Amount ?? await repo.GetMonthlyAllowanceAsync(now.Month, fallbackIncome);
+        var currentBills = await repo.GetRowsAsync("bills", now.Month, now.Year);
+        var currentExpenses = await repo.GetRowsAsync("extra_expenses", now.Month, now.Year);
+        var currentInvestments = await repo.GetRowsAsync("investments", now.Month, now.Year);
+        var currentSavings = await repo.GetRowsAsync("savings", now.Month, now.Year);
+        var currentRemaining = currentAllowance - currentBills.Sum(x => x.Amount) - currentExpenses.Sum(x => x.Amount) - currentInvestments.Sum(x => x.Amount) + currentSavings.Sum(x => x.Amount);
+        var currentMonthVariance = currentRemaining - monthlyTarget;
+        var selectedDeduction = Math.Max(0, deductFromTotal ?? 0m);
+        var selectedRawTotal = selectedAccounts.Sum(a => a.Amount);
+        var selectedTotalNow = Math.Max(0, selectedRawTotal - selectedDeduction);
+
+        // The headline forecast always uses the single configured monthly saving target (£1,200 by default),
+        // rather than adding every account's "Monthly in" amount on top of it.
+        var selectedWithoutInterest = selectedTotalNow + calc.ProjectSalarySavings(monthlyTarget, months);
+
+        // Spread the £1,200 target across selected pots using their recorded monthly-in values as weights.
+        // This preserves the existing monthly-in settings without double-counting them in the headline total.
+        decimal selectedWithInterest;
+        if (selectedAccounts.Count == 0)
+        {
+            selectedWithInterest = 0m;
+        }
+        else
+        {
+            var rawMonthlyTotal = selectedAccounts.Sum(a => Math.Max(0, a.MonthlyContribution));
+            selectedWithInterest = 0m;
+            var remainingDeduction = selectedDeduction;
+
+            for (var index = 0; index < selectedAccounts.Count; index++)
+            {
+                var account = selectedAccounts[index];
+                var accountOpeningBalance = Math.Max(0, account.Amount - remainingDeduction);
+                remainingDeduction = Math.Max(0, remainingDeduction - account.Amount);
+
+                var allocatedMonthlyTarget = rawMonthlyTotal > 0
+                    ? monthlyTarget * Math.Max(0, account.MonthlyContribution) / rawMonthlyTotal
+                    : (index == 0 ? monthlyTarget : 0m);
+
+                selectedWithInterest += calc.CompoundMonthly(
+                    accountOpeningBalance,
+                    account.InterestRate,
+                    allocatedMonthlyTarget,
+                    months);
+            }
+        }
+
         var pattern = recentUpdates.Count switch
         {
             0 => "No update pattern yet. Update your ISA/pots monthly and this will become more useful.",
@@ -120,7 +179,14 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             VaultTotalValue = vaultTotalValue,
             VaultItemCount = vaultItemCount,
             TotalValueNow = Math.Round(total + assetSummary.TotalValue + vaultTotalValue, 2),
-            TotalValueByApril = Math.Round(projectedWithInterest + projectedStocksCrypto + vaultTotalValue, 2)
+            TotalValueByApril = Math.Round(projectedWithInterest + projectedStocksCrypto + vaultTotalValue, 2),
+            SelectedAccountIds = selectedIds,
+            GoalDate = target,
+            SelectedTotalNow = Math.Round(selectedTotalNow, 2),
+            SelectedProjectedWithoutInterest = Math.Round(selectedWithoutInterest, 2),
+            SelectedProjectedWithInterest = Math.Round(selectedWithInterest, 2),
+            DeductFromSelectedTotal = Math.Round(selectedDeduction, 2),
+            CurrentMonthVariance = Math.Round(currentMonthVariance, 2)
         };
 
         return View(vm);

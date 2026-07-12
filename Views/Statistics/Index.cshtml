@@ -3,54 +3,101 @@
 @{
     ViewData["Title"] = "Statistics";
     var gb = CultureInfo.GetCultureInfo("en-GB");
-    var remainingOutsideHouse = Math.Max(0, Model.HouseGoal.ExternalTotalValue - Model.HouseGoal.MoneyboxFundAmount);
 }
 
 <section class="hero card">
   <div>
     <p class="eyebrow">Statistics</p>
     <h1>Goal forecast</h1>
-    <p class="muted">Normal goal view first, then the interest-adjusted forecast underneath.</p>
+    <p class="muted">Choose the pots to include, then see the simple forecast first.</p>
   </div>
 </section>
 
-<section class="grid cards-4">
+<section class="card selection-panel">
+  <div class="selection-heading">
+    <div>
+      <p class="eyebrow">Included pots</p>
+      <h2>Select what this forecast should use</h2>
+      <p class="muted">The first pot is selected automatically when no choice has been made.</p>
+    </div>
+  </div>
+  <form method="get" class="pot-selection-form">
+    <input type="hidden" name="goalDate" value="@Model.GoalDate.ToString("yyyy-MM-dd")" />
+    <div class="pot-choice-grid">
+      @foreach (var account in Model.Accounts)
+      {
+        var selected = Model.SelectedAccountIds.Contains(account.Id);
+        <label class="pot-choice @(selected ? "selected" : "")">
+          <input type="checkbox" name="selectedAccountIds" value="@account.Id" checked="@selected" />
+          <span>
+            <strong>@account.Name</strong>
+            <small>@account.Amount.ToString("C", gb) now · @account.MonthlyContribution.ToString("C", gb)/month · @account.InterestRate.ToString("0.##")%</small>
+          </span>
+        </label>
+      }
+    </div>
+    <div class="deduct-panel">
+      <div>
+        <p class="eyebrow">Deduct from total</p>
+        <p class="muted">Remove money that is already committed or should not count towards this forecast.</p>
+      </div>
+      <label>
+        Amount to deduct
+        <input type="number" min="0" step="0.01" name="deductFromTotal" value="@Model.DeductFromSelectedTotal" />
+      </label>
+    </div>
+    <button class="primary" type="submit">Update forecast</button>
+  </form>
+</section>
+
+<section class="grid cards-4 simple-stat-grid">
   <article class="card">
     <p class="eyebrow">Total value now</p>
-    <h2>@Model.TotalValueNow.ToString("C", gb)</h2>
-    <p>Goal accounts + live assets + Personal Vault excluding coins/bullion already tracked in Assets.</p>
+    <h2>@Model.SelectedTotalNow.ToString("C", gb)</h2>
+    <p>Selected balances after deducting @Model.DeductFromSelectedTotal.ToString("C", gb).</p>
   </article>
   <article class="card">
-    <p class="eyebrow">Total value by @Model.AprilTarget.ToString("MMM yyyy")</p>
-    <h2>@Model.TotalValueByApril.ToString("C", gb)</h2>
-    <p>Goal forecast + live asset forecast + vault asset value.</p>
+    <p class="eyebrow">Without interest by @Model.GoalDate.ToString("MMM yyyy")</p>
+    <h2>@Model.SelectedProjectedWithoutInterest.ToString("C", gb)</h2>
+    <p>Current selected balance plus @Model.MonthlySavingTarget.ToString("C0", gb) saved each month.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">With interest by @Model.GoalDate.ToString("MMM yyyy")</p>
+    <h2>@Model.SelectedProjectedWithInterest.ToString("C", gb)</h2>
+    <p class="good">Uses the @Model.MonthlySavingTarget.ToString("C0", gb) monthly target and each selected pot’s interest rate.</p>
+  </article>
+  <article class="card">
+    <p class="eyebrow">Forecast after current month</p>
+    <h2 class="@(Model.CurrentMonthVariance < 0 ? "warn" : "good")">@Model.SelectedProjectedAfterCurrentMonth.ToString("C", gb)</h2>
+    <p>
+      @(Model.CurrentMonthVariance < 0
+        ? $"Deducts the current {Model.CurrentMonthShortfall.ToString("C", gb)} shortfall."
+        : Model.CurrentMonthVariance > 0
+          ? $"Adds the current {Model.CurrentMonthOversaved.ToString("C", gb)} oversave."
+          : "The current month is exactly on the saving target.")
+    </p>
   </article>
 </section>
 
-<section class="grid cards-4">
-  <article class="card">
-    <p class="eyebrow">Current ISA / pot total</p>
-    <h2>@Model.TotalNow.ToString("C", gb)</h2>
-    <p>@Model.Remaining.ToString("C", gb) left to £20k today</p>
-  </article>
-  <article class="card">
-    <p class="eyebrow">By @Model.AprilTarget.ToString("MMM yyyy") normal money</p>
-    <h2>@Model.ProjectedByAprilWithoutInterest.ToString("C", gb)</h2>
-    <p>@Model.RemainingByAprilWithoutInterest.ToString("C", gb) still left. Includes @Model.ProjectedSalarySavingsByApril.ToString("C", gb) planned salary savings.</p>
-  </article>
-  <article class="card">
-    <p class="eyebrow">By @Model.AprilTarget.ToString("MMM yyyy") with interest</p>
-    <h2>@Model.ProjectedByAprilWithInterest.ToString("C", gb)</h2>
-    <p class="good">+@Model.ProjectedInterestEarned.ToString("C", gb) estimated interest, plus @Model.ProjectedSalarySavingsByApril.ToString("C", gb) planned salary savings</p>
-  </article>
-  <article class="card">
-    <p class="eyebrow">Goal date estimate</p>
-    <h2>@(Model.EstimatedGoalDate is null ? "N/A" : Model.EstimatedGoalDate.Value.ToString("MMM yyyy"))</h2>
-    <p>@(Model.EstimatedMonthsToGoal < 0 ? "Not enough monthly contributions recorded" : Model.EstimatedMonthsToGoal + " months using interest + contributions")</p>
-  </article>
+<details class="complex-statistics">
+  <summary>
+    <span>Complex statistics and editing</span>
+    <small>Open live assets, account editing, goal date, calculators, patterns and tables</small>
+  </summary>
+  <div class="complex-statistics-body">
+<section class="card">
+  <h2>Edit goal date</h2>
+  <p class="muted">This date controls the selected-pot forecasts at the top of the page.</p>
+  <form method="get" class="inline-form">
+    @foreach (var id in Model.SelectedAccountIds)
+    {
+      <input type="hidden" name="selectedAccountIds" value="@id" />
+    }
+    <input type="hidden" name="deductFromTotal" value="@Model.DeductFromSelectedTotal" />
+    <label>Goal date<input type="date" name="goalDate" value="@Model.GoalDate.ToString("yyyy-MM-dd")" /></label>
+    <button class="primary" type="submit">Update goal date</button>
+  </form>
 </section>
-
-
 
 <section class="card">
   <h2>Live assets</h2>
@@ -87,7 +134,7 @@
       <label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label>
       <label>Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate" /></label>
       <label>Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label>
-      <label><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@(a.IncludeInGlobalGoal)" /> Include</label>
+      <input type="hidden" name="includeInGlobalGoal" value="true" />
       <button type="submit">Save</button>
     </form>
     <form asp-action="DeleteAccount" method="post" data-confirm="Delete/reset this account?" style="margin-bottom:14px">
@@ -101,7 +148,7 @@
     <input name="amount" type="number" step="0.01" placeholder="Amount" />
     <input name="interestRate" type="number" step="0.01" placeholder="Interest %" />
     <input name="monthlyContribution" type="number" step="0.01" placeholder="Monthly in" />
-    <label><input name="includeInGlobalGoal" type="checkbox" value="true" checked /> Include</label>
+    <input type="hidden" name="includeInGlobalGoal" value="true" />
     <button type="submit">Add account</button>
   </form>
 </section>
@@ -114,6 +161,12 @@
   <p class="muted">This now defaults Total value of everything to your "By @Model.AprilTarget.ToString("MMM yyyy") with interest" number. Forecast months are the months left until April: <strong>@Model.MonthsToApril</strong>.</p>
 
   <form method="get" class="planner-form">
+    @foreach (var id in Model.SelectedAccountIds)
+    {
+      <input type="hidden" name="selectedAccountIds" value="@id" />
+    }
+    <input type="hidden" name="goalDate" value="@Model.GoalDate.ToString("yyyy-MM-dd")" />
+    <input type="hidden" name="deductFromTotal" value="@Model.DeductFromSelectedTotal" />
     <label>Total value of everything
       <input type="number" step="0.01" name="externalTotalValue" value="@Model.HouseGoal.ExternalTotalValue" />
     </label>
@@ -181,6 +234,12 @@
   <article class="card">
     <h2>Interest-only calculator</h2>
     <form method="get" class="planner-form compact">
+      @foreach (var id in Model.SelectedAccountIds)
+      {
+        <input type="hidden" name="selectedAccountIds" value="@id" />
+      }
+      <input type="hidden" name="goalDate" value="@Model.GoalDate.ToString("yyyy-MM-dd")" />
+      <input type="hidden" name="deductFromTotal" value="@Model.DeductFromSelectedTotal" />
       <input type="hidden" name="externalTotalValue" value="@Model.HouseGoal.ExternalTotalValue" />
       <input type="hidden" name="houseGoal" value="@Model.HouseGoal.HouseGoal" />
       <input type="hidden" name="moneyboxFundAmount" value="@Model.HouseGoal.MoneyboxFundAmount" />
@@ -269,3 +328,9 @@
     </table>
   </div>
 </section>
+  </div>
+</details>
+
+<style>
+  .selection-panel{padding:22px}.selection-heading{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.pot-selection-form{display:grid;gap:16px}.pot-choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.pot-choice{display:flex;align-items:flex-start;gap:12px;border:1px solid var(--line);border-radius:18px;padding:15px;background:rgba(15,23,42,.35);cursor:pointer}.pot-choice.selected{box-shadow:inset 0 0 0 2px var(--brand)}.pot-choice input{width:auto;margin-top:4px}.pot-choice span{display:grid;gap:4px}.pot-choice small{color:var(--muted);line-height:1.4}.deduct-panel{display:grid;grid-template-columns:1fr minmax(220px,320px);gap:18px;align-items:end;padding:16px;border:1px solid var(--line);border-radius:18px;background:rgba(15,23,42,.2)}.deduct-panel label{margin:0}.complex-statistics{padding:0;overflow:hidden;border-radius:24px}.complex-statistics>summary{display:grid;gap:4px;padding:20px 22px;background:var(--soft);list-style:none}.complex-statistics>summary::-webkit-details-marker{display:none}.complex-statistics>summary span{font-size:1.1rem}.complex-statistics>summary small{font-weight:500;color:var(--muted)}.complex-statistics-body{padding:18px}.complex-statistics-body>.card:last-child{margin-bottom:0}@@media(max-width:800px){.pot-choice-grid{grid-template-columns:1fr}.deduct-panel{grid-template-columns:1fr}}
+</style>
