@@ -28,7 +28,11 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
 
         var goal = decimal.TryParse(config["FinanceSettings:GlobalGoal"], out var gg) ? gg : 20000m;
         var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt) ? mt : 1200m;
-        var target = new DateTime(DateTime.Today.Year + (DateTime.Today.Month > 4 ? 1 : 0), 4, 30);
+        var defaultGoal = new DateTime(DateTime.Today.Year + 1, 1, 31);
+        var goalYear = (int)await repo.GetDecimalSettingAsync("StatisticsGoalYear", defaultGoal.Year);
+        var goalMonth = Math.Clamp((int)await repo.GetDecimalSettingAsync("StatisticsGoalMonth", defaultGoal.Month), 1, 12);
+        var target = new DateTime(Math.Max(DateTime.Today.Year, goalYear), goalMonth, DateTime.DaysInMonth(Math.Max(DateTime.Today.Year, goalYear), goalMonth));
+        if (target < DateTime.Today) target = defaultGoal;
         var months = Math.Max(0, ((target.Year - DateTime.Today.Year) * 12) + target.Month - DateTime.Today.Month);
 
         var included = accounts.Where(a => a.IncludeInGlobalGoal).ToList();
@@ -126,6 +130,19 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         return View(vm);
     }
 
+
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveGoalDate(DateTime goalDate)
+    {
+        if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() });
+        var safeDate = goalDate == default ? new DateTime(DateTime.Today.Year + 1, 1, 31) : goalDate;
+        await repo.SaveDecimalSettingAsync("StatisticsGoalYear", safeDate.Year);
+        await repo.SaveDecimalSettingAsync("StatisticsGoalMonth", safeDate.Month);
+        TempData["Success"] = "Statistics goal date updated.";
+        return RedirectToAction(nameof(Index));
+    }
 
     [HttpPost]
     public async Task<IActionResult> SaveAccount(int id, string name, decimal amount, decimal interestRate, decimal monthlyContribution, bool includeInGlobalGoal = true)

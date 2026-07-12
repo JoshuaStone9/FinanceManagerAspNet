@@ -27,13 +27,20 @@ public sealed class DashboardViewModel
     public decimal MonthlySavingTarget { get; set; }
     public decimal GlobalGoal { get; set; }
     public decimal MonthlyIncome { get; set; }
+    public decimal CarryForwardAmount { get; set; }
+    public decimal CarryForwardCalculated { get; set; }
+    public decimal? CarryForwardOverride { get; set; }
+    public string? CarryForwardOverrideReason { get; set; }
+    public bool HasCarryForwardOverride => CarryForwardOverride.HasValue;
+    public decimal EffectiveIncome => MonthlyIncome + CarryForwardAmount;
     public int SickDays { get; set; }
     public decimal BillsTotal { get; set; }
     public decimal ExpensesTotal { get; set; }
+    public decimal ExtraExpensesTotal { get; set; }
     public decimal InvestmentsTotal { get; set; }
     public decimal SavingsTotal { get; set; }
-    public decimal TotalAllocated => BillsTotal + ExpensesTotal + InvestmentsTotal + SavingsTotal;
-    public decimal RemainingFund => MonthlyIncome - TotalAllocated;
+    public decimal TotalAllocated => BillsTotal + ExpensesTotal + ExtraExpensesTotal + InvestmentsTotal + SavingsTotal;
+    public decimal RemainingFund => EffectiveIncome - TotalAllocated;
     public bool IsOverBudget => RemainingFund < 0;
     public decimal OverspendAmount => Math.Max(0, -RemainingFund);
     public decimal TotalGoalBalance { get; set; }
@@ -58,6 +65,7 @@ public sealed class DashboardViewModel
     public int MonthsToGoalAtCurrentPace { get; set; }
     public List<PaymentRow> Bills { get; set; } = [];
     public List<PaymentRow> Expenses { get; set; } = [];
+    public List<PaymentRow> ExtraExpenses { get; set; } = [];
     public List<PaymentRow> Investments { get; set; } = [];
     public List<PaymentRow> Savings { get; set; } = [];
     public List<AccountBalance> Accounts { get; set; } = [];
@@ -422,15 +430,42 @@ public sealed record ReservePot(
     DateTime UpdatedAt)
 {
     public decimal RemainingToTarget => TargetAmount.HasValue ? Math.Max(0, TargetAmount.Value - AllocatedAmount) : 0m;
+
+    public int? MonthsUntilDue
+    {
+        get
+        {
+            if (!DueDate.HasValue) return null;
+            var firstOfThisMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            var firstOfDueMonth = new DateTime(DueDate.Value.Year, DueDate.Value.Month, 1);
+            return Math.Max(1, ((firstOfDueMonth.Year - firstOfThisMonth.Year) * 12) + firstOfDueMonth.Month - firstOfThisMonth.Month);
+        }
+    }
+
     public decimal? SuggestedMonthlyContribution
     {
         get
         {
-            if (!TargetAmount.HasValue || !DueDate.HasValue || RemainingToTarget <= 0) return null;
-            var firstOfThisMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-            var firstOfDueMonth = new DateTime(DueDate.Value.Year, DueDate.Value.Month, 1);
-            var months = Math.Max(1, ((firstOfDueMonth.Year - firstOfThisMonth.Year) * 12) + firstOfDueMonth.Month - firstOfThisMonth.Month);
-            return Math.Round(RemainingToTarget / months, 2);
+            if (!TargetAmount.HasValue || !MonthsUntilDue.HasValue || RemainingToTarget <= 0) return null;
+            return Math.Round(RemainingToTarget / MonthsUntilDue.Value, 2);
+        }
+    }
+
+    public decimal? EstimatedAmountByDueDate
+    {
+        get
+        {
+            if (!TargetAmount.HasValue || !MonthsUntilDue.HasValue) return null;
+            return Math.Round(AllocatedAmount + (DefaultMonthlyContribution * MonthsUntilDue.Value), 2);
+        }
+    }
+
+    public decimal? ExtraMonthlyContributionNeeded
+    {
+        get
+        {
+            if (!SuggestedMonthlyContribution.HasValue) return null;
+            return Math.Round(Math.Max(0, SuggestedMonthlyContribution.Value - DefaultMonthlyContribution), 2);
         }
     }
 }
@@ -444,4 +479,35 @@ public sealed class HouseholdReserveViewModel
     public decimal TotalDefaultMonthlyContributions => Pots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);
     public decimal EstimatedMonthlyInterest => Math.Round(Reserve.Balance * (Reserve.InterestRate / 100m) / 12m, 2);
     public bool IsOverAllocated => UnallocatedBalance < 0;
+}
+
+
+public sealed record ExistingPaymentOption(
+    string Name,
+    decimal Amount,
+    string? Category,
+    string? Type,
+    string? Length,
+    string? Notes);
+
+public sealed class CarryOverItemInput
+{
+    public bool Include { get; set; } = true;
+    public string Source { get; set; } = string.Empty;
+    public int SourceId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string? Category { get; set; }
+    public string? Type { get; set; }
+    public string? Length { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class CarryOverViewModel
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public DateTime CurrentMonth => new(Year, Month, 1);
+    public DateTime NextMonth => CurrentMonth.AddMonths(1);
+    public List<CarryOverItemInput> Items { get; set; } = [];
 }

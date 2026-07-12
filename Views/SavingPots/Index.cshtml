@@ -1,88 +1,47 @@
 @model FinanceManagerAspNet.Models.HouseholdReserveViewModel
 @using System.Globalization
-@{
-    ViewData["Title"] = "Household Reserve";
-    var gb = CultureInfo.GetCultureInfo("en-GB");
-    var canEdit = User.Identity?.IsAuthenticated == true;
-}
-
-<section class="hero card">
-    <div><p class="eyebrow">One real fund, simple virtual pots</p><h1>Household Reserve</h1><p class="muted">Keep emergency savings, annual bills and home/car reserves together in one cash-like interest-earning fund while tracking what each part is for.</p></div>
-</section>
-
+@{ ViewData["Title"] = "Household Reserve"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; }
+<section class="hero card"><div><p class="eyebrow">One physical fund, clear virtual allocations</p><h1>Household Reserve</h1><p class="muted">Dashboard reserve allocations automatically increase the matching pot month by month.</p></div></section>
 <section class="grid cards-4">
-    <article class="card"><p class="eyebrow">Physical fund balance</p><h2>@Model.Reserve.Balance.ToString("C", gb)</h2><p>@Model.Reserve.Provider</p></article>
-    <article class="card"><p class="eyebrow">Allocated to virtual pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2><p>The money is still physically held together.</p></article>
-    <article class="card"><p class="eyebrow">Unallocated</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2><p>@(Model.IsOverAllocated ? "Virtual allocations exceed the real fund balance." : "Available to assign later.")</p></article>
-    <article class="card"><p class="eyebrow">Estimated interest</p><h2>@Model.EstimatedMonthlyInterest.ToString("C", gb)/month</h2><p>@Model.Reserve.InterestRate.ToString("0.##")% annual rate</p></article>
+<article class="card"><p class="eyebrow">Physical balance</p><h2>@Model.Reserve.Balance.ToString("C", gb)</h2><p>@Model.Reserve.Provider</p></article>
+<article class="card"><p class="eyebrow">Virtual allocations</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
+<article class="card"><p class="eyebrow">Unallocated</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2></article>
+<article class="card"><p class="eyebrow">Estimated monthly interest</p><h2>@Model.EstimatedMonthlyInterest.ToString("C", gb)</h2><p>@Model.Reserve.InterestRate.ToString("0.##")% AER estimate.</p></article>
 </section>
-
 @if (canEdit)
 {
-<section class="card">
-    <p class="eyebrow">Physical account</p><h2>Update the lump fund</h2>
-    <form asp-action="SaveReserve" method="post" class="account-form">
-        @Html.AntiForgeryToken()
-        <label>Current balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance" /></label>
-        <label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate" /></label>
-        <label>Provider / account<input name="provider" value="@Model.Reserve.Provider" /></label>
-        <button class="primary">Save reserve</button>
-    </form>
-</section>
+<section class="card"><p class="eyebrow">Physical account</p><h2>Edit reserve account</h2><form asp-action="SaveReserve" method="post" class="account-form">@Html.AntiForgeryToken()<label>Balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance"/></label><label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate"/></label><label>Provider<input name="provider" value="@Model.Reserve.Provider"/></label><button class="primary">Save reserve</button></form></section>
 }
 
-<section class="card">
-    <div class="section-head"><div><p class="eyebrow">Virtual allocations</p><h2>What the lump fund is reserved for</h2><p class="muted">Targets and due dates are optional. Enter only the current allocation and a normal monthly contribution where useful.</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Pot</th><th>Allocated</th><th>Monthly</th><th>Target / due</th><th>Suggested</th><th>Status</th><th></th></tr></thead><tbody>
-    @foreach (var pot in Model.Pots)
-    {
-        <tr>
-            <td><strong>@pot.Name</strong><br /><span class="muted">@pot.Notes</span></td>
-            <td>@pot.AllocatedAmount.ToString("C", gb)</td>
-            <td>@pot.DefaultMonthlyContribution.ToString("C", gb)</td>
-            <td>@(pot.TargetAmount?.ToString("C", gb) ?? "No target")<br /><span class="muted">@(pot.DueDate?.ToString("MMM yyyy") ?? "No due date")</span></td>
-            <td>@(pot.SuggestedMonthlyContribution?.ToString("C", gb) ?? "—")</td>
-            <td>@(pot.IsActive ? "Active" : "Paused")</td>
-            <td>
-            @if (canEdit)
-            {
-                <details><summary>Edit</summary>
-                    <form asp-action="SavePot" method="post" class="account-form">
-                        @Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id" />
-                        <label>Name<input name="name" value="@pot.Name" required /></label>
-                        <label>Allocated now<input name="allocatedAmount" type="number" min="0" step="0.01" value="@pot.AllocatedAmount" /></label>
-                        <label>Monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="@pot.DefaultMonthlyContribution" /></label>
-                        <label>Optional target<input name="targetAmount" type="number" min="0" step="0.01" value="@pot.TargetAmount" /></label>
-                        <label>Optional due date<input name="dueDate" type="date" value="@pot.DueDate?.ToString("yyyy-MM-dd")" /></label>
-                        <label>Priority<input name="priority" type="number" min="1" value="@pot.Priority" /></label>
-                        <label><input name="isActive" type="checkbox" value="true" checked="@pot.IsActive" /> Active</label>
-                        <label>Notes<input name="notes" value="@pot.Notes" /></label>
-                        <button class="primary">Save</button>
-                    </form>
-                    <form asp-action="DeletePot" method="post" data-confirm="Delete this virtual pot?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id" /><button class="button danger-inline">Delete</button></form>
-                </details>
-            }
-            </td>
-        </tr>
-    }
-    </tbody></table></div>
+@if (Model.Pots.Count == 0)
+{
+<section class="card"><h2>No virtual allocations yet</h2><p class="muted">Nothing is created by default. Add a pot below, or add a Household reserve allocation on the Dashboard and a matching pot will be created automatically.</p></section>
+}
+else
+{
+@foreach (var pot in Model.Pots)
+{
+<section class="card" id="pot-@pot.Id"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div><div><strong>@pot.AllocatedAmount.ToString("C", gb)</strong></div></div>
+<section class="grid cards-4 compact-grid">
+<article><p class="eyebrow">Allocated</p><strong>@pot.AllocatedAmount.ToString("C", gb)</strong></article>
+<article><p class="eyebrow">Average monthly</p><strong>@pot.DefaultMonthlyContribution.ToString("C", gb)</strong><p class="muted">Calculated from dashboard contributions.</p></article>
+<article><p class="eyebrow">Target</p><strong>@(pot.TargetAmount?.ToString("C", gb) ?? "None")</strong></article>
+<article><p class="eyebrow">Due</p><strong>@(pot.DueDate?.ToString("MMM yyyy") ?? "None")</strong></article>
+@if (pot.TargetAmount.HasValue && pot.DueDate.HasValue)
+{
+<article><p class="eyebrow">Estimated by due date</p><strong>@(pot.EstimatedAmountByDueDate?.ToString("C", gb) ?? "—")</strong><p class="muted">At the current monthly average.</p></article>
+<article><p class="eyebrow">Extra needed monthly</p><strong class="@((pot.ExtraMonthlyContributionNeeded ?? 0) > 0 ? "bad" : "good")">@(pot.ExtraMonthlyContributionNeeded?.ToString("C", gb) ?? "—")</strong><p class="muted">Additional amount above the current average to reach the target.</p></article>
+}
 </section>
-
 @if (canEdit)
 {
-<section class="card">
-    <p class="eyebrow">Add allocation</p><h2>New virtual pot</h2>
-    <form asp-action="SavePot" method="post" class="account-form">
-        @Html.AntiForgeryToken()<input type="hidden" name="id" value="0" />
-        <label>Name<input name="name" required placeholder="e.g. Appliance replacement" /></label>
-        <label>Allocated now<input name="allocatedAmount" type="number" min="0" step="0.01" value="0" /></label>
-        <label>Monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="0" /></label>
-        <label>Optional target<input name="targetAmount" type="number" min="0" step="0.01" /></label>
-        <label>Optional due date<input name="dueDate" type="date" /></label>
-        <label>Priority<input name="priority" type="number" min="1" value="10" /></label>
-        <input type="hidden" name="isActive" value="true" />
-        <label>Notes<input name="notes" /></label>
-        <button class="primary">Add virtual pot</button>
-    </form>
+<form asp-action="SavePot" method="post" class="account-form edit-panel">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><label>Name<input name="name" value="@pot.Name" required/></label><label>Allocated now<input name="allocatedAmount" type="number" min="0" step="0.01" value="@pot.AllocatedAmount"/></label><label>Average monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="@pot.DefaultMonthlyContribution" readonly/><span class="muted">Automatically calculated from dashboard contributions.</span></label><label>Optional target<input name="targetAmount" type="number" min="0" step="0.01" value="@pot.TargetAmount"/></label><label>Optional due date<input name="dueDate" type="date" value="@pot.DueDate?.ToString("yyyy-MM-dd")"/></label><label>Priority<input name="priority" type="number" min="1" value="@pot.Priority"/></label><label class="checkbox-inline"><input name="isActive" type="checkbox" value="true" checked="@pot.IsActive"/> Active</label><label>Notes<input name="notes" value="@pot.Notes"/></label><button class="primary">Save allocation</button></form>
+<form asp-action="DeletePot" method="post" data-confirm="Delete this virtual allocation?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete</button></form>
+}
 </section>
+}
+}
+@if (canEdit)
+{
+<section class="card"><p class="eyebrow">New allocation</p><h2>Add virtual pot</h2><form asp-action="SavePot" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="0"/><label>Name<input name="name" required placeholder="e.g. Car insurance"/></label><label>Allocated now<input name="allocatedAmount" type="number" min="0" step="0.01" value="0"/></label><label>Average monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="0" readonly/><span class="muted">Set automatically after dashboard contributions are recorded.</span></label><label>Optional target<input name="targetAmount" type="number" min="0" step="0.01"/></label><label>Optional due date<input name="dueDate" type="date"/></label><label>Priority<input name="priority" type="number" min="1" value="10"/></label><input type="hidden" name="isActive" value="true"/><label>Notes<input name="notes"/></label><button class="primary">Add allocation</button></form></section>
 }

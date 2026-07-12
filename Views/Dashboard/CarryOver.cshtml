@@ -1,0 +1,101 @@
+@model FinanceManagerAspNet.Models.CarryOverViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Confirm carry over";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var sections = new[]
+    {
+        (Source: "bills", Title: "Bills", Help: "Regular household bills and direct debits."),
+        (Source: "everyday_spending", Title: "Everyday spending", Help: "Monthly allowances such as food, fuel and general spending."),
+        (Source: "investments", Title: "Investments", Help: "Regular monthly investment contributions."),
+        (Source: "savings", Title: "Household reserve allocations", Help: "Monthly amounts assigned to your virtual reserve pots.")
+    };
+}
+
+<section class="hero card">
+    <div>
+        <p class="eyebrow">Carry over all</p>
+        <h1>@Model.CurrentMonth.ToString("MMMM") → @Model.NextMonth.ToString("MMMM yyyy")</h1>
+        <p class="muted">Confirm each item and adjust any amount before copying. Existing bills, everyday spending, investments and household reserve allocations in @Model.NextMonth.ToString("MMMM") will be replaced. Extra expenses are preserved and remain excluded. The final excess or shortfall for this month will also be carried into the next month.</p>
+    </div>
+</section>
+
+<form asp-action="ConfirmCarryOver" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Year" />
+    <input type="hidden" asp-for="Month" />
+
+    <div class="actions card carry-actions">
+        <button type="button" class="button" id="select-all">Confirm all</button>
+        <button type="button" class="button" id="clear-all">Clear all</button>
+        <button type="submit" class="primary">Replace @Model.NextMonth.ToString("MMMM") with confirmed items</button>
+    </div>
+
+    @foreach (var carrySection in sections)
+    {
+        var sectionCount = Model.Items.Count(x => x.Source == carrySection.Source);
+        var sectionTotal = Model.Items.Where(x => x.Source == carrySection.Source).Sum(x => x.Amount);
+
+        <section class="card carry-section">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">@sectionCount item@(sectionCount == 1 ? "" : "s")</p>
+                    <h2>@carrySection.Title</h2>
+                    <p class="muted">@carrySection.Help</p>
+                </div>
+                <strong>@sectionTotal.ToString("C", gb)</strong>
+            </div>
+
+            @if (sectionCount == 0)
+            {
+                <p class="muted">There are no @carrySection.Title.ToLowerInvariant() to carry over.</p>
+            }
+            else
+            {
+                @for (var i = 0; i < Model.Items.Count; i++)
+                {
+                    if (Model.Items[i].Source != carrySection.Source)
+                    {
+                        continue;
+                    }
+
+                    <div class="carry-row carry-row-inner">
+                        <input type="hidden" name="Items.Index" value="@i" />
+                        <input type="hidden" asp-for="Items[i].Source" />
+                        <input type="hidden" asp-for="Items[i].SourceId" />
+                        <input type="hidden" asp-for="Items[i].Category" />
+                        <input type="hidden" asp-for="Items[i].Type" />
+                        <input type="hidden" asp-for="Items[i].Length" />
+                        <input type="hidden" asp-for="Items[i].Notes" />
+
+                        <label class="confirm-check">
+                            <input asp-for="Items[i].Include" class="carry-check" />
+                            Include in @Model.NextMonth.ToString("MMMM")
+                        </label>
+
+                        <div class="account-form">
+                            <label>
+                                Name
+                                <input asp-for="Items[i].Name" />
+                            </label>
+                            <label>
+                                Amount
+                                <input asp-for="Items[i].Amount" type="number" min="0" step="0.01" />
+                            </label>
+                        </div>
+                    </div>
+                }
+            }
+        </section>
+    }
+</form>
+
+@section Scripts {
+    <script>
+        document.getElementById('select-all').onclick = () =>
+            document.querySelectorAll('.carry-check').forEach(x => x.checked = true);
+
+        document.getElementById('clear-all').onclick = () =>
+            document.querySelectorAll('.carry-check').forEach(x => x.checked = false);
+    </script>
+}

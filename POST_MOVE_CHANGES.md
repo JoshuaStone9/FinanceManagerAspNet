@@ -29,3 +29,8 @@ This version is designed for use after moving into the house.
 - Unallocated reserve
 
 The database tables are created automatically by `EnsureModernTablesAsync` when the application starts.
+
+## V2.6 reserve contribution forecasting
+- Reserve pot monthly contribution is recalculated from actual dashboard reserve allocations.
+- If a pot has different amounts across months, the value shown is the average monthly total.
+- Targeted pots with a due date show the estimated balance by that date and the extra monthly contribution required to reach the target.
