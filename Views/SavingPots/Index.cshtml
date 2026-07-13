@@ -67,7 +67,30 @@ else
 <details class="edit-panel"><summary>Recalculate funding history</summary><form asp-action="RebuildHistory" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><label>Start from<select name="startMode"><option value="FirstContribution">Current imported baseline</option><option value="January2026">1 January 2026</option><option value="Custom">Custom date</option></select></label><label>Custom date<input name="customStartDate" type="date" value="@pot.FundingPlanStartDate.ToString("yyyy-MM-dd")"/></label><button class="secondary">Rebuild history</button></form></details>
 <form asp-action="DeletePot" method="post" data-confirm="Delete this virtual allocation?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete</button></form>
 }
-<details class="edit-panel" open><summary>Funding history</summary><div class="table-wrap"><table><thead><tr><th>Month</th><th>Status</th><th>Expected</th><th>Dashboard paid</th><th>Applied this month</th><th>Recovery</th><th>Credit used</th><th>Credit created</th><th>Shortfall</th><th>Excess</th><th>Recovery balance</th></tr></thead><tbody>@foreach (var month in summary.Months.Take(18)){<tr><td>@month.MonthLabel</td><td>@month.Status</td><td>@month.ExpectedAmount.ToString("C", gb)</td><td>@month.ActualAmount.ToString("C", gb)</td><td>@month.AppliedToCurrentMonth.ToString("C", gb)</td><td>@month.AppliedToRecovery.ToString("C", gb)</td><td>@month.CarriedExcessUsed.ToString("C", gb)</td><td>@month.CarriedExcessCreated.ToString("C", gb)</td><td class="@(month.ShortfallAmount > 0 ? "bad" : "")">@month.ShortfallAmount.ToString("C", gb)</td><td class="@(month.GenuineExcess > 0 ? "good" : "")">@month.GenuineExcess.ToString("C", gb)</td><td class="@(month.RecoveryBalance > 0 ? "bad" : "good")">@month.RecoveryBalance.ToString("C", gb)</td></tr>}</tbody></table></div></details>
+<details class="edit-panel" open><summary>Funding timeline</summary>
+<div class="funding-timeline">
+@foreach (var month in summary.Months.Take(12))
+{
+    var timelineClass = month.Status is "Funded" or "Overfunded" or "Funded from carried excess" ? "good" : month.Status is "Missed" or "Partially funded" or "Overdue" ? "bad" : "warn";
+    <article class="timeline-item"><span class="@timelineClass">●</span><div><strong>@month.MonthLabel</strong><p class="muted">@month.Status · @month.EffectiveCurrentMonthFunding.ToString("C", gb) of @month.ExpectedAmount.ToString("C", gb)</p></div></article>
+}
+</div></details>
+<details class="edit-panel" open><summary>Monthly funding records</summary><div class="table-wrap"><table><thead><tr><th>Month</th><th>Status</th><th>Expected</th><th>Dashboard paid</th><th>Applied this month</th><th>Recovery</th><th>Credit used</th><th>Credit created</th><th>Shortfall</th><th>Excess</th><th>Recovery balance</th></tr></thead><tbody>@foreach (var month in summary.Months){<tr><td>@month.MonthLabel</td><td>@month.Status</td><td>@month.ExpectedAmount.ToString("C", gb)</td><td>@month.ActualAmount.ToString("C", gb)</td><td>@month.AppliedToCurrentMonth.ToString("C", gb)</td><td>@month.AppliedToRecovery.ToString("C", gb)</td><td>@month.CarriedExcessUsed.ToString("C", gb)</td><td>@month.CarriedExcessCreated.ToString("C", gb)</td><td class="@(month.ShortfallAmount > 0 ? "bad" : "")">@month.ShortfallAmount.ToString("C", gb)</td><td class="@(month.GenuineExcess > 0 ? "good" : "")">@month.GenuineExcess.ToString("C", gb)</td><td class="@(month.RecoveryBalance > 0 ? "bad" : "good")">@month.RecoveryBalance.ToString("C", gb)</td></tr>}</tbody></table></div></details>
+<details class="edit-panel" open><summary>Recovery history</summary>
+@if (summary.RecoveryAllocations.Count == 0)
+{
+    <p class="muted">No later contributions have been applied to earlier missed months.</p>
+}
+else
+{
+<div class="table-wrap"><table><thead><tr><th>Recovery paid in</th><th>Missed month cleared</th><th>Amount</th></tr></thead><tbody>
+@foreach (var recovery in summary.RecoveryAllocations)
+{
+<tr><td>@recovery.SourceMonthLabel</td><td>@recovery.TargetMonthLabel</td><td class="good">@recovery.Amount.ToString("C", gb)</td></tr>
+}
+</tbody></table></div>
+}
+</details>
 </section>
 }
 }

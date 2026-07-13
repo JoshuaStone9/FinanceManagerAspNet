@@ -150,6 +150,26 @@ IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('
 IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','recovery_balance') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD recovery_balance decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_recovery_balance DEFAULT 0;
 IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','carried_excess_balance') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD carried_excess_balance decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_credit_balance DEFAULT 0;
 
+IF OBJECT_ID('dbo.reserve_pot_recovery_allocations','U') IS NULL
+EXEC(N'CREATE TABLE dbo.reserve_pot_recovery_allocations(
+    reserve_pot_recovery_allocation_id int IDENTITY(1,1) PRIMARY KEY,
+    reserve_pot_id int NOT NULL,
+    source_year int NOT NULL,
+    source_month int NOT NULL,
+    target_year int NOT NULL,
+    target_month int NOT NULL,
+    amount decimal(18,2) NOT NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_reserve_pot_recovery_allocations_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE,
+    CONSTRAINT CK_reserve_pot_recovery_allocations_amount CHECK(amount > 0)
+)');
+
+IF OBJECT_ID('dbo.reserve_pot_recovery_allocations','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_reserve_pot_recovery_allocations_pot_target' AND object_id=OBJECT_ID('dbo.reserve_pot_recovery_allocations'))
+EXEC(N'CREATE INDEX IX_reserve_pot_recovery_allocations_pot_target ON dbo.reserve_pot_recovery_allocations(reserve_pot_id,target_year,target_month)');
+
+IF OBJECT_ID('dbo.reserve_pot_recovery_allocations','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_reserve_pot_recovery_allocations_pot_source' AND object_id=OBJECT_ID('dbo.reserve_pot_recovery_allocations'))
+EXEC(N'CREATE INDEX IX_reserve_pot_recovery_allocations_pot_source ON dbo.reserve_pot_recovery_allocations(reserve_pot_id,source_year,source_month)');
+
 IF OBJECT_ID('dbo.finance_events','U') IS NULL
 CREATE TABLE dbo.finance_events(
     finance_event_id bigint IDENTITY(1,1) PRIMARY KEY,
@@ -1546,6 +1566,10 @@ VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,
 
         decimal outstandingRecovery = 0m;
         decimal carriedExcess = 0m;
+        var recoveryQueue = new LinkedList<(int Year, int Month, decimal Remaining)>();
+
+        // Recovery allocations are rebuilt deterministically with the monthly history.
+        await ExecuteAsync("DELETE FROM dbo.reserve_pot_recovery_allocations WHERE reserve_pot_id=@id", ("@id", potId));
 
         for (var month = start; month <= current; month = month.AddMonths(1))
         {
@@ -1574,6 +1598,27 @@ VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,
             var status = calculation.Status;
             outstandingRecovery = calculation.RecoveryBalance;
             carriedExcess = calculation.CarriedExcessBalance;
+
+            // Apply recovery to the oldest outstanding shortfall first and preserve the link.
+            var recoveryToAllocate = appliedToRecovery;
+            while (recoveryToAllocate > 0m && recoveryQueue.First is not null)
+            {
+                var debt = recoveryQueue.First.Value;
+                recoveryQueue.RemoveFirst();
+                var allocated = Math.Min(recoveryToAllocate, debt.Remaining);
+                await ExecuteAsync(@"INSERT INTO dbo.reserve_pot_recovery_allocations
+(reserve_pot_id,source_year,source_month,target_year,target_month,amount)
+VALUES(@potId,@sourceYear,@sourceMonth,@targetYear,@targetMonth,@amount)",
+                    ("@potId", potId), ("@sourceYear", month.Year), ("@sourceMonth", month.Month),
+                    ("@targetYear", debt.Year), ("@targetMonth", debt.Month), ("@amount", allocated));
+                recoveryToAllocate -= allocated;
+                var remainingDebt = debt.Remaining - allocated;
+                if (remainingDebt > 0m)
+                    recoveryQueue.AddFirst((debt.Year, debt.Month, remainingDebt));
+            }
+
+            if (shortfall > 0m && pot.CarryForwardShortfalls)
+                recoveryQueue.AddLast((month.Year, month.Month, shortfall));
 
             await ExecuteAsync(@"MERGE dbo.reserve_pot_monthly_funding AS target
 USING (SELECT @potId reserve_pot_id,@year [year],@month [month]) source
@@ -1629,6 +1674,24 @@ FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id ORDER BY [year],[m
                 reader.GetString(12), reader.GetBoolean(13), reader.GetDateTime(14)));
         }
 
+        var recoveryAllocations = new List<ReservePotRecoveryAllocation>();
+        await using (var recoveryCon = new SqlConnection(ConnStr))
+        {
+            await recoveryCon.OpenAsync();
+            await using var recoveryCmd = new SqlCommand(@"SELECT source_year,source_month,target_year,target_month,amount,created_at
+FROM dbo.reserve_pot_recovery_allocations WHERE reserve_pot_id=@id
+ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryCon);
+            recoveryCmd.Parameters.AddWithValue("@id", pot.Id);
+            await using var recoveryReader = await recoveryCmd.ExecuteReaderAsync();
+            while (await recoveryReader.ReadAsync())
+            {
+                recoveryAllocations.Add(new ReservePotRecoveryAllocation(
+                    recoveryReader.GetInt32(0), recoveryReader.GetInt32(1),
+                    recoveryReader.GetInt32(2), recoveryReader.GetInt32(3),
+                    recoveryReader.GetDecimal(4), recoveryReader.GetDateTime(5)));
+            }
+        }
+
         var current = months.LastOrDefault(x => x.Year == DateTime.Today.Year && x.Month == DateTime.Today.Month);
         var outstanding = current?.RecoveryBalance ?? 0m;
         var availableCredit = current?.CarriedExcessBalance ?? 0m;
@@ -1675,7 +1738,8 @@ FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id ORDER BY [year],[m
             ProjectedShortfall = projectedShortfall,
             RequiredMonthlyContribution = requiredMonthly,
             AdditionalMonthlyContributionRequired = extraRequired,
-            Months = months.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).ToList()
+            Months = months.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).ToList(),
+            RecoveryAllocations = recoveryAllocations
         };
     }
 

@@ -513,6 +513,18 @@ public sealed record ReservePotFundingMonth(
     public decimal Difference => EffectiveCurrentMonthFunding - ExpectedAmount;
 }
 
+public sealed record ReservePotRecoveryAllocation(
+    int SourceYear,
+    int SourceMonth,
+    int TargetYear,
+    int TargetMonth,
+    decimal Amount,
+    DateTime CreatedAt)
+{
+    public string SourceMonthLabel => new DateTime(SourceYear, SourceMonth, 1).ToString("MMMM yyyy");
+    public string TargetMonthLabel => new DateTime(TargetYear, TargetMonth, 1).ToString("MMMM yyyy");
+}
+
 public sealed class ReservePotFundingSummary
 {
     public int PotId { get; set; }
@@ -537,6 +549,7 @@ public sealed class ReservePotFundingSummary
     public decimal? RequiredMonthlyContribution { get; set; }
     public decimal? AdditionalMonthlyContributionRequired { get; set; }
     public List<ReservePotFundingMonth> Months { get; set; } = [];
+    public List<ReservePotRecoveryAllocation> RecoveryAllocations { get; set; } = [];
 }
 
 public sealed record FinanceEventRow(
