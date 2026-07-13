@@ -427,6 +427,7 @@ public sealed record ReservePot(
     int? ExpectedFundingDay,
     bool CarryForwardShortfalls,
     bool CarryExcessForward,
+    DateTime? FundingPausedFrom,
     DateTime? FundingPausedUntil,
     string? FundingPauseReason,
     DateTime FundingPlanStartDate,
@@ -437,7 +438,13 @@ public sealed record ReservePot(
     string? Notes,
     DateTime UpdatedAt)
 {
-    public bool IsFundingPaused => FundingPausedUntil.HasValue && FundingPausedUntil.Value.Date >= DateTime.Today;
+    public bool IsFundingPaused => IsPausedFor(DateTime.Today);
+    public bool IsPausedFor(DateTime date)
+    {
+        if (!FundingPausedUntil.HasValue) return false;
+        var from = (FundingPausedFrom ?? DateTime.Today).Date;
+        return date.Date >= from && date.Date <= FundingPausedUntil.Value.Date;
+    }
     public string FundingPlanLabel => FundingFrequency == "Irregular"
         ? "Fund when available"
         : $"{IntendedMonthlyContribution:C} {FundingFrequency.ToLowerInvariant()}";
@@ -515,6 +522,7 @@ public sealed class ReservePotFundingSummary
     public decimal CurrentMonthActual { get; set; }
     public decimal CurrentMonthEffectiveFunding { get; set; }
     public decimal CurrentMonthAppliedToRecovery { get; set; }
+    public decimal CurrentMonthCarriedExcessUsed { get; set; }
     public decimal CurrentMonthCarriedExcessCreated { get; set; }
     public decimal CurrentMonthGenuineExcess { get; set; }
     public decimal CurrentMonthRemaining => Math.Max(0, CurrentMonthExpected - CurrentMonthEffectiveFunding);

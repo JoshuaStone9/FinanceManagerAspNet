@@ -49,13 +49,18 @@ public sealed class FundingEngineService : IFundingEngineService
         var recovery = Math.Max(0m, input.OutstandingRecovery);
         var carriedExcess = Math.Max(0m, input.CarriedExcessBalance);
 
-        // The current schema stores a single pause-until date rather than historical pause ranges.
-        // Therefore a pause is applied to the current period only. Historical pause periods can be
-        // introduced later without changing the contribution allocation order implemented here.
+        // Smart pause uses an explicit date range. A paused month has no scheduled
+        // expectation, but voluntary contributions can still clear old recovery and
+        // create future credit or genuine excess. A month is paused when any day in
+        // that month overlaps the configured pause range.
+        var periodEnd = periodStart.AddMonths(1).AddDays(-1);
+        var pauseFrom = (pot.FundingPausedFrom ?? pot.FundingPausedUntil)?.Date;
+        var pauseUntil = pot.FundingPausedUntil?.Date;
         var paused = pot.IsActive
-            && input.IsCurrentPeriod
-            && pot.FundingPausedUntil.HasValue
-            && pot.FundingPausedUntil.Value.Date >= input.AsOfDate.Date;
+            && pauseFrom.HasValue
+            && pauseUntil.HasValue
+            && pauseFrom.Value <= periodEnd
+            && pauseUntil.Value >= periodStart;
 
         var expected = !pot.IsActive || paused ||
                        pot.FundingFrequency.Equals("Irregular", StringComparison.OrdinalIgnoreCase)

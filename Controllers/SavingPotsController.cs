@@ -26,14 +26,14 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SavePot(int id, string name, decimal allocatedAmount, decimal defaultMonthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
+    public async Task<IActionResult> SavePot(int id, string name, decimal allocatedAmount, decimal defaultMonthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedFrom, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
     {
         if (!CanEdit()) return LoginRedirect();
 
         var returnAnchor = id > 0 ? $"pot-{id}" : "new-allocation";
         try
         {
-            var savedId = await repo.SaveReservePotAsync(id, name, allocatedAmount, defaultMonthlyContribution, intendedMonthlyContribution, fundingFrequency, expectedFundingDay, carryForwardShortfalls, carryExcessForward, fundingPausedUntil, fundingPauseReason, fundingPlanStartDate, targetAmount, dueDate, priority, isActive, notes);
+            var savedId = await repo.SaveReservePotAsync(id, name, allocatedAmount, defaultMonthlyContribution, intendedMonthlyContribution, fundingFrequency, expectedFundingDay, carryForwardShortfalls, carryExcessForward, fundingPausedFrom, fundingPausedUntil, fundingPauseReason, fundingPlanStartDate, targetAmount, dueDate, priority, isActive, notes);
             TempData["Success"] = id > 0 ? "Virtual pot updated." : "Virtual pot added.";
             return Redirect($"{Url.Action(nameof(Index))}#pot-{savedId}");
         }

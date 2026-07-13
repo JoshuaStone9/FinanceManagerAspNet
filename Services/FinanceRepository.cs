@@ -104,13 +104,14 @@ INSERT INTO dbo.household_reserve(household_reserve_id,balance,interest_rate,pro
 SELECT 1, ISNULL((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0), 0, 'Money market fund';
 
 IF OBJECT_ID('dbo.reserve_pots','U') IS NULL
-CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, intended_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, funding_frequency nvarchar(30) NOT NULL DEFAULT 'Monthly', expected_funding_day int NULL, carry_forward_shortfalls bit NOT NULL DEFAULT 1, carry_excess_forward bit NOT NULL DEFAULT 0, funding_paused_until date NULL, funding_pause_reason nvarchar(300) NULL, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, intended_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, funding_frequency nvarchar(30) NOT NULL DEFAULT 'Monthly', expected_funding_day int NULL, carry_forward_shortfalls bit NOT NULL DEFAULT 1, carry_excess_forward bit NOT NULL DEFAULT 0, funding_paused_from date NULL, funding_paused_until date NULL, funding_pause_reason nvarchar(300) NULL, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
 IF COL_LENGTH('dbo.reserve_pots','intended_monthly_contribution') IS NULL ALTER TABLE dbo.reserve_pots ADD intended_monthly_contribution decimal(18,2) NOT NULL CONSTRAINT DF_reserve_pots_intended_monthly_contribution DEFAULT 0;
 IF COL_LENGTH('dbo.reserve_pots','funding_frequency') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_frequency nvarchar(30) NOT NULL CONSTRAINT DF_reserve_pots_funding_frequency DEFAULT 'Monthly';
 IF COL_LENGTH('dbo.reserve_pots','expected_funding_day') IS NULL ALTER TABLE dbo.reserve_pots ADD expected_funding_day int NULL;
 IF COL_LENGTH('dbo.reserve_pots','carry_forward_shortfalls') IS NULL ALTER TABLE dbo.reserve_pots ADD carry_forward_shortfalls bit NOT NULL CONSTRAINT DF_reserve_pots_carry_forward_shortfalls DEFAULT 1;
 IF COL_LENGTH('dbo.reserve_pots','carry_excess_forward') IS NULL ALTER TABLE dbo.reserve_pots ADD carry_excess_forward bit NOT NULL CONSTRAINT DF_reserve_pots_carry_excess_forward DEFAULT 0;
+IF COL_LENGTH('dbo.reserve_pots','funding_paused_from') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_from date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_until') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_until date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_pause_reason') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_pause_reason nvarchar(300) NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
@@ -1434,14 +1435,14 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
         var list = new List<ReservePot>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
+        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_from,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
-            list.Add(new ReservePot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetInt32(6), r.GetBoolean(7), r.GetBoolean(8), r.IsDBNull(9) ? null : r.GetDateTime(9), r.IsDBNull(10) ? null : r.GetString(10), r.GetDateTime(11), r.IsDBNull(12) ? null : r.GetDecimal(12), r.IsDBNull(13) ? null : r.GetDateTime(13), r.GetInt32(14), r.GetBoolean(15), r.IsDBNull(16) ? null : r.GetString(16), r.GetDateTime(17)));
+            list.Add(new ReservePot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetInt32(6), r.GetBoolean(7), r.GetBoolean(8), r.IsDBNull(9) ? null : r.GetDateTime(9), r.IsDBNull(10) ? null : r.GetDateTime(10), r.IsDBNull(11) ? null : r.GetString(11), r.GetDateTime(12), r.IsDBNull(13) ? null : r.GetDecimal(13), r.IsDBNull(14) ? null : r.GetDateTime(14), r.GetInt32(15), r.GetBoolean(16), r.IsDBNull(17) ? null : r.GetString(17), r.GetDateTime(18)));
         return list;
     }
 
-    public async Task<int> SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal monthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
+    public async Task<int> SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal monthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedFrom, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
     {
         await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
@@ -1454,6 +1455,13 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
         if (expectedFundingDay is < 1 or > 31)
             throw new ArgumentOutOfRangeException(nameof(expectedFundingDay), "Expected funding day must be between 1 and 31.");
 
+        if (fundingPausedUntil.HasValue && !fundingPausedFrom.HasValue)
+            fundingPausedFrom = DateTime.Today;
+        if (fundingPausedFrom.HasValue && !fundingPausedUntil.HasValue)
+            throw new ArgumentException("Choose a pause-until date when setting a pause start date.", nameof(fundingPausedUntil));
+        if (fundingPausedFrom.HasValue && fundingPausedUntil.HasValue && fundingPausedUntil.Value.Date < fundingPausedFrom.Value.Date)
+            throw new ArgumentException("Pause-until date cannot be before the pause start date.", nameof(fundingPausedUntil));
+
         var parameters = new (string, object)[]
         {
             ("@name", name.Trim()),
@@ -1464,6 +1472,7 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
             ("@fundingDay", expectedFundingDay.HasValue ? expectedFundingDay.Value : DBNull.Value),
             ("@carryForward", carryForwardShortfalls),
             ("@carryExcess", carryExcessForward),
+            ("@pausedFrom", fundingPausedFrom.HasValue ? fundingPausedFrom.Value.Date : DBNull.Value),
             ("@pausedUntil", fundingPausedUntil.HasValue ? fundingPausedUntil.Value.Date : DBNull.Value),
             ("@pauseReason", DbValue(fundingPauseReason)),
             ("@planStart", (fundingPlanStartDate ?? DateTime.Today).Date),
@@ -1476,14 +1485,14 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
 
         if (id <= 0)
         {
-            await ExecuteAsync(@"INSERT INTO dbo.reserve_pots([name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes)
-VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,@carryExcess,@pausedUntil,@pauseReason,@planStart,@target,@due,@priority,@active,@notes)", parameters);
+            await ExecuteAsync(@"INSERT INTO dbo.reserve_pots([name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_from,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes)
+VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,@carryExcess,@pausedFrom,@pausedUntil,@pauseReason,@planStart,@target,@due,@priority,@active,@notes)", parameters);
             id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 reserve_pot_id FROM dbo.reserve_pots WHERE [name]=@name ORDER BY reserve_pot_id DESC", ("@name", name.Trim())));
             await AddFinanceEventAsync("Household Reserve", "PotCreated", "ReservePot", id, $"{name.Trim()} created", "A new virtual allocation was created.", allocatedAmount, "User");
         }
         else
         {
-            await ExecuteAsync(@"UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,default_monthly_contribution=@monthly,intended_monthly_contribution=@intended,funding_frequency=@frequency,expected_funding_day=@fundingDay,carry_forward_shortfalls=@carryForward,carry_excess_forward=@carryExcess,funding_paused_until=@pausedUntil,funding_pause_reason=@pauseReason,funding_plan_start_date=@planStart,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", parameters.Append(("@id", (object)id)).ToArray());
+            await ExecuteAsync(@"UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,default_monthly_contribution=@monthly,intended_monthly_contribution=@intended,funding_frequency=@frequency,expected_funding_day=@fundingDay,carry_forward_shortfalls=@carryForward,carry_excess_forward=@carryExcess,funding_paused_from=@pausedFrom,funding_paused_until=@pausedUntil,funding_pause_reason=@pauseReason,funding_plan_start_date=@planStart,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", parameters.Append(("@id", (object)id)).ToArray());
             await AddFinanceEventAsync("Household Reserve", "PotUpdated", "ReservePot", id, $"{name.Trim()} updated", "Funding settings or allocation details were changed.", allocatedAmount, "User");
         }
 
@@ -1653,6 +1662,7 @@ FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id ORDER BY [year],[m
             CurrentMonthActual = current?.ActualAmount ?? 0m,
             CurrentMonthEffectiveFunding = current?.EffectiveCurrentMonthFunding ?? 0m,
             CurrentMonthAppliedToRecovery = current?.AppliedToRecovery ?? 0m,
+            CurrentMonthCarriedExcessUsed = current?.CarriedExcessUsed ?? 0m,
             CurrentMonthCarriedExcessCreated = current?.CarriedExcessCreated ?? 0m,
             CurrentMonthGenuineExcess = current?.GenuineExcess ?? 0m,
             OutstandingRecovery = outstanding,
