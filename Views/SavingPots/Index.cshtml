@@ -9,14 +9,14 @@
 <article class="card"><p class="eyebrow">Estimated monthly interest</p><h2>@Model.EstimatedMonthlyInterest.ToString("C", gb)</h2><p>@Model.Reserve.InterestRate.ToString("0.##")% AER estimate.</p></article>
 </section>
 
-@{ var activeSummaries = Model.Pots.Where(x => x.IsActive).Select(x => Model.FundingSummaries.GetValueOrDefault(x.Id)).Where(x => x is not null).ToList(); var attention = activeSummaries.Count(x => x!.CurrentStatus is "Overdue" or "Missed" or "Partially funded"); var expectedThisMonth = activeSummaries.Sum(x => x!.CurrentMonthExpected); var actualThisMonth = activeSummaries.Sum(x => x!.CurrentMonthActual); }
+@{ var activeSummaries = Model.Pots.Where(x => x.IsActive).Select(x => Model.FundingSummaries.GetValueOrDefault(x.Id)).Where(x => x is not null).ToList(); var attention = activeSummaries.Count(x => x!.CurrentStatus is "Overdue" or "Missed" or "Partially funded"); var expectedThisMonth = activeSummaries.Sum(x => x!.CurrentMonthExpected); var actualThisMonth = activeSummaries.Sum(x => x!.CurrentMonthEffectiveFunding); }
 <section class="card" id="monthly-checklist"><div class="section-head"><div><p class="eyebrow">Monthly funding checklist</p><h2>@currentMonth</h2><p class="muted">@attention pot@(attention == 1 ? "" : "s") need attention. @actualThisMonth.ToString("C", gb) of @expectedThisMonth.ToString("C", gb) funded.</p></div></div>
 <div class="grid cards-4 compact-grid">
 @foreach (var pot in Model.Pots.Where(x => x.IsActive))
 {
     var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id);
     if (summary is null) continue;
-    <article><p class="eyebrow">@pot.Name</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthActual.ToString("C", gb) / @summary.CurrentMonthExpected.ToString("C", gb) this month</p><a href="#pot-@pot.Id">Review</a></article>
+    <article><p class="eyebrow">@pot.Name</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) / @summary.CurrentMonthExpected.ToString("C", gb) this month</p><a href="#pot-@pot.Id">Review</a></article>
 }
 </div></section>
 
@@ -44,8 +44,10 @@ else
 <section class="card" id="pot-@pot.Id"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div><div><a class="secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">Events</a></div></div>
 <section class="grid cards-4 compact-grid">
 <article><p class="eyebrow">Allocated</p><strong>@pot.AllocatedAmount.ToString("C", gb)</strong></article>
-<article><p class="eyebrow">Funding status</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthActual.ToString("C", gb) of @summary.CurrentMonthExpected.ToString("C", gb) this month.</p></article>
+<article><p class="eyebrow">Funding status</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) of @summary.CurrentMonthExpected.ToString("C", gb) this month.</p><p class="muted">Dashboard paid: @summary.CurrentMonthActual.ToString("C", gb)</p></article>
 <article><p class="eyebrow">Outstanding recovery</p><strong class="@(summary.OutstandingRecovery > 0 ? "bad" : "good")">@summary.OutstandingRecovery.ToString("C", gb)</strong><p class="muted">Later excess funding automatically reduces this.</p></article>
+<article><p class="eyebrow">Carried excess available</p><strong class="@(summary.AvailableCarriedExcess > 0 ? "good" : "")">@summary.AvailableCarriedExcess.ToString("C", gb)</strong><p class="muted">Credit available for future months when enabled.</p></article>
+<article><p class="eyebrow">This month allocation</p><strong>@summary.CurrentMonthAppliedToRecovery.ToString("C", gb) recovery</strong><p class="muted">@summary.CurrentMonthCarriedExcessCreated.ToString("C", gb) carried forward · @summary.CurrentMonthGenuineExcess.ToString("C", gb) genuine excess</p></article>
 <article><p class="eyebrow">Expected balance today</p><strong>@summary.ExpectedBalanceToday.ToString("C", gb)</strong><p class="muted">Actual balance: @pot.AllocatedAmount.ToString("C", gb)</p></article>
 <article><p class="eyebrow">Intended funding</p><strong>@pot.IntendedMonthlyContribution.ToString("C", gb)</strong><p class="muted">@pot.FundingFrequency@(pot.ExpectedFundingDay.HasValue ? $" · expected day {pot.ExpectedFundingDay}" : "")</p></article>
 <article><p class="eyebrow">Missed / partial months</p><strong>@summary.MissedMonths / @summary.PartiallyFundedMonths</strong><p class="muted">Tracked since @pot.FundingPlanStartDate.ToString("dd MMM yyyy").</p></article>
@@ -65,7 +67,7 @@ else
 <details class="edit-panel"><summary>Recalculate funding history</summary><form asp-action="RebuildHistory" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><label>Start from<select name="startMode"><option value="FirstContribution">Current imported baseline</option><option value="January2026">1 January 2026</option><option value="Custom">Custom date</option></select></label><label>Custom date<input name="customStartDate" type="date" value="@pot.FundingPlanStartDate.ToString("yyyy-MM-dd")"/></label><button class="secondary">Rebuild history</button></form></details>
 <form asp-action="DeletePot" method="post" data-confirm="Delete this virtual allocation?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete</button></form>
 }
-<details class="edit-panel" open><summary>Funding history</summary><div class="table-wrap"><table><thead><tr><th>Month</th><th>Status</th><th>Expected</th><th>Actual</th><th>Difference</th></tr></thead><tbody>@foreach (var month in summary.Months.Take(18)){<tr><td>@month.MonthLabel</td><td>@month.Status</td><td>@month.ExpectedAmount.ToString("C", gb)</td><td>@month.ActualAmount.ToString("C", gb)</td><td class="@(month.Difference < 0 ? "bad" : month.Difference > 0 ? "good" : "")">@month.Difference.ToString("C", gb)</td></tr>}</tbody></table></div></details>
+<details class="edit-panel" open><summary>Funding history</summary><div class="table-wrap"><table><thead><tr><th>Month</th><th>Status</th><th>Expected</th><th>Dashboard paid</th><th>Applied this month</th><th>Recovery</th><th>Credit used</th><th>Credit created</th><th>Shortfall</th><th>Excess</th><th>Recovery balance</th></tr></thead><tbody>@foreach (var month in summary.Months.Take(18)){<tr><td>@month.MonthLabel</td><td>@month.Status</td><td>@month.ExpectedAmount.ToString("C", gb)</td><td>@month.ActualAmount.ToString("C", gb)</td><td>@month.AppliedToCurrentMonth.ToString("C", gb)</td><td>@month.AppliedToRecovery.ToString("C", gb)</td><td>@month.CarriedExcessUsed.ToString("C", gb)</td><td>@month.CarriedExcessCreated.ToString("C", gb)</td><td class="@(month.ShortfallAmount > 0 ? "bad" : "")">@month.ShortfallAmount.ToString("C", gb)</td><td class="@(month.GenuineExcess > 0 ? "good" : "")">@month.GenuineExcess.ToString("C", gb)</td><td class="@(month.RecoveryBalance > 0 ? "bad" : "good")">@month.RecoveryBalance.ToString("C", gb)</td></tr>}</tbody></table></div></details>
 </section>
 }
 }

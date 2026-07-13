@@ -489,14 +489,21 @@ public sealed record ReservePotFundingMonth(
     int Month,
     decimal ExpectedAmount,
     decimal ActualAmount,
-    decimal Difference,
+    decimal AppliedToCurrentMonth,
+    decimal AppliedToRecovery,
+    decimal CarriedExcessUsed,
+    decimal CarriedExcessCreated,
+    decimal ShortfallAmount,
+    decimal GenuineExcess,
+    decimal RecoveryBalance,
+    decimal CarriedExcessBalance,
     string Status,
     bool IsPaused,
     DateTime UpdatedAt)
 {
     public string MonthLabel => new DateTime(Year, Month, 1).ToString("MMMM yyyy");
-    public decimal Shortfall => Math.Max(0, ExpectedAmount - ActualAmount);
-    public decimal Excess => Math.Max(0, ActualAmount - ExpectedAmount);
+    public decimal EffectiveCurrentMonthFunding => AppliedToCurrentMonth + CarriedExcessUsed;
+    public decimal Difference => EffectiveCurrentMonthFunding - ExpectedAmount;
 }
 
 public sealed class ReservePotFundingSummary
@@ -506,8 +513,13 @@ public sealed class ReservePotFundingSummary
     public string StatusCssClass { get; set; } = "muted";
     public decimal CurrentMonthExpected { get; set; }
     public decimal CurrentMonthActual { get; set; }
-    public decimal CurrentMonthRemaining => Math.Max(0, CurrentMonthExpected - CurrentMonthActual);
+    public decimal CurrentMonthEffectiveFunding { get; set; }
+    public decimal CurrentMonthAppliedToRecovery { get; set; }
+    public decimal CurrentMonthCarriedExcessCreated { get; set; }
+    public decimal CurrentMonthGenuineExcess { get; set; }
+    public decimal CurrentMonthRemaining => Math.Max(0, CurrentMonthExpected - CurrentMonthEffectiveFunding);
     public decimal OutstandingRecovery { get; set; }
+    public decimal AvailableCarriedExcess { get; set; }
     public decimal ExpectedBalanceToday { get; set; }
     public decimal ActualBalance { get; set; }
     public int MissedMonths { get; set; }

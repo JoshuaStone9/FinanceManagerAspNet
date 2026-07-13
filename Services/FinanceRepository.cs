@@ -9,7 +9,7 @@ public sealed record CarryForwardInfo(decimal CalculatedAmount, decimal? Overrid
     public decimal EffectiveAmount => OverrideAmount ?? CalculatedAmount;
 }
 
-public sealed class FinanceRepository(IConfiguration config)
+public sealed class FinanceRepository(IConfiguration config, IFundingEngineService fundingEngine)
 {
     private string ConnStr => Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
         ?? config.GetConnectionString("FinanceManager")
@@ -139,6 +139,15 @@ CREATE TABLE dbo.reserve_pot_monthly_funding(
     CONSTRAINT FK_reserve_pot_monthly_funding_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE,
     CONSTRAINT UQ_reserve_pot_monthly_funding UNIQUE(reserve_pot_id,[year],[month])
 );
+
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','applied_to_current_month') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD applied_to_current_month decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_current DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','applied_to_recovery') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD applied_to_recovery decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_recovery DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','carried_excess_used') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD carried_excess_used decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_credit_used DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','carried_excess_created') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD carried_excess_created decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_credit_created DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','shortfall_amount') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD shortfall_amount decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_shortfall DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','genuine_excess') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD genuine_excess decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_genuine_excess DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','recovery_balance') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD recovery_balance decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_recovery_balance DEFAULT 0;
+IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NOT NULL AND COL_LENGTH('dbo.reserve_pot_monthly_funding','carried_excess_balance') IS NULL ALTER TABLE dbo.reserve_pot_monthly_funding ADD carried_excess_balance decimal(18,2) NOT NULL CONSTRAINT DF_reserve_month_credit_balance DEFAULT 0;
 
 IF OBJECT_ID('dbo.finance_events','U') IS NULL
 CREATE TABLE dbo.finance_events(
@@ -1508,55 +1517,87 @@ VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,
         var pot = (await GetReservePotsAsync()).FirstOrDefault(x => x.Id == potId);
         if (pot is null) return;
 
-        var start = new DateTime((overrideStartDate ?? pot.FundingPlanStartDate).Year, (overrideStartDate ?? pot.FundingPlanStartDate).Month, 1);
+        var chosenStart = overrideStartDate ?? pot.FundingPlanStartDate;
+        var start = new DateTime(chosenStart.Year, chosenStart.Month, 1);
         var current = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         if (start > current) start = current;
 
         if (overrideStartDate.HasValue)
             await ExecuteAsync("UPDATE dbo.reserve_pots SET funding_plan_start_date=@start,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", ("@start", overrideStartDate.Value.Date), ("@id", potId));
 
-        var oldStatuses = new Dictionary<(int Year,int Month),string>();
+        var oldStatuses = new Dictionary<(int Year, int Month), string>();
         await using (var con = new SqlConnection(ConnStr))
         {
             await con.OpenAsync();
             await using var cmd = new SqlCommand("SELECT [year],[month],[status] FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id", con);
             cmd.Parameters.AddWithValue("@id", potId);
-            await using var r = await cmd.ExecuteReaderAsync();
-            while (await r.ReadAsync()) oldStatuses[(r.GetInt32(0),r.GetInt32(1))] = r.GetString(2);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) oldStatuses[(reader.GetInt32(0), reader.GetInt32(1))] = reader.GetString(2);
         }
+
+        decimal outstandingRecovery = 0m;
+        decimal carriedExcess = 0m;
 
         for (var month = start; month <= current; month = month.AddMonths(1))
         {
             var next = month.AddMonths(1);
-            var actual = Convert.ToDecimal(await ScalarAsync("SELECT ISNULL(SUM(amount),0) FROM dbo.savings WHERE [name]=@name AND [date]>=@start AND [date]<@end AND amount>0", ("@name", pot.Name), ("@start", month), ("@end", next)) ?? 0m);
-            var paused = pot.IsFundingPaused && month == current;
-            var expected = !pot.IsActive || paused || pot.FundingFrequency == "Irregular" ? 0m : pot.IntendedMonthlyContribution;
-            string status;
-            if (!pot.IsActive) status = "Inactive";
-            else if (paused) status = "Paused";
-            else if (expected <= 0) status = "Not configured";
-            else if (actual >= expected) status = actual > expected ? "Overfunded" : "Funded";
-            else if (month < current) status = actual > 0 ? "Partially funded" : "Missed";
-            else
+            var actual = Convert.ToDecimal(await ScalarAsync(
+                "SELECT ISNULL(SUM(amount),0) FROM dbo.savings WHERE [name]=@name AND [date]>=@start AND [date]<@end AND amount>0",
+                ("@name", pot.Name), ("@start", month), ("@end", next)) ?? 0m);
+
+            var calculation = fundingEngine.Calculate(new FundingEngineInput(
+                Pot: pot,
+                PeriodStart: month,
+                AsOfDate: DateTime.Today,
+                DashboardContribution: actual,
+                OutstandingRecovery: outstandingRecovery,
+                CarriedExcessBalance: carriedExcess,
+                IsCurrentPeriod: month == current));
+
+            var paused = calculation.IsPaused;
+            var expected = calculation.ExpectedAmount;
+            var appliedToCurrent = calculation.AppliedToCurrentMonth;
+            var appliedToRecovery = calculation.AppliedToRecovery;
+            var carriedExcessUsed = calculation.CarriedExcessUsed;
+            var carriedExcessCreated = calculation.CarriedExcessCreated;
+            var genuineExcess = calculation.GenuineExcess;
+            var shortfall = calculation.ShortfallAmount;
+            var status = calculation.Status;
+            outstandingRecovery = calculation.RecoveryBalance;
+            carriedExcess = calculation.CarriedExcessBalance;
+
+            await ExecuteAsync(@"MERGE dbo.reserve_pot_monthly_funding AS target
+USING (SELECT @potId reserve_pot_id,@year [year],@month [month]) source
+ON target.reserve_pot_id=source.reserve_pot_id AND target.[year]=source.[year] AND target.[month]=source.[month]
+WHEN MATCHED THEN UPDATE SET expected_amount=@expected,actual_amount=@actual,
+    applied_to_current_month=@currentApplied,applied_to_recovery=@recoveryApplied,
+    carried_excess_used=@creditUsed,carried_excess_created=@creditCreated,
+    shortfall_amount=@shortfall,genuine_excess=@genuineExcess,
+    recovery_balance=@recoveryBalance,carried_excess_balance=@creditBalance,
+    [status]=@status,is_paused=@paused,updated_at=SYSUTCDATETIME()
+WHEN NOT MATCHED THEN INSERT(reserve_pot_id,[year],[month],expected_amount,actual_amount,
+    applied_to_current_month,applied_to_recovery,carried_excess_used,carried_excess_created,
+    shortfall_amount,genuine_excess,recovery_balance,carried_excess_balance,[status],is_paused)
+VALUES(@potId,@year,@month,@expected,@actual,@currentApplied,@recoveryApplied,@creditUsed,
+    @creditCreated,@shortfall,@genuineExcess,@recoveryBalance,@creditBalance,@status,@paused);",
+                ("@potId", potId), ("@year", month.Year), ("@month", month.Month),
+                ("@expected", expected), ("@actual", actual), ("@currentApplied", appliedToCurrent),
+                ("@recoveryApplied", appliedToRecovery), ("@creditUsed", carriedExcessUsed),
+                ("@creditCreated", carriedExcessCreated), ("@shortfall", shortfall),
+                ("@genuineExcess", genuineExcess), ("@recoveryBalance", outstandingRecovery),
+                ("@creditBalance", carriedExcess), ("@status", status), ("@paused", paused));
+
+            if (oldStatuses.TryGetValue((month.Year, month.Month), out var old) && old != status &&
+                (status is "Missed" or "Overdue" or "Funded" or "Overfunded" or "Funded from carried excess" or "Paused – voluntary contribution"))
             {
-                var dueDay = Math.Min(pot.ExpectedFundingDay ?? DateTime.DaysInMonth(month.Year, month.Month), DateTime.DaysInMonth(month.Year, month.Month));
-                var dueDate = new DateTime(month.Year, month.Month, dueDay);
-                status = actual > 0 ? (DateTime.Today > dueDate ? "Partially funded" : "In progress") : (DateTime.Today > dueDate ? "Overdue" : "Pending");
+                await AddFinanceEventAsync("Household Reserve", $"Funding{status.Replace(" ", string.Empty).Replace("–", string.Empty)}", "ReservePot", potId,
+                    $"{pot.Name}: {status}",
+                    $"{month:MMMM yyyy}: expected {expected:C}, dashboard contribution {actual:C}, recovery applied {appliedToRecovery:C}, carried excess used {carriedExcessUsed:C}.",
+                    actual, "System");
             }
-
-            await ExecuteAsync(@"MERGE dbo.reserve_pot_monthly_funding AS t
-USING (SELECT @potId reserve_pot_id,@year [year],@month [month]) s
-ON t.reserve_pot_id=s.reserve_pot_id AND t.[year]=s.[year] AND t.[month]=s.[month]
-WHEN MATCHED THEN UPDATE SET expected_amount=@expected,actual_amount=@actual,[status]=@status,is_paused=@paused,updated_at=SYSUTCDATETIME()
-WHEN NOT MATCHED THEN INSERT(reserve_pot_id,[year],[month],expected_amount,actual_amount,[status],is_paused)
-VALUES(@potId,@year,@month,@expected,@actual,@status,@paused);",
-                ("@potId",potId),("@year",month.Year),("@month",month.Month),("@expected",expected),("@actual",actual),("@status",status),("@paused",paused));
-
-            if (oldStatuses.TryGetValue((month.Year,month.Month), out var old) && old != status && status is "Missed" or "Overdue" or "Funded")
-                await AddFinanceEventAsync("Household Reserve", $"Funding{status.Replace(" ", string.Empty)}", "ReservePot", potId, $"{pot.Name}: {status}", $"{month:MMMM yyyy}: expected {expected:C}, actual {actual:C}.", actual, "System");
         }
 
-        await ExecuteAsync("DELETE FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id AND DATEFROMPARTS([year],[month],1)<@start", ("@id",potId),("@start",start));
+        await ExecuteAsync("DELETE FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id AND DATEFROMPARTS([year],[month],1)<@start", ("@id", potId), ("@start", start));
     }
 
     private async Task<ReservePotFundingSummary> GetReservePotFundingSummaryAsync(ReservePot pot)
@@ -1564,36 +1605,67 @@ VALUES(@potId,@year,@month,@expected,@actual,@status,@paused);",
         var months = new List<ReservePotFundingMonth>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT [year],[month],expected_amount,actual_amount,actual_amount-expected_amount,[status],is_paused,updated_at FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id ORDER BY [year],[month]", con);
+        await using var cmd = new SqlCommand(@"SELECT [year],[month],expected_amount,actual_amount,
+    applied_to_current_month,applied_to_recovery,carried_excess_used,carried_excess_created,
+    shortfall_amount,genuine_excess,recovery_balance,carried_excess_balance,[status],is_paused,updated_at
+FROM dbo.reserve_pot_monthly_funding WHERE reserve_pot_id=@id ORDER BY [year],[month]", con);
         cmd.Parameters.AddWithValue("@id", pot.Id);
-        await using var r = await cmd.ExecuteReaderAsync();
-        while (await r.ReadAsync()) months.Add(new ReservePotFundingMonth(r.GetInt32(0),r.GetInt32(1),r.GetDecimal(2),r.GetDecimal(3),r.GetDecimal(4),r.GetString(5),r.GetBoolean(6),r.GetDateTime(7)));
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            months.Add(new ReservePotFundingMonth(
+                reader.GetInt32(0), reader.GetInt32(1), reader.GetDecimal(2), reader.GetDecimal(3),
+                reader.GetDecimal(4), reader.GetDecimal(5), reader.GetDecimal(6), reader.GetDecimal(7),
+                reader.GetDecimal(8), reader.GetDecimal(9), reader.GetDecimal(10), reader.GetDecimal(11),
+                reader.GetString(12), reader.GetBoolean(13), reader.GetDateTime(14)));
+        }
 
         var current = months.LastOrDefault(x => x.Year == DateTime.Today.Year && x.Month == DateTime.Today.Month);
-        var expectedTotal = months.Sum(x => x.ExpectedAmount);
-        var actualTotal = months.Sum(x => x.ActualAmount);
-        var outstanding = pot.CarryForwardShortfalls ? Math.Max(0, expectedTotal - actualTotal) : (current?.Shortfall ?? 0);
-        var expectedBalanceToday = Math.Max(0, pot.AllocatedAmount + outstanding);
+        var outstanding = current?.RecoveryBalance ?? 0m;
+        var availableCredit = current?.CarriedExcessBalance ?? 0m;
+        var expectedBalanceToday = Math.Max(0m, pot.AllocatedAmount + outstanding);
         decimal? requiredMonthly = null, projectedShortfall = null, extraRequired = null;
         decimal projected = pot.AllocatedAmount;
         if (pot.TargetAmount.HasValue && pot.DueDate.HasValue && pot.DueDate.Value.Date >= DateTime.Today)
         {
-            var monthsRemaining = Math.Max(1, ((pot.DueDate.Value.Year-DateTime.Today.Year)*12)+pot.DueDate.Value.Month-DateTime.Today.Month+1);
-            requiredMonthly = Math.Round(Math.Max(0,pot.TargetAmount.Value-pot.AllocatedAmount)/monthsRemaining,2);
-            projected = Math.Round(pot.AllocatedAmount + pot.IntendedMonthlyContribution*monthsRemaining,2);
-            projectedShortfall = Math.Max(0,pot.TargetAmount.Value-projected);
-            extraRequired = Math.Max(0,requiredMonthly.Value-pot.IntendedMonthlyContribution);
+            var monthsRemaining = Math.Max(1, ((pot.DueDate.Value.Year - DateTime.Today.Year) * 12) + pot.DueDate.Value.Month - DateTime.Today.Month + 1);
+            requiredMonthly = Math.Round(Math.Max(0m, pot.TargetAmount.Value - pot.AllocatedAmount) / monthsRemaining, 2);
+            projected = Math.Round(pot.AllocatedAmount + pot.IntendedMonthlyContribution * monthsRemaining, 2);
+            projectedShortfall = Math.Max(0m, pot.TargetAmount.Value - projected);
+            extraRequired = Math.Max(0m, requiredMonthly.Value - pot.IntendedMonthlyContribution);
         }
+
         var status = current?.Status ?? (pot.IsActive ? "Not configured" : "Inactive");
-        var css = status switch { "Funded" or "Overfunded" => "good", "Pending" or "In progress" or "Paused" => "warn", "Overdue" or "Missed" or "Partially funded" => "bad", _ => "muted" };
+        var css = status switch
+        {
+            "Funded" or "Overfunded" or "Funded from carried excess" => "good",
+            "Pending" or "In progress" or "Paused" or "Paused – voluntary contribution" => "warn",
+            "Overdue" or "Missed" or "Partially funded" => "bad",
+            _ => "muted"
+        };
+
         return new ReservePotFundingSummary
         {
-            PotId=pot.Id, CurrentStatus=status, StatusCssClass=css,
-            CurrentMonthExpected=current?.ExpectedAmount ?? 0, CurrentMonthActual=current?.ActualAmount ?? 0,
-            OutstandingRecovery=outstanding, ExpectedBalanceToday=expectedBalanceToday, ActualBalance=pot.AllocatedAmount,
-            MissedMonths=months.Count(x=>x.Status=="Missed"), PartiallyFundedMonths=months.Count(x=>x.Status=="Partially funded"),
-            ProjectedBalanceByDueDate=projected, ProjectedShortfall=projectedShortfall, RequiredMonthlyContribution=requiredMonthly,
-            AdditionalMonthlyContributionRequired=extraRequired, Months=months.OrderByDescending(x=>x.Year).ThenByDescending(x=>x.Month).ToList()
+            PotId = pot.Id,
+            CurrentStatus = status,
+            StatusCssClass = css,
+            CurrentMonthExpected = current?.ExpectedAmount ?? 0m,
+            CurrentMonthActual = current?.ActualAmount ?? 0m,
+            CurrentMonthEffectiveFunding = current?.EffectiveCurrentMonthFunding ?? 0m,
+            CurrentMonthAppliedToRecovery = current?.AppliedToRecovery ?? 0m,
+            CurrentMonthCarriedExcessCreated = current?.CarriedExcessCreated ?? 0m,
+            CurrentMonthGenuineExcess = current?.GenuineExcess ?? 0m,
+            OutstandingRecovery = outstanding,
+            AvailableCarriedExcess = availableCredit,
+            ExpectedBalanceToday = expectedBalanceToday,
+            ActualBalance = pot.AllocatedAmount,
+            MissedMonths = months.Count(x => x.Status == "Missed"),
+            PartiallyFundedMonths = months.Count(x => x.Status == "Partially funded"),
+            ProjectedBalanceByDueDate = projected,
+            ProjectedShortfall = projectedShortfall,
+            RequiredMonthlyContribution = requiredMonthly,
+            AdditionalMonthlyContributionRequired = extraRequired,
+            Months = months.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).ToList()
         };
     }
 
