@@ -1,86 +1,244 @@
-# Finance Manager ASP.NET Version
+# Finance Manager V2
 
-This is a mobile-friendly ASP.NET Core MVC version of the uploaded WinForms Finance Manager.
+Finance Manager V2 is a modern ASP.NET Core MVC personal finance and financial planning application designed to provide complete visibility and control over household finances, savings goals, reserve funds and long-term financial planning.
 
-## What it keeps compatible
+The application has evolved from the original WinForms Finance Manager into a service-oriented web application with dashboard intelligence, funding automation and historical reporting while remaining compatible with the existing SQL Server data model.
 
-It reads your existing SQL Server database `Finance_Manager` and keeps the existing table names used by the WinForms app:
+---
 
-- `dbo.bills`
-- `dbo.extra_expenses`
-- `dbo.investments`
-- `dbo.savings`
-- `dbo.emergency_fund`
-- `dbo.monthly_allowance`
+# Current Version
 
-The dashboard calculations use the same core approach:
+**Version:** 2.0
 
-`remaining fund = monthly allowance - bills - extra expenses - investments + savings`
+**Status:** Active Development
 
-The monthly saving target is set to `£1,200`, and the global goal is set to `£20,000`.
+**Current Development Phase:** Phase 6 – Forecasting & Planning (Planned)
 
-## New optional tables
+---
 
-On startup/use, the repository creates small extra tables if missing:
+# Technology Stack
 
-- `finance_settings` for hidden/changeable settings such as interest rate
-- `account_balances` for Lucy's ISA, Monzo pots and future pots/accounts
-- `account_balance_history` for update pattern/statistics
-- `monthly_income_stats` for manual money-in and sick day tracking
+* ASP.NET Core MVC
+* C#
+* SQL Server (LocalDB during development)
+* Razor Views
+* Bootstrap
+* Service / Repository Architecture
 
-These are additive and do not replace your existing data.
+---
 
-## How to run
+# Core Principles
 
-1. Open the folder in Visual Studio 2022.
+Finance Manager V2 has been designed around several core principles:
+
+* Preserve historical financial information.
+* Never automatically move money without user confirmation.
+* Keep funding history immutable.
+* Preserve the user's location after save operations.
+* Keep business logic within services.
+* Use dashboard intelligence to highlight actionable information.
+* Separate operational dashboards from historical reporting.
+
+---
+
+# Major Features
+
+## Dashboard
+
+* Financial Action Centre
+* Funding Health overview
+* Due reminders
+* Recommendation summary
+* Upcoming targets
+* Funding statistics
+
+## Household Reserve
+
+* Reserve balance management
+* Multiple savings pots
+* Individual targets
+* Pot priorities
+* Active and paused pots
+* Carry excess configuration
+* Funding plans
+
+## Savings Command Centre
+
+* Monthly funding plans
+* Funding frequencies
+* Funding dates
+* Carry excess
+* Carry shortfalls
+* Pause periods
+* Target dates
+* Contribution history
+
+## Funding Engine
+
+* Monthly funding tracking
+* Recovery calculations
+* Genuine excess
+* Carried excess
+* Funding timeline
+* Funding history
+* Automatic monthly summaries
+
+## Recommendation Engine
+
+* Recovery recommendations
+* Priority-based allocation
+* Apply individual recommendations
+* Apply all recommendations
+* Recommendation history
+
+## Finance Events
+
+Complete financial audit trail including:
+
+* Pot creation
+* Pot updates
+* Contributions
+* Funding status changes
+* Recommendation applications
+* Funding rebuilds
+
+## Reminders
+
+* Manual reminders
+* Automatic reminders
+* Funding reminders
+* Target reminders
+* Snooze
+* Complete
+* Dismiss
+* Reopen
+
+## Monthly Funding Review
+
+* Month selector
+* Summary cards
+* Per-pot funding review
+* Monthly funding statistics
+* Events
+* Reminders
+* Recommendation history
+
+## Statistics
+
+* Reserve statistics
+* Goal tracking
+* Interest calculations
+* Historical summaries
+
+---
+
+# Database
+
+Finance Manager V2 remains compatible with the original Finance Manager database while extending it with additional tables where required.
+
+Original tables remain supported alongside new tables for:
+
+* Funding history
+* Finance events
+* Finance reminders
+* Recommendation applications
+* Dashboard intelligence
+* Monthly reviews
+
+---
+
+# Configuration
+
+Configuration is stored within `appsettings.json`.
+
+Example:
+
+```json
+{
+  "ConnectionStrings": {
+    "FinanceManager": "Server=(localdb)\\MSSQLLocalDB2025;Database=Finance_Manager_V2;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True"
+  }
+}
+```
+
+---
+
+# Architecture
+
+Finance Manager follows a layered architecture.
+
+```text
+Razor Views
+      │
+Controllers
+      │
+Services
+      │
+FinanceRepository
+      │
+SQL Server
+```
+
+Business logic is implemented within services while repositories are responsible only for data access.
+
+---
+
+# Running the Project
+
+1. Open the solution in Visual Studio 2022 or later.
 2. Restore NuGet packages.
-3. Check `appsettings.json` connection string.
-4. Run the project.
+3. Configure `appsettings.json`.
+4. Apply any pending database migrations or allow automatic table creation.
+5. Run the application.
 
-You can also set an environment variable named `FM_CONNECTION_STRING` to override the connection string, matching your old app pattern.
+---
 
-## Main features added
+# Documentation
 
-- Phone-friendly dashboard.
-- Month navigation with left/right arrows.
-- Red/green carry-over result before each month.
-- £1,200 monthly saving target.
-- £20,000 global goal including emergency fund and extra accounts.
-- Interest forecast for emergency fund, Lucy's ISA and Monzo pots.
-- Hidden-ish advanced interest fields inside the account modal.
-- Statistics page for income, sick days, account updates and goal estimates.
-- One carry-over button with checklist sections for bills, investments and optional extra expenses.
+Project documentation is located within the `/docs` folder.
 
-## Interest forecast update
+* Specification
+* Roadmap
+* Architecture
+* Database
+* Coding Standards
+* UI Standards
+* Phase Documentation
+* Changelog
 
-The Statistics page now calculates projected balances using monthly compounding:
+---
 
-1. Current account balance is taken from `emergency_fund` and `account_balances`.
-2. Monthly contribution is added each month.
-3. Monthly interest is applied using `annual rate / 12`.
-4. The page shows normal projected money, projected money with interest, interest earned, and the estimated goal month.
+# Roadmap
 
-The carry-over SQL has also been simplified to avoid INSERT column/value count errors.
+## Completed
 
-## Latest update
+* Phase 1 – Savings Command Centre
+* Phase 2 – Funding Engine
+* Phase 3 – Events, Recommendations & Reminders
+* Phase 4 – Dashboard Intelligence & Recommendation Workflow
+* Phase 5 – Monthly Funding Review
 
-This version includes:
+## Planned
 
-- STONEYMINI SQL Server connection string in `appsettings.json`.
-- Fixed carry-over SQL using `INSERT ... SELECT`.
-- Add payment / bill dashboard flow.
-- Interest forecast statistics.
-- Goal forecast now adds the planned £1,200 monthly saving target into the £20,000 projection, not just the current pots and interest.
+* Phase 6 – Forecasting & Planning
+* Phase 7 – Reporting & Export
+* Phase 8 – Automation
+* Phase 9 – Financial Intelligence
 
-## Latest update - House / Moneybox forecast
+---
 
-Added a Statistics page House planner with:
+# Development Standards
 
-- Manual external total value box.
-- £30,000 house goal input.
-- Moneybox fund amount input.
-- Moneybox interest rate input.
-- Bonus input that is taken off the total needed.
-- Normal remaining amount and remaining amount with Moneybox interest.
-- Interest-only calculator for any custom amount/rate/months.
-- The £1,200 monthly saving target is applied to the house/Moneybox forecast only and is not added into the Emergency Fund account projection.
+The project follows several development standards:
+
+* Service-oriented architecture
+* Repository pattern
+* Async-first data access
+* Immutable funding history
+* Interface-based collection parameters (`IReadOnlyList<T>` / `IEnumerable<T>`) where appropriate
+* Confirmation before financial actions
+* Version-controlled project documentation
+
+---
+
+Finance Manager V2 continues to evolve into a complete personal financial planning platform, providing budgeting, reserve management, funding automation, historical reporting and long-term financial forecasting from a single application.
