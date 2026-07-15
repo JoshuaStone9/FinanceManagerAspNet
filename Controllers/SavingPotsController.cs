@@ -7,25 +7,50 @@ namespace FinanceManagerAspNet.Controllers;
 public sealed class SavingPotsController(
     FinanceRepository repo,
     IReserveRecommendationService recommendationService,
-    IRecommendationApplicationService applicationService) : Controller
+    IRecommendationApplicationService applicationService,
+    IReserveAccountSelectionService reserveAccountSelectionService) : Controller
 {
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(bool reselect = false)
     {
         var reserve = await repo.GetHouseholdReserveAsync();
+        var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
         var pots = await repo.GetReservePotsAsync();
         var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
         await repo.SyncFundingRemindersAsync(pots, summaries);
+        var totalAllocated = pots.Where(x => x.IsActive).Sum(x => Math.Max(0m, x.AllocatedAmount));
+        var remainingToAllocate = Math.Max(0m, accountSummary.SurplusAboveBaseline - totalAllocated);
         var recommendations = recommendationService.BuildRecoveryRecommendations(
-            Math.Max(0m, reserve.Balance - pots.Where(x => x.IsActive).Sum(x => x.AllocatedAmount)), pots, summaries);
+            remainingToAllocate, pots, summaries);
         var dueReminders = await repo.GetFinanceRemindersAsync("Open", dueOnly: true);
         return View(new HouseholdReserveViewModel
         {
             Reserve = reserve,
+            AccountSummary = accountSummary,
+            ShowAccountSelector = reselect || !accountSummary.HasSelection,
             Pots = pots,
             FundingSummaries = summaries,
             RecoveryRecommendations = recommendations,
             DueReminders = dueReminders
         });
+    }
+
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveReserveAccountSelection(int[] selectedAccountIds)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        if (selectedAccountIds.Length == 0)
+        {
+            TempData["Error"] = "Select at least one reserve account.";
+            return Redirect($"{Url.Action(nameof(Index), new { reselect = true })}#reserve-accounts");
+        }
+
+        await reserveAccountSelectionService.SaveSelectionAsync(selectedAccountIds);
+        await repo.AddFinanceEventAsync("Household Reserve", "ReserveAccountsSelected", "HouseholdReserve", 1,
+            "Reserve accounts updated", $"{selectedAccountIds.Length} account(s) now make up the household reserve.", null, "User");
+        TempData["Success"] = "Reserve account selection saved.";
+        return Redirect($"{Url.Action(nameof(Index))}#reserve-accounts");
     }
 
     [HttpPost]

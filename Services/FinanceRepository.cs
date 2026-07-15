@@ -71,6 +71,14 @@ IF OBJECT_ID('dbo.reserved_funds','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM
 INSERT INTO dbo.reserved_funds([name], amount, category, access_speed, include_in_net_worth, deduct_from_savings_allocation, notes)
 VALUES('Moneybox Deposit', 8000, 'House Deposit', 'Moneybox / LISA', 1, 1, 'Reserved for Moneybox house deposit, excluded from savings allocation but still part of net worth.');
 
+IF OBJECT_ID('dbo.reserve_account_selections','U') IS NULL
+CREATE TABLE dbo.reserve_account_selections(
+    account_id int NOT NULL PRIMARY KEY,
+    display_order int NOT NULL DEFAULT 0,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
 IF OBJECT_ID('dbo.account_balance_history','U') IS NULL
 CREATE TABLE dbo.account_balance_history(history_id int IDENTITY(1,1) PRIMARY KEY, account_balance_id int NULL, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
@@ -1458,6 +1466,46 @@ VALUES(@potId, @amount, @date, @note)",
         ("@amount", amount),
         ("@date", date.Date),
         ("@note", DbValue(note)));
+    }
+
+    public async Task<IReadOnlySet<int>> GetSelectedReserveAccountIdsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var ids = new HashSet<int>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT account_id FROM dbo.reserve_account_selections ORDER BY display_order, account_id", con);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) ids.Add(reader.GetInt32(0));
+        return ids;
+    }
+
+    public async Task SaveReserveAccountSelectionAsync(IEnumerable<int> accountIds)
+    {
+        await EnsureModernTablesAsync();
+        var ids = accountIds.Distinct().Where(x => x >= 0).ToArray();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var tx = await con.BeginTransactionAsync();
+        try
+        {
+            await using (var delete = new SqlCommand("DELETE FROM dbo.reserve_account_selections", con, (SqlTransaction)tx))
+                await delete.ExecuteNonQueryAsync();
+
+            for (var i = 0; i < ids.Length; i++)
+            {
+                await using var insert = new SqlCommand("INSERT INTO dbo.reserve_account_selections(account_id, display_order) VALUES(@id,@order)", con, (SqlTransaction)tx);
+                insert.Parameters.AddWithValue("@id", ids[i]);
+                insert.Parameters.AddWithValue("@order", i);
+                await insert.ExecuteNonQueryAsync();
+            }
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<HouseholdReserve> GetHouseholdReserveAsync()

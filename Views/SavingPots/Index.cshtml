@@ -3,10 +3,31 @@
 @{ ViewData["Title"] = "Household Reserve"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentMonth = DateTime.Today.ToString("MMMM yyyy"); var applyAllOperationKey = Guid.NewGuid().ToString("N"); }
 <section class="hero card"><div><p class="eyebrow">One physical fund, clear virtual allocations</p><h1>Household Reserve</h1><p class="muted">Dashboard reserve allocations automatically increase the matching pot and now update its monthly funding history.</p></div><div><a class="secondary" asp-controller="Events" asp-action="Index">Events</a></div></section>
 <section class="grid cards-4">
-<article class="card"><p class="eyebrow">Physical balance</p><h2>@Model.Reserve.Balance.ToString("C", gb)</h2><p>@Model.Reserve.Provider</p></article>
-<article class="card"><p class="eyebrow">Virtual allocations</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
-<article class="card"><p class="eyebrow">Unallocated</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2></article>
-<article class="card"><p class="eyebrow">Estimated monthly interest</p><h2>@Model.EstimatedMonthlyInterest.ToString("C", gb)</h2><p>@Model.Reserve.InterestRate.ToString("0.##")% AER estimate.</p></article>
+<article class="card"><p class="eyebrow">Total reserve balance</p><h2>@Model.AccountSummary.TotalBalance.ToString("C", gb)</h2><p class="muted">Across selected reserve accounts.</p></article>
+<article class="card"><p class="eyebrow">Protected baseline</p><h2>@Model.AccountSummary.Baseline.ToString("C", gb)</h2><p class="@(Model.AccountSummary.BaselineShortfall > 0 ? "bad" : "good")">@(Model.AccountSummary.BaselineShortfall > 0 ? $"{Model.AccountSummary.BaselineShortfall.ToString("C", gb)} still needed" : "Baseline covered")</p></article>
+<article class="card"><p class="eyebrow">Surplus above baseline</p><h2>@Model.AccountSummary.SurplusAboveBaseline.ToString("C", gb)</h2><p class="muted">Available before pot allocations.</p></article>
+<article class="card"><p class="eyebrow">Allocated to pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
+<article class="card"><p class="eyebrow">Remaining to allocate</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2><p class="muted">Surplus minus current pot allocations.</p></article>
+</section>
+
+<section class="card" id="reserve-accounts">
+<div class="section-head"><div><p class="eyebrow">Reserve accounts</p><h2>Accounts protecting the £12,000 baseline</h2></div>
+@if (!Model.ShowAccountSelector && canEdit){<a class="secondary button" asp-action="Index" asp-route-reselect="true" asp-fragment="reserve-accounts">Reselect reserve accounts</a>}
+</div>
+@if (Model.ShowAccountSelector)
+{
+<form asp-action="SaveReserveAccountSelection" method="post" class="account-form">@Html.AntiForgeryToken()
+<div class="grid cards-4 compact-grid">
+@foreach (var account in Model.AccountSummary.AvailableAccounts)
+{
+<label class="reserve-account-option"><input type="checkbox" name="selectedAccountIds" value="@account.Id" checked="@account.IsSelected"/><span><strong>@account.Name</strong><small>@account.Balance.ToString("C", gb) · @account.InterestRate.ToString("0.##")% AER</small></span></label>
+}
+</div><button class="primary">Save reserve accounts</button></form>
+}
+else
+{
+<div class="grid cards-4 compact-grid">@foreach(var account in Model.AccountSummary.SelectedAccounts){<article><p class="eyebrow">@account.Name</p><strong>@account.Balance.ToString("C", gb)</strong><p class="muted">@account.InterestRate.ToString("0.##")% AER</p></article>}</div>
+}
 </section>
 
 @{ var activeSummaries = Model.Pots.Where(x => x.IsActive).Select(x => Model.FundingSummaries.GetValueOrDefault(x.Id)).Where(x => x is not null).ToList(); var attention = activeSummaries.Count(x => x!.CurrentStatus is "Overdue" or "Missed" or "Partially funded"); var expectedThisMonth = activeSummaries.Sum(x => x!.CurrentMonthExpected); var actualThisMonth = activeSummaries.Sum(x => x!.CurrentMonthEffectiveFunding); }
@@ -54,7 +75,7 @@
 
 @if (canEdit)
 {
-<section class="card" id="reserve-account"><p class="eyebrow">Physical account</p><h2>Edit reserve account</h2><form asp-action="SaveReserve" method="post" class="account-form">@Html.AntiForgeryToken()<label>Balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance"/></label><label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate"/></label><label>Provider<input name="provider" value="@Model.Reserve.Provider"/></label><button class="primary">Save reserve</button></form></section>
+<details class="card" id="reserve-account"><summary><strong>Legacy physical reserve settings</strong></summary><p class="muted">Kept for compatibility with older calculations.</p><form asp-action="SaveReserve" method="post" class="account-form">@Html.AntiForgeryToken()<label>Balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance"/></label><label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate"/></label><label>Provider<input name="provider" value="@Model.Reserve.Provider"/></label><button class="primary">Save reserve</button></form></details>
 }
 
 <div id="allocations"></div>
@@ -67,7 +88,9 @@ else
 @foreach (var pot in Model.Pots)
 {
     var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id) ?? new FinanceManagerAspNet.Models.ReservePotFundingSummary { PotId = pot.Id };
-<section class="card" id="pot-@pot.Id"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div><div><a class="secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">Events</a></div></div>
+<details class="card pot-disclosure" id="pot-@pot.Id">
+<summary class="pot-title-row"><span><strong>@pot.Name</strong><small>@pot.AllocatedAmount.ToString("C", gb)@(pot.TargetAmount.HasValue ? $" of {pot.TargetAmount.Value.ToString("C", gb)}" : "")</small></span><span class="@summary.StatusCssClass">@summary.CurrentStatus</span></summary>
+<div class="pot-expanded"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div><div><a class="secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">Events</a></div></div>
 <section class="grid cards-4 compact-grid">
 <article><p class="eyebrow">Allocated</p><strong>@pot.AllocatedAmount.ToString("C", gb)</strong></article>
 <article><p class="eyebrow">Funding status</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) of @summary.CurrentMonthExpected.ToString("C", gb) this month.</p><p class="muted">Dashboard paid: @summary.CurrentMonthActual.ToString("C", gb)</p></article>
@@ -117,7 +140,8 @@ else
 </tbody></table></div>
 }
 </details>
-</section>
+</div>
+</details>
 }
 }
 @if (canEdit)

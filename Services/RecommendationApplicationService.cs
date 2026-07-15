@@ -10,7 +10,8 @@ public interface IRecommendationApplicationService
 
 public sealed class RecommendationApplicationService(
     FinanceRepository repo,
-    IReserveRecommendationService recommendationService) : IRecommendationApplicationService
+    IReserveRecommendationService recommendationService,
+    IReserveAccountSelectionService reserveAccountSelectionService) : IRecommendationApplicationService
 {
     public async Task<ApplyRecommendationResult> ApplyAsync(
         int potId,
@@ -26,7 +27,7 @@ public sealed class RecommendationApplicationService(
             };
         }
 
-        var reserve = await repo.GetHouseholdReserveAsync();
+        var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
         var pots = await repo.GetReservePotsAsync();
         var pot = pots.FirstOrDefault(x => x.Id == potId);
 
@@ -40,7 +41,9 @@ public sealed class RecommendationApplicationService(
         }
 
         var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
-        var available = Math.Max(0m, reserve.Balance - pots.Where(x => x.IsActive).Sum(x => x.AllocatedAmount));
+        var available = Math.Max(0m,
+            accountSummary.SurplusAboveBaseline -
+            pots.Where(x => x.IsActive).Sum(x => Math.Max(0m, x.AllocatedAmount)));
         var current = recommendationService
             .BuildRecoveryRecommendations(available, pots, summaries)
             .FirstOrDefault(x => x.PotId == potId);
@@ -62,10 +65,12 @@ public sealed class RecommendationApplicationService(
     public async Task<ApplyAllRecommendationsResult> ApplyAllAsync(string operationKey)
     {
         var result = new ApplyAllRecommendationsResult();
-        var reserve = await repo.GetHouseholdReserveAsync();
+        var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
         var pots = await repo.GetReservePotsAsync();
         var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
-        var available = Math.Max(0m, reserve.Balance - pots.Where(x => x.IsActive).Sum(x => x.AllocatedAmount));
+        var available = Math.Max(0m,
+            accountSummary.SurplusAboveBaseline -
+            pots.Where(x => x.IsActive).Sum(x => Math.Max(0m, x.AllocatedAmount)));
         var recommendations = recommendationService.BuildRecoveryRecommendations(available, pots, summaries);
 
         foreach (var recommendation in recommendations.OrderBy(x => x.Priority).ThenBy(x => x.PotName))

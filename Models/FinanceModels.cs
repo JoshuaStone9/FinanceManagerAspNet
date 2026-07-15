@@ -443,6 +443,26 @@ public sealed class StatisticsViewModel
     public decimal TotalValueByApril { get; set; }
     public decimal AvailableEmergencyFundAfterPots => Math.Round(HouseGoal.EmergencyFundStillNeededWithInterest - AllocatedToSavingPots, 2);
 }
+
+public sealed record ReserveAccountOption(
+    int Id,
+    string Name,
+    decimal Balance,
+    decimal InterestRate,
+    bool IsSelected);
+
+public sealed class HouseholdReserveAccountSummary
+{
+    public decimal Baseline { get; init; } = 12000m;
+    public IReadOnlyList<ReserveAccountOption> AvailableAccounts { get; init; } = Array.Empty<ReserveAccountOption>();
+    public IReadOnlyList<ReserveAccountOption> SelectedAccounts { get; init; } = Array.Empty<ReserveAccountOption>();
+    public decimal TotalBalance => SelectedAccounts.Sum(x => x.Balance);
+    public decimal BaselineCovered => Math.Min(TotalBalance, Baseline);
+    public decimal BaselineShortfall => Math.Max(0m, Baseline - TotalBalance);
+    public decimal SurplusAboveBaseline => Math.Max(0m, TotalBalance - Baseline);
+    public bool HasSelection => SelectedAccounts.Count > 0;
+}
+
 public sealed record HouseholdReserve(
     decimal Balance,
     decimal InterestRate,
@@ -668,12 +688,15 @@ public sealed class FinanceEventsViewModel
 public sealed class HouseholdReserveViewModel
 {
     public HouseholdReserve Reserve { get; set; } = new(0, 0, "Money market fund", DateTime.MinValue);
+    public HouseholdReserveAccountSummary AccountSummary { get; set; } = new();
+    public bool ShowAccountSelector { get; set; }
     public List<ReservePot> Pots { get; set; } = [];
     public List<ReserveRecoveryRecommendation> RecoveryRecommendations { get; set; } = [];
     public List<FinanceReminderRow> DueReminders { get; set; } = [];
     public Dictionary<int, ReservePotFundingSummary> FundingSummaries { get; set; } = [];
-    public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => p.AllocatedAmount);
-    public decimal UnallocatedBalance => Reserve.Balance - TotalAllocated;
+    public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => Math.Max(0m, p.AllocatedAmount));
+    public decimal UnallocatedBalance => AccountSummary.SurplusAboveBaseline - TotalAllocated;
+    public decimal RemainingToAllocate => Math.Max(0m, UnallocatedBalance);
     public decimal TotalDefaultMonthlyContributions => Pots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);
     public decimal EstimatedMonthlyInterest => Math.Round(Reserve.Balance * (Reserve.InterestRate / 100m) / 12m, 2);
     public bool IsOverAllocated => UnallocatedBalance < 0;
