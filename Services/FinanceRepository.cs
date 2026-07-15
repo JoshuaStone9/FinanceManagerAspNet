@@ -114,14 +114,21 @@ IF COL_LENGTH('dbo.reserve_pots','carry_excess_forward') IS NULL ALTER TABLE dbo
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_from') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_from date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_until') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_until date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_pause_reason') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_pause_reason nvarchar(300) NULL;
-IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
+IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL
+    ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
 
+-- Run this dynamically so SQL Server compiles it only after the column exists.
+EXEC(N'
 UPDATE p
 SET funding_plan_start_date = COALESCE(
-    (SELECT MIN(CAST(s.[date] AS date)) FROM dbo.savings s WHERE s.[name] = p.[name] AND s.amount > 0),
-    CAST('2026-01-01' AS date))
+    (SELECT MIN(CAST(s.[date] AS date))
+     FROM dbo.savings s
+     WHERE s.[name] = p.[name]
+       AND s.amount > 0),
+    CAST(''2026-01-01'' AS date))
 FROM dbo.reserve_pots p
 WHERE p.funding_plan_start_date IS NULL;
+');
 
 IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NULL
 CREATE TABLE dbo.reserve_pot_monthly_funding(
@@ -183,6 +190,27 @@ CREATE TABLE dbo.finance_events(
     amount decimal(18,2) NULL,
     source nvarchar(40) NOT NULL DEFAULT 'System'
 );
+
+IF OBJECT_ID('dbo.finance_reminders','U') IS NULL
+CREATE TABLE dbo.finance_reminders(
+    finance_reminder_id int IDENTITY(1,1) PRIMARY KEY,
+    reserve_pot_id int NULL,
+    title nvarchar(220) NOT NULL,
+    [description] nvarchar(1000) NULL,
+    due_date date NOT NULL,
+    reminder_type nvarchar(60) NOT NULL DEFAULT 'Manual',
+    [status] nvarchar(30) NOT NULL DEFAULT 'Open',
+    is_system_generated bit NOT NULL DEFAULT 0,
+    system_key nvarchar(180) NULL,
+    snoozed_until date NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_finance_reminders_reserve_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE SET NULL
+);
+IF OBJECT_ID('dbo.finance_reminders','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_finance_reminders_status_due' AND object_id=OBJECT_ID('dbo.finance_reminders'))
+CREATE INDEX IX_finance_reminders_status_due ON dbo.finance_reminders([status],due_date);
+IF OBJECT_ID('dbo.finance_reminders','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_finance_reminders_system_key' AND object_id=OBJECT_ID('dbo.finance_reminders'))
+CREATE UNIQUE INDEX UX_finance_reminders_system_key ON dbo.finance_reminders(system_key) WHERE system_key IS NOT NULL;
 
 
 
@@ -1446,7 +1474,7 @@ VALUES(@potId, @amount, @date, @note)",
         await ExecuteAsync(@"MERGE dbo.household_reserve AS t USING (SELECT 1 AS id) AS s ON t.household_reserve_id=s.id
 WHEN MATCHED THEN UPDATE SET balance=@balance, interest_rate=@rate, provider=@provider, updated_at=SYSUTCDATETIME()
 WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider) VALUES(1,@balance,@rate,@provider);",
-            ("@balance", Math.Max(0,balance)), ("@rate", Math.Max(0,interestRate)), ("@provider", string.IsNullOrWhiteSpace(provider) ? "Money market fund" : provider.Trim()));
+            ("@balance", Math.Max(0, balance)), ("@rate", Math.Max(0, interestRate)), ("@provider", string.IsNullOrWhiteSpace(provider) ? "Money market fund" : provider.Trim()));
     }
 
     public async Task<List<ReservePot>> GetReservePotsAsync()
@@ -1747,7 +1775,7 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
     {
         await EnsureModernTablesAsync();
         await ExecuteAsync("INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source) VALUES(@area,@type,@entityType,@entityId,@title,@description,@amount,@source)",
-            ("@area",area),("@type",eventType),("@entityType",entityType),("@entityId",entityId.HasValue?entityId.Value:DBNull.Value),("@title",title),("@description",DbValue(description)),("@amount",amount.HasValue?amount.Value:DBNull.Value),("@source",source));
+            ("@area", area), ("@type", eventType), ("@entityType", entityType), ("@entityId", entityId.HasValue ? entityId.Value : DBNull.Value), ("@title", title), ("@description", DbValue(description)), ("@amount", amount.HasValue ? amount.Value : DBNull.Value), ("@source", source));
     }
 
     public async Task<List<FinanceEventRow>> GetFinanceEventsAsync(int? potId = null, string? eventType = null, DateTime? from = null, DateTime? to = null)
@@ -1763,8 +1791,118 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
         cmd.Parameters.AddWithValue("@from", from.HasValue ? from.Value.Date : DBNull.Value);
         cmd.Parameters.AddWithValue("@to", to.HasValue ? to.Value.Date : DBNull.Value);
         await using var r = await cmd.ExecuteReaderAsync();
-        while (await r.ReadAsync()) list.Add(new FinanceEventRow(r.GetInt64(0),r.GetDateTime(1),r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetInt32(5),r.GetString(6),r.IsDBNull(7)?null:r.GetString(7),r.IsDBNull(8)?null:r.GetDecimal(8),r.GetString(9)));
+        while (await r.ReadAsync()) list.Add(new FinanceEventRow(r.GetInt64(0), r.GetDateTime(1), r.GetString(2), r.GetString(3), r.GetString(4), r.IsDBNull(5) ? null : r.GetInt32(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetDecimal(8), r.GetString(9)));
         return list;
+    }
+
+    public async Task<List<FinanceReminderRow>> GetFinanceRemindersAsync(string? status = "Open", bool dueOnly = false)
+    {
+        await EnsureModernTablesAsync();
+        var list = new List<FinanceReminderRow>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        var sql = @"SELECT r.finance_reminder_id,r.reserve_pot_id,p.[name],r.title,r.[description],r.due_date,r.reminder_type,r.[status],r.is_system_generated,r.snoozed_until,r.created_at,r.updated_at
+FROM dbo.finance_reminders r
+LEFT JOIN dbo.reserve_pots p ON p.reserve_pot_id=r.reserve_pot_id
+WHERE (@status IS NULL OR r.[status]=@status)
+  AND (@dueOnly=0 OR COALESCE(r.snoozed_until,r.due_date)<=CONVERT(date,GETDATE()))
+ORDER BY CASE WHEN r.[status]='Open' THEN 0 ELSE 1 END, COALESCE(r.snoozed_until,r.due_date), r.created_at DESC";
+        await using var cmd = new SqlCommand(sql, con);
+        cmd.Parameters.AddWithValue("@status", string.IsNullOrWhiteSpace(status) || status.Equals("All", StringComparison.OrdinalIgnoreCase) ? DBNull.Value : status);
+        cmd.Parameters.AddWithValue("@dueOnly", dueOnly);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new FinanceReminderRow(
+                r.GetInt32(0),
+                r.IsDBNull(1) ? null : r.GetInt32(1),
+                r.IsDBNull(2) ? null : r.GetString(2),
+                r.GetString(3),
+                r.IsDBNull(4) ? null : r.GetString(4),
+                r.GetDateTime(5),
+                r.GetString(6),
+                r.GetString(7),
+                r.GetBoolean(8),
+                r.IsDBNull(9) ? null : r.GetDateTime(9),
+                r.GetDateTime(10),
+                r.GetDateTime(11)));
+        }
+        return list;
+    }
+
+    public async Task<int> GetDueReminderCountAsync()
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync("SELECT COUNT(*) FROM dbo.finance_reminders WHERE [status]='Open' AND COALESCE(snoozed_until,due_date)<=CONVERT(date,GETDATE())");
+        return Convert.ToInt32(value ?? 0);
+    }
+
+    public async Task AddReminderAsync(int? reservePotId, string title, string? description, DateTime dueDate)
+    {
+        if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("A reminder title is required.");
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"INSERT INTO dbo.finance_reminders(reserve_pot_id,title,[description],due_date,reminder_type,[status],is_system_generated)
+VALUES(@potId,@title,@description,@dueDate,'Manual','Open',0)",
+            ("@potId", reservePotId.HasValue ? reservePotId.Value : DBNull.Value),
+            ("@title", title.Trim()),
+            ("@description", DbValue(description)),
+            ("@dueDate", dueDate.Date));
+        await AddFinanceEventAsync("Reminders", "ReminderCreated", "ReservePot", reservePotId, title.Trim(), description, null, "User");
+    }
+
+    public async Task UpdateReminderStatusAsync(int id, string status)
+    {
+        var allowed = new[] { "Open", "Completed", "Dismissed" };
+        if (!allowed.Contains(status)) throw new ArgumentException("Invalid reminder status.");
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("UPDATE dbo.finance_reminders SET [status]=@status,snoozed_until=NULL,updated_at=SYSUTCDATETIME() WHERE finance_reminder_id=@id", ("@status", status), ("@id", id));
+    }
+
+    public async Task SnoozeReminderAsync(int id, DateTime snoozedUntil)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("UPDATE dbo.finance_reminders SET [status]='Open',snoozed_until=@until,updated_at=SYSUTCDATETIME() WHERE finance_reminder_id=@id", ("@until", snoozedUntil.Date), ("@id", id));
+    }
+
+    public async Task SyncFundingRemindersAsync(IEnumerable<ReservePot> pots, IReadOnlyDictionary<int, ReservePotFundingSummary> summaries)
+    {
+        await EnsureModernTablesAsync();
+        var today = DateTime.Today;
+        foreach (var pot in pots.Where(x => x.IsActive))
+        {
+            if (!summaries.TryGetValue(pot.Id, out var summary)) continue;
+            if (summary.CurrentStatus is "Overdue" or "Missed" or "Partially funded")
+            {
+                var key = $"funding:{pot.Id}:{today:yyyyMM}";
+                var title = $"{pot.Name} needs funding attention";
+                var description = $"{summary.CurrentStatus}. {summary.CurrentMonthEffectiveFunding:C} of {summary.CurrentMonthExpected:C} funded; {summary.OutstandingRecovery:C} remains to recover.";
+                await ExecuteAsync(@"MERGE dbo.finance_reminders AS target
+USING (SELECT @key system_key) source ON target.system_key=source.system_key
+WHEN MATCHED THEN UPDATE SET reserve_pot_id=@potId,title=@title,[description]=@description,due_date=@dueDate,reminder_type='Funding',updated_at=SYSUTCDATETIME(),[status]=CASE WHEN target.[status]='Completed' THEN 'Completed' ELSE 'Open' END
+WHEN NOT MATCHED THEN INSERT(reserve_pot_id,title,[description],due_date,reminder_type,[status],is_system_generated,system_key)
+VALUES(@potId,@title,@description,@dueDate,'Funding','Open',1,@key);",
+                    ("@key", key), ("@potId", pot.Id), ("@title", title), ("@description", description), ("@dueDate", today));
+            }
+
+            if (pot.DueDate.HasValue && pot.TargetAmount.HasValue && pot.AllocatedAmount < pot.TargetAmount.Value)
+            {
+                var days = (pot.DueDate.Value.Date - today).Days;
+                if (days is >= 0 and <= 30)
+                {
+                    var key = $"target:{pot.Id}:{pot.DueDate.Value:yyyyMMdd}";
+                    var title = $"{pot.Name} target is due soon";
+                    var description = $"Target date: {pot.DueDate.Value:dd MMM yyyy}. Remaining: {Math.Max(0m, pot.TargetAmount.Value - pot.AllocatedAmount):C}.";
+                    await ExecuteAsync(@"MERGE dbo.finance_reminders AS target
+USING (SELECT @key system_key) source ON target.system_key=source.system_key
+WHEN MATCHED THEN UPDATE SET reserve_pot_id=@potId,title=@title,[description]=@description,due_date=@dueDate,reminder_type='TargetDue',updated_at=SYSUTCDATETIME(),[status]=CASE WHEN target.[status]='Completed' THEN 'Completed' ELSE 'Open' END
+WHEN NOT MATCHED THEN INSERT(reserve_pot_id,title,[description],due_date,reminder_type,[status],is_system_generated,system_key)
+VALUES(@potId,@title,@description,@dueDate,'TargetDue','Open',1,@key);",
+                        ("@key", key), ("@potId", pot.Id), ("@title", title), ("@description", description), ("@dueDate", pot.DueDate.Value.Date));
+                }
+            }
+        }
+
+        await ExecuteAsync("UPDATE dbo.finance_reminders SET [status]='Dismissed',updated_at=SYSUTCDATETIME() WHERE is_system_generated=1 AND [status]='Open' AND system_key LIKE 'funding:%' AND due_date<DATEFROMPARTS(YEAR(GETDATE()),MONTH(GETDATE()),1)");
     }
 
     public async Task DeleteReservePotAsync(int id)
@@ -1772,7 +1910,7 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
         await EnsureModernTablesAsync();
         var pot = (await GetReservePotsAsync()).FirstOrDefault(x => x.Id == id);
         if (pot is not null) await AddFinanceEventAsync("Household Reserve", "PotDeleted", "ReservePot", id, $"{pot.Name} deleted", "The virtual allocation was deleted.", pot.AllocatedAmount, "User");
-        await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id",id));
+        await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id", id));
     }
 
 }

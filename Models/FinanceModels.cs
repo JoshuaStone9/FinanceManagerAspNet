@@ -552,6 +552,44 @@ public sealed class ReservePotFundingSummary
     public List<ReservePotRecoveryAllocation> RecoveryAllocations { get; set; } = [];
 }
 
+
+public sealed class ReserveRecoveryRecommendation
+{
+    public int PotId { get; set; }
+    public string PotName { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public decimal OutstandingRecovery { get; set; }
+    public decimal RecommendedAmount { get; set; }
+    public decimal RemainingAfterRecommendation => Math.Max(0m, OutstandingRecovery - RecommendedAmount);
+}
+
+public sealed record FinanceReminderRow(
+    int Id,
+    int? ReservePotId,
+    string? PotName,
+    string Title,
+    string? Description,
+    DateTime DueDate,
+    string ReminderType,
+    string Status,
+    bool IsSystemGenerated,
+    DateTime? SnoozedUntil,
+    DateTime CreatedAt,
+    DateTime UpdatedAt)
+{
+    public DateTime EffectiveDueDate => SnoozedUntil?.Date ?? DueDate.Date;
+    public bool IsDue => Status == "Open" && EffectiveDueDate <= DateTime.Today;
+    public bool IsOverdue => Status == "Open" && EffectiveDueDate < DateTime.Today;
+}
+
+public sealed class FinanceRemindersViewModel
+{
+    public string Status { get; set; } = "Open";
+    public List<ReservePot> Pots { get; set; } = [];
+    public List<FinanceReminderRow> Reminders { get; set; } = [];
+    public int DueCount => Reminders.Count(x => x.IsDue);
+}
+
 public sealed record FinanceEventRow(
     long Id,
     DateTime OccurredAt,
@@ -578,6 +616,8 @@ public sealed class HouseholdReserveViewModel
 {
     public HouseholdReserve Reserve { get; set; } = new(0, 0, "Money market fund", DateTime.MinValue);
     public List<ReservePot> Pots { get; set; } = [];
+    public List<ReserveRecoveryRecommendation> RecoveryRecommendations { get; set; } = [];
+    public List<FinanceReminderRow> DueReminders { get; set; } = [];
     public Dictionary<int, ReservePotFundingSummary> FundingSummaries { get; set; } = [];
     public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => p.AllocatedAmount);
     public decimal UnallocatedBalance => Reserve.Balance - TotalAllocated;

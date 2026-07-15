@@ -1,0 +1,63 @@
+@model FinanceManagerAspNet.Models.FinanceRemindersViewModel
+@{
+    ViewData["Title"] = "Reminders";
+    var canEdit = User.Identity?.IsAuthenticated == true;
+}
+<section class="hero card">
+    <div><p class="eyebrow">Stage 3.4</p><h1>Finance reminders</h1><p class="muted">Automatic funding alerts and reminders you create yourself.</p></div>
+    <div class="chips"><span>@Model.DueCount due</span></div>
+</section>
+<section class="card">
+    <p class="eyebrow">Filter</p><h2>Reminder status</h2>
+    <div class="actions">
+        <a class="@(Model.Status == "Open" ? "primary" : "secondary") button" asp-route-status="Open">Open</a>
+        <a class="@(Model.Status == "Completed" ? "primary" : "secondary") button" asp-route-status="Completed">Completed</a>
+        <a class="@(Model.Status == "Dismissed" ? "primary" : "secondary") button" asp-route-status="Dismissed">Dismissed</a>
+        <a class="@(Model.Status == "All" ? "primary" : "secondary") button" asp-route-status="All">All</a>
+    </div>
+</section>
+@if (canEdit)
+{
+<section class="card" id="new-reminder">
+    <p class="eyebrow">Manual reminder</p><h2>Add reminder</h2>
+    <form asp-action="Create" method="post" class="account-form">
+        @Html.AntiForgeryToken()
+        <label>Title<input name="title" required maxlength="220" placeholder="e.g. Review car insurance pot" /></label>
+        <label>Pot (optional)<select name="reservePotId"><option value="">General reminder</option>@foreach(var pot in Model.Pots){<option value="@pot.Id">@pot.Name</option>}</select></label>
+        <label>Due date<input name="dueDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" required /></label>
+        <label class="full-row">Notes<textarea name="description" rows="3"></textarea></label>
+        <button class="primary">Add reminder</button>
+    </form>
+</section>
+}
+@if (Model.Reminders.Count == 0)
+{
+<section class="card"><h2>No @Model.Status.ToLowerInvariant() reminders</h2><p class="muted">Automatic reminders appear when a pot is overdue, missed, partially funded, or approaching its target date.</p></section>
+}
+else
+{
+<section class="card"><div class="reminder-list">
+@foreach (var reminder in Model.Reminders)
+{
+    var dueClass = reminder.IsOverdue ? "bad" : reminder.IsDue ? "warn" : "muted";
+    <article class="reminder-row" id="reminder-@reminder.Id">
+        <div><div class="chips"><span>@reminder.ReminderType</span>@if(reminder.IsSystemGenerated){<span>Automatic</span>}<span class="@dueClass">Due @reminder.EffectiveDueDate.ToString("dd MMM yyyy")</span></div><h3>@reminder.Title</h3>@if (!string.IsNullOrWhiteSpace(reminder.PotName)){<p class="eyebrow">@reminder.PotName</p>}<p class="muted">@reminder.Description</p></div>
+        @if (canEdit)
+        {
+        <div class="reminder-actions">
+            @if (reminder.Status == "Open")
+            {
+                <form asp-action="Complete" method="post">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@reminder.Id"/><button class="primary">Complete</button></form>
+                <form asp-action="Snooze" method="post" class="snooze-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@reminder.Id"/><input type="date" name="snoozedUntil" value="@DateTime.Today.AddDays(7).ToString("yyyy-MM-dd")" min="@DateTime.Today.ToString("yyyy-MM-dd")"/><button class="secondary">Snooze</button></form>
+                <form asp-action="Dismiss" method="post">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@reminder.Id"/><button class="danger-inline">Dismiss</button></form>
+            }
+            else
+            {
+                <form asp-action="Reopen" method="post">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@reminder.Id"/><button class="secondary">Reopen</button></form>
+            }
+        </div>
+        }
+    </article>
+}
+</div></section>
+}

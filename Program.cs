@@ -9,8 +9,16 @@ using Microsoft.Data.SqlClient;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+var financeConnectionString =
+    Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
+    ?? builder.Configuration.GetConnectionString("FinanceManager")
+    ?? throw new InvalidOperationException(
+        "Missing FinanceManager connection string.");
+
+Console.WriteLine($"Finance Manager connection: {financeConnectionString}");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("FinanceManager")));
+    options.UseSqlServer(financeConnectionString));
 
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
@@ -36,6 +44,7 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IFundingEngineService, FundingEngineService>();
+builder.Services.AddScoped<IReserveRecommendationService, ReserveRecommendationService>();
 builder.Services.AddScoped<FinanceRepository>();
 builder.Services.AddScoped<FinanceCalculator>();
 builder.Services.AddHttpClient<MarketPriceService>();

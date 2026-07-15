@@ -4,14 +4,25 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class SavingPotsController(FinanceRepository repo) : Controller
+public sealed class SavingPotsController(FinanceRepository repo, IReserveRecommendationService recommendationService) : Controller
 {
     public async Task<IActionResult> Index()
     {
         var reserve = await repo.GetHouseholdReserveAsync();
         var pots = await repo.GetReservePotsAsync();
         var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
-        return View(new HouseholdReserveViewModel { Reserve = reserve, Pots = pots, FundingSummaries = summaries });
+        await repo.SyncFundingRemindersAsync(pots, summaries);
+        var recommendations = recommendationService.BuildRecoveryRecommendations(
+            Math.Max(0m, reserve.Balance - pots.Where(x => x.IsActive).Sum(x => x.AllocatedAmount)), pots, summaries);
+        var dueReminders = await repo.GetFinanceRemindersAsync("Open", dueOnly: true);
+        return View(new HouseholdReserveViewModel
+        {
+            Reserve = reserve,
+            Pots = pots,
+            FundingSummaries = summaries,
+            RecoveryRecommendations = recommendations,
+            DueReminders = dueReminders
+        });
     }
 
     [HttpPost]
