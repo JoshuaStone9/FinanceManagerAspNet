@@ -70,6 +70,38 @@ public sealed class DashboardViewModel
     public List<PaymentRow> Savings { get; set; } = [];
     public List<AccountBalance> Accounts { get; set; } = [];
     public List<LastModifiedInfo> LastModified { get; set; } = [];
+    public DashboardIntelligenceSummary Intelligence { get; set; } = new();
+}
+
+public sealed class DashboardIntelligenceSummary
+{
+    public int ActivePotCount { get; set; }
+    public decimal MonthlyPlanned { get; set; }
+    public decimal FundedThisMonth { get; set; }
+    public decimal RemainingThisMonth { get; set; }
+    public int DueReminderCount { get; set; }
+    public int OverdueOrMissedCount { get; set; }
+    public int PartiallyFundedCount { get; set; }
+    public int PausedCount { get; set; }
+    public int CompletedCount { get; set; }
+    public int HealthyCount { get; set; }
+    public int ApproachingTargetCount { get; set; }
+    public decimal AvailableReserve { get; set; }
+    public decimal RecommendedAllocationTotal { get; set; }
+    public decimal RemainingReserveAfterRecommendations => Math.Max(0m, AvailableReserve - RecommendedAllocationTotal);
+    public List<ReserveRecoveryRecommendation> Recommendations { get; set; } = [];
+    public List<FinanceReminderRow> DueReminders { get; set; } = [];
+    public List<DashboardUpcomingTarget> UpcomingTargets { get; set; } = [];
+}
+
+public sealed record DashboardUpcomingTarget(
+    int PotId,
+    string PotName,
+    DateTime DueDate,
+    decimal RemainingAmount)
+{
+    public int DaysRemaining => (DueDate.Date - DateTime.Today).Days;
+    public string UrgencyCssClass => DaysRemaining <= 30 ? "bad" : DaysRemaining <= 60 ? "warn" : "good";
 }
 
 public sealed class HouseGoalViewModel

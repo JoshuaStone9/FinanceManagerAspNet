@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class DashboardController(FinanceRepository repo, IConfiguration config) : Controller
+public sealed class DashboardController(FinanceRepository repo, IConfiguration config, IDashboardSummaryService dashboardSummaryService) : Controller
 {
     public async Task<IActionResult> Index(int? year, int? month)
     {
@@ -44,6 +44,7 @@ public sealed class DashboardController(FinanceRepository repo, IConfiguration c
         var reserveAllocated = reservePots.Where(p => p.IsActive).Sum(p => p.AllocatedAmount);
         ViewBag.ReserveAllocated = reserveAllocated;
         ViewBag.ReserveUnallocated = reserve.Balance - reserveAllocated;
+        vm.Intelligence = await dashboardSummaryService.BuildAsync(reserve, reservePots);
         ViewBag.ExistingBills = await repo.GetExistingPaymentOptionsAsync("bills");
         ViewBag.ExistingEveryday = await repo.GetExistingPaymentOptionsAsync("everyday_spending");
         ViewBag.ExistingExtras = await repo.GetExistingPaymentOptionsAsync("extra_expenses");

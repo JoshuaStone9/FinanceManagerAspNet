@@ -27,6 +27,122 @@
 @if (TempData["CarryMessage"] != null) { <section class="card"><strong>@TempData["CarryMessage"]</strong></section> }
 @if (TempData["Success"] != null) { <section class="card"><strong>@TempData["Success"]</strong></section> }
 
+<section class="card intelligence-card" id="action-centre">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Financial Action Centre</p>
+            <h2>What needs attention</h2>
+            <p class="muted">Live funding, reminder, recovery and target information from the Household Reserve.</p>
+        </div>
+        <div class="actions">
+            <a class="button" asp-controller="Reminders" asp-action="Index">View reminders</a>
+            <a class="button primary" asp-controller="SavingPots" asp-action="Index" asp-fragment="recommendations">View recommendations</a>
+        </div>
+    </div>
+    <div class="action-centre-grid">
+        <a class="action-centre-item @(Model.Intelligence.DueReminderCount > 0 ? "attention-bad" : "attention-good")" asp-controller="Reminders" asp-action="Index">
+            <span class="action-count">@Model.Intelligence.DueReminderCount</span>
+            <span>Funding reminders due</span>
+        </a>
+        <a class="action-centre-item @(Model.Intelligence.OverdueOrMissedCount > 0 ? "attention-warn" : "attention-good")" asp-controller="SavingPots" asp-action="Index">
+            <span class="action-count">@Model.Intelligence.OverdueOrMissedCount</span>
+            <span>Overdue or missed pots</span>
+        </a>
+        <a class="action-centre-item @(Model.Intelligence.RecommendedAllocationTotal > 0 ? "attention-good" : "")" asp-controller="SavingPots" asp-action="Index" asp-fragment="recommendations">
+            <span class="action-count">@Model.Intelligence.RecommendedAllocationTotal.ToString("C", gb)</span>
+            <span>Recommended recovery</span>
+        </a>
+        <a class="action-centre-item @(Model.Intelligence.ApproachingTargetCount > 0 ? "attention-warn" : "attention-good")" href="#upcoming-targets">
+            <span class="action-count">@Model.Intelligence.ApproachingTargetCount</span>
+            <span>Targets due within 30 days</span>
+        </a>
+    </div>
+</section>
+
+<section class="grid cards-4">
+    <article class="card"><p class="eyebrow">Active pots</p><h2>@Model.Intelligence.ActivePotCount</h2><p class="muted">Currently included in funding health.</p></article>
+    <article class="card"><p class="eyebrow">Monthly planned</p><h2>@Model.Intelligence.MonthlyPlanned.ToString("C", gb)</h2><p class="muted">Excludes paused and irregular pots.</p></article>
+    <article class="card"><p class="eyebrow">Funded this month</p><h2 class="good">@Model.Intelligence.FundedThisMonth.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">Still to fund</p><h2 class="@(Model.Intelligence.RemainingThisMonth > 0 ? "warn" : "good")">@Model.Intelligence.RemainingThisMonth.ToString("C", gb)</h2></article>
+</section>
+
+<section class="grid two">
+    <article class="card">
+        <p class="eyebrow">Funding health</p>
+        <h2>Pot status overview</h2>
+        <div class="health-grid">
+            <div><strong class="good">@Model.Intelligence.HealthyCount</strong><span>Healthy</span></div>
+            <div><strong class="bad">@Model.Intelligence.OverdueOrMissedCount</strong><span>Overdue / missed</span></div>
+            <div><strong class="warn">@Model.Intelligence.PartiallyFundedCount</strong><span>Partially funded</span></div>
+            <div><strong>@Model.Intelligence.PausedCount</strong><span>Paused</span></div>
+            <div><strong class="good">@Model.Intelligence.CompletedCount</strong><span>Completed</span></div>
+        </div>
+    </article>
+    <article class="card">
+        <p class="eyebrow">Recommended recovery</p>
+        <h2>@Model.Intelligence.RecommendedAllocationTotal.ToString("C", gb) suggested</h2>
+        <p class="muted">Available unassigned reserve: @Model.Intelligence.AvailableReserve.ToString("C", gb)</p>
+        @if (Model.Intelligence.Recommendations.Count == 0)
+        {
+            <p class="good"><strong>No recovery allocation is currently required.</strong></p>
+        }
+        else
+        {
+            <div class="compact-list">
+                @foreach (var recommendation in Model.Intelligence.Recommendations.Take(4))
+                {
+                    <div><span>@recommendation.PotName</span><strong>@recommendation.RecommendedAmount.ToString("C", gb)</strong></div>
+                }
+            </div>
+            <p class="muted">Reserve remaining afterwards: @Model.Intelligence.RemainingReserveAfterRecommendations.ToString("C", gb)</p>
+            <a class="button primary" asp-controller="SavingPots" asp-action="Index" asp-fragment="recommendations">Open recommendations</a>
+        }
+    </article>
+</section>
+
+<section class="grid two">
+    <article class="card">
+        <p class="eyebrow">Reminder preview</p>
+        <h2>Due reminders</h2>
+        @if (Model.Intelligence.DueReminders.Count == 0)
+        {
+            <p class="good"><strong>Nothing is due today.</strong></p>
+        }
+        else
+        {
+            <div class="compact-list">
+                @foreach (var reminder in Model.Intelligence.DueReminders)
+                {
+                    <div>
+                        <span><strong>@reminder.Title</strong><br/><small class="muted">@(reminder.PotName ?? "General") · @reminder.EffectiveDueDate.ToString("dd MMM yyyy")</small></span>
+                    </div>
+                }
+            </div>
+            <a class="button" asp-controller="Reminders" asp-action="Index">View all reminders</a>
+        }
+    </article>
+    <article class="card" id="upcoming-targets">
+        <p class="eyebrow">Upcoming targets</p>
+        <h2>Next target dates</h2>
+        @if (Model.Intelligence.UpcomingTargets.Count == 0)
+        {
+            <p class="muted">No incomplete target dates are currently scheduled.</p>
+        }
+        else
+        {
+            <div class="compact-list">
+                @foreach (var target in Model.Intelligence.UpcomingTargets)
+                {
+                    <div>
+                        <span><strong>@target.PotName</strong><br/><small class="muted">@target.DueDate.ToString("dd MMM yyyy") · @target.RemainingAmount.ToString("C", gb) remaining</small></span>
+                        <strong class="@target.UrgencyCssClass">@target.DaysRemaining days</strong>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+</section>
+
 <section class="grid cards-4">
     <article class="card">
         <p class="eyebrow">Available funds</p>

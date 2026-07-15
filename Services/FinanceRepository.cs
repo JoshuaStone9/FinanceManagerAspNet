@@ -114,21 +114,14 @@ IF COL_LENGTH('dbo.reserve_pots','carry_excess_forward') IS NULL ALTER TABLE dbo
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_from') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_from date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_until') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_until date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_pause_reason') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_pause_reason nvarchar(300) NULL;
-IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL
-    ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
+IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
 
--- Run this dynamically so SQL Server compiles it only after the column exists.
-EXEC(N'
 UPDATE p
 SET funding_plan_start_date = COALESCE(
-    (SELECT MIN(CAST(s.[date] AS date))
-     FROM dbo.savings s
-     WHERE s.[name] = p.[name]
-       AND s.amount > 0),
-    CAST(''2026-01-01'' AS date))
+    (SELECT MIN(CAST(s.[date] AS date)) FROM dbo.savings s WHERE s.[name] = p.[name] AND s.amount > 0),
+    CAST('2026-01-01' AS date))
 FROM dbo.reserve_pots p
 WHERE p.funding_plan_start_date IS NULL;
-');
 
 IF OBJECT_ID('dbo.reserve_pot_monthly_funding','U') IS NULL
 CREATE TABLE dbo.reserve_pot_monthly_funding(
@@ -1474,7 +1467,7 @@ VALUES(@potId, @amount, @date, @note)",
         await ExecuteAsync(@"MERGE dbo.household_reserve AS t USING (SELECT 1 AS id) AS s ON t.household_reserve_id=s.id
 WHEN MATCHED THEN UPDATE SET balance=@balance, interest_rate=@rate, provider=@provider, updated_at=SYSUTCDATETIME()
 WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider) VALUES(1,@balance,@rate,@provider);",
-            ("@balance", Math.Max(0, balance)), ("@rate", Math.Max(0, interestRate)), ("@provider", string.IsNullOrWhiteSpace(provider) ? "Money market fund" : provider.Trim()));
+            ("@balance", Math.Max(0,balance)), ("@rate", Math.Max(0,interestRate)), ("@provider", string.IsNullOrWhiteSpace(provider) ? "Money market fund" : provider.Trim()));
     }
 
     public async Task<List<ReservePot>> GetReservePotsAsync()
@@ -1775,7 +1768,7 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
     {
         await EnsureModernTablesAsync();
         await ExecuteAsync("INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source) VALUES(@area,@type,@entityType,@entityId,@title,@description,@amount,@source)",
-            ("@area", area), ("@type", eventType), ("@entityType", entityType), ("@entityId", entityId.HasValue ? entityId.Value : DBNull.Value), ("@title", title), ("@description", DbValue(description)), ("@amount", amount.HasValue ? amount.Value : DBNull.Value), ("@source", source));
+            ("@area",area),("@type",eventType),("@entityType",entityType),("@entityId",entityId.HasValue?entityId.Value:DBNull.Value),("@title",title),("@description",DbValue(description)),("@amount",amount.HasValue?amount.Value:DBNull.Value),("@source",source));
     }
 
     public async Task<List<FinanceEventRow>> GetFinanceEventsAsync(int? potId = null, string? eventType = null, DateTime? from = null, DateTime? to = null)
@@ -1791,7 +1784,7 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
         cmd.Parameters.AddWithValue("@from", from.HasValue ? from.Value.Date : DBNull.Value);
         cmd.Parameters.AddWithValue("@to", to.HasValue ? to.Value.Date : DBNull.Value);
         await using var r = await cmd.ExecuteReaderAsync();
-        while (await r.ReadAsync()) list.Add(new FinanceEventRow(r.GetInt64(0), r.GetDateTime(1), r.GetString(2), r.GetString(3), r.GetString(4), r.IsDBNull(5) ? null : r.GetInt32(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetDecimal(8), r.GetString(9)));
+        while (await r.ReadAsync()) list.Add(new FinanceEventRow(r.GetInt64(0),r.GetDateTime(1),r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetInt32(5),r.GetString(6),r.IsDBNull(7)?null:r.GetString(7),r.IsDBNull(8)?null:r.GetDecimal(8),r.GetString(9)));
         return list;
     }
 
@@ -1890,7 +1883,7 @@ VALUES(@potId,@title,@description,@dueDate,'Funding','Open',1,@key);",
                 if (days is >= 0 and <= 30)
                 {
                     var key = $"target:{pot.Id}:{pot.DueDate.Value:yyyyMMdd}";
-                    var title = $"{pot.Name} target is due soon";
+                        var title = $"{pot.Name} target is due soon";
                     var description = $"Target date: {pot.DueDate.Value:dd MMM yyyy}. Remaining: {Math.Max(0m, pot.TargetAmount.Value - pot.AllocatedAmount):C}.";
                     await ExecuteAsync(@"MERGE dbo.finance_reminders AS target
 USING (SELECT @key system_key) source ON target.system_key=source.system_key
@@ -1910,7 +1903,7 @@ VALUES(@potId,@title,@description,@dueDate,'TargetDue','Open',1,@key);",
         await EnsureModernTablesAsync();
         var pot = (await GetReservePotsAsync()).FirstOrDefault(x => x.Id == id);
         if (pot is not null) await AddFinanceEventAsync("Household Reserve", "PotDeleted", "ReservePot", id, $"{pot.Name} deleted", "The virtual allocation was deleted.", pot.AllocatedAmount, "User");
-        await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id", id));
+        await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id",id));
     }
 
 }
