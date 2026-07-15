@@ -680,6 +680,59 @@ public sealed class HouseholdReserveViewModel
 }
 
 
+
+public sealed class MonthlyFundingReview
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public decimal PlannedTotal { get; set; }
+    public decimal ActualTotal { get; set; }
+    public decimal EffectiveFundingTotal { get; set; }
+    public decimal RemainingTotal { get; set; }
+    public decimal RecoveryAppliedTotal { get; set; }
+    public decimal GenuineExcessTotal { get; set; }
+    public decimal CarriedExcessUsedTotal { get; set; }
+    public decimal CarriedExcessCreatedTotal { get; set; }
+    public decimal ShortfallTotal { get; set; }
+    public int ReminderCount { get; set; }
+    public int RecommendationApplicationCount { get; set; }
+    public decimal RecommendationApplicationTotal { get; set; }
+    public List<MonthlyFundingReviewPotRow> PotRows { get; set; } = [];
+    public List<FinanceEventRow> Events { get; set; } = [];
+    public List<FinanceReminderRow> Reminders { get; set; } = [];
+    public DateTime ReviewMonth => new(Year, Month, 1);
+    public string MonthLabel => ReviewMonth.ToString("MMMM yyyy");
+    public int FundedPotCount => PotRows.Count(x => x.Status is "Funded" or "Overfunded" or "Funded from carried excess");
+    public int AttentionPotCount => PotRows.Count(x => x.Status is "Overdue" or "Missed" or "Partially funded");
+}
+
+public sealed class MonthlyFundingReviewPotRow
+{
+    public int PotId { get; set; }
+    public string PotName { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public bool IsActive { get; set; }
+    public bool IsPaused { get; set; }
+    public decimal PlannedAmount { get; set; }
+    public decimal ActualAmount { get; set; }
+    public decimal EffectiveFunding { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public decimal RecoveryApplied { get; set; }
+    public decimal GenuineExcess { get; set; }
+    public decimal CarriedExcessUsed { get; set; }
+    public decimal CarriedExcessCreated { get; set; }
+    public decimal ShortfallAmount { get; set; }
+    public string Status { get; set; } = "Not scheduled";
+    public string StatusCssClass => Status switch
+    {
+        "Funded" or "Overfunded" or "Funded from carried excess" => "good",
+        "Overdue" or "Missed" => "bad",
+        "Partially funded" => "warning",
+        "Paused" => "muted",
+        _ => "muted"
+    };
+}
+
 public sealed record ExistingPaymentOption(
     string Name,
     decimal Amount,

@@ -1552,24 +1552,16 @@ VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,
         return id;
     }
 
-    public async Task<Dictionary<int, ReservePotFundingSummary>>
-     GetReservePotFundingSummariesAsync(
-         IReadOnlyList<ReservePot>? pots = null)
+    public async Task<Dictionary<int, ReservePotFundingSummary>> GetReservePotFundingSummariesAsync(IReadOnlyList<ReservePot>? pots = null)
     {
         await EnsureModernTablesAsync();
-
         pots ??= await GetReservePotsAsync();
-
         var result = new Dictionary<int, ReservePotFundingSummary>();
-
         foreach (var pot in pots)
         {
             await RebuildReservePotFundingHistoryAsync(pot.Id);
-
-            result[pot.Id] =
-                await GetReservePotFundingSummaryAsync(pot);
+            result[pot.Id] = await GetReservePotFundingSummaryAsync(pot);
         }
-
         return result;
     }
 
