@@ -41,6 +41,7 @@ builder.Services.AddScoped<IRecommendationApplicationService, RecommendationAppl
 builder.Services.AddScoped<IDashboardSummaryService, DashboardSummaryService>();
 builder.Services.AddScoped<IMonthlyFundingReviewService, MonthlyFundingReviewService>();
 builder.Services.AddScoped<IReserveAccountSelectionService, ReserveAccountSelectionService>();
+builder.Services.AddScoped<IReservePotActionService, ReservePotActionService>();
 builder.Services.AddScoped<FinanceRepository>();
 builder.Services.AddScoped<FinanceCalculator>();
 builder.Services.AddHttpClient<MarketPriceService>();

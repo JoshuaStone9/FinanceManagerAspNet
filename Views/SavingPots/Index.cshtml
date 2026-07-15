@@ -110,6 +110,23 @@ else
 <article><p class="eyebrow">Additional monthly needed</p><strong class="@((summary.AdditionalMonthlyContributionRequired ?? 0) > 0 ? "bad" : "good")">@(summary.AdditionalMonthlyContributionRequired?.ToString("C", gb) ?? "—")</strong></article>
 }
 </section>
+
+@if (canEdit)
+{
+<div class="pot-action-row">
+@if (pot.TargetAmount.HasValue && pot.AllocatedAmount < pot.TargetAmount.Value)
+{
+<form asp-action="PayPotInFull" method="post" data-confirm="Pay this pot in full using available reserve surplus?">
+@Html.AntiForgeryToken()
+<input type="hidden" name="potId" value="@pot.Id"/>
+<input type="hidden" name="operationKey" value="@(Guid.NewGuid().ToString("N"))"/>
+<button class="primary" type="submit">Pay this pot in full now</button>
+</form>
+}
+<a class="secondary button-link" asp-action="Withdraw" asp-route-id="@pot.Id">Withdraw from pot</a>
+</div>
+}
+
 @if (canEdit)
 {
 <form asp-action="SavePot" method="post" class="account-form edit-panel">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><label>Name<input name="name" value="@pot.Name" required/></label><label>Allocated now<input name="allocatedAmount" type="number" min="0" step="0.01" value="@pot.AllocatedAmount"/></label><label>Average monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="@pot.DefaultMonthlyContribution" readonly/><span class="muted">Automatically calculated from dashboard contributions.</span></label><label>Intended contribution<input name="intendedMonthlyContribution" type="number" min="0" step="0.01" value="@pot.IntendedMonthlyContribution"/><span class="muted">What you normally plan to add.</span></label><label>Funding frequency<select name="fundingFrequency"><option selected="@(pot.FundingFrequency == "Monthly")">Monthly</option><option selected="@(pot.FundingFrequency == "Weekly")">Weekly</option><option selected="@(pot.FundingFrequency == "Irregular")">Irregular</option></select></label><label>Expected funding day<input name="expectedFundingDay" type="number" min="1" max="31" value="@pot.ExpectedFundingDay"/><span class="muted">Optional day of the month, such as payday.</span></label><label>Funding plan start date<input name="fundingPlanStartDate" type="date" value="@pot.FundingPlanStartDate.ToString("yyyy-MM-dd")"/><span class="muted">Existing pots use their first contribution, falling back to 1 January 2026.</span></label><label class="checkbox-inline"><input name="carryForwardShortfalls" type="checkbox" value="true" checked="@pot.CarryForwardShortfalls"/> Carry missed funding forward</label><label class="checkbox-inline"><input name="carryExcessForward" type="checkbox" value="true" checked="@pot.CarryExcessForward"/> Carry genuine excess into future months</label><p class="muted">When enabled, money left after this month and any recovery can satisfy future planned contributions. It will still be shown separately from new dashboard payments.</p><label>Pause funding from<input name="fundingPausedFrom" type="date" value="@pot.FundingPausedFrom?.ToString("yyyy-MM-dd")"/><span class="muted">Leave blank and set an end date to start the pause today.</span></label><label>Temporarily pause funding until<input name="fundingPausedUntil" type="date" value="@pot.FundingPausedUntil?.ToString("yyyy-MM-dd")"/><span class="muted">The allocation remains active and can still receive voluntary contributions, but no scheduled funding is expected during the pause.</span></label><label>Pause reason<input name="fundingPauseReason" value="@pot.FundingPauseReason"/></label><label>Optional target<input name="targetAmount" type="number" min="0" step="0.01" value="@pot.TargetAmount"/></label><label>Optional due date<input name="dueDate" type="date" value="@pot.DueDate?.ToString("yyyy-MM-dd")"/></label><label>Priority<input name="priority" type="number" min="1" value="@pot.Priority"/></label><label class="checkbox-inline"><input name="isActive" type="checkbox" value="true" checked="@pot.IsActive"/> Active allocation</label><p class="muted">Untick only when this pot is stopped or archived. Use the pause setting for a temporary break.</p><label>Notes<input name="notes" value="@pot.Notes"/></label><button class="primary">Save allocation</button></form>

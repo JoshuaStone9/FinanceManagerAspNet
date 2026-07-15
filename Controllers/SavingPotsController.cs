@@ -8,7 +8,8 @@ public sealed class SavingPotsController(
     FinanceRepository repo,
     IReserveRecommendationService recommendationService,
     IRecommendationApplicationService applicationService,
-    IReserveAccountSelectionService reserveAccountSelectionService) : Controller
+    IReserveAccountSelectionService reserveAccountSelectionService,
+    IReservePotActionService reservePotActionService) : Controller
 {
     public async Task<IActionResult> Index(bool reselect = false)
     {
@@ -73,6 +74,47 @@ public sealed class SavingPotsController(
         var result = await applicationService.ApplyAllAsync(operationKey);
         TempData[result.AppliedCount > 0 ? "Success" : "Error"] = result.Message;
         return Redirect($"{Url.Action(nameof(Index))}#recommendations");
+    }
+
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PayPotInFull(int potId, string operationKey)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        var result = await reservePotActionService.PayInFullAsync(potId, operationKey);
+        TempData[result.Succeeded ? "Success" : "Error"] = result.Message;
+        return Redirect($"{Url.Action(nameof(Index))}#pot-{potId}");
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Withdraw(int id)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        var model = await reservePotActionService.BuildWithdrawalAsync(id);
+        return model is null ? NotFound() : View(model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Withdraw(ReservePotWithdrawalViewModel input)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        var result = await reservePotActionService.WithdrawAsync(input);
+        if (!result.Succeeded)
+        {
+            TempData["Error"] = result.Message;
+            var refreshed = await reservePotActionService.BuildWithdrawalAsync(input.PotId);
+            if (refreshed is null) return NotFound();
+            refreshed.Amount = input.Amount;
+            refreshed.WithdrawalDate = input.WithdrawalDate;
+            refreshed.Reason = input.Reason;
+            refreshed.OperationKey = input.OperationKey;
+            return View(refreshed);
+        }
+
+        TempData["Success"] = result.Message;
+        return Redirect($"{Url.Action(nameof(Index))}#pot-{input.PotId}");
     }
 
     [HttpPost]

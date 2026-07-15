@@ -203,6 +203,22 @@ CREATE TABLE dbo.recommendation_applications(
     CONSTRAINT FK_recommendation_applications_reserve_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE
 );
 
+
+IF OBJECT_ID('dbo.reserve_pot_actions','U') IS NULL
+CREATE TABLE dbo.reserve_pot_actions(
+    reserve_pot_action_id bigint IDENTITY(1,1) PRIMARY KEY,
+    operation_key nvarchar(180) NOT NULL,
+    reserve_pot_id int NOT NULL,
+    action_type nvarchar(40) NOT NULL,
+    amount decimal(18,2) NOT NULL,
+    action_date date NOT NULL,
+    reason nvarchar(500) NULL,
+    resulting_balance decimal(18,2) NOT NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UX_reserve_pot_actions_operation UNIQUE(operation_key),
+    CONSTRAINT FK_reserve_pot_actions_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE
+);
+
 IF OBJECT_ID('dbo.finance_reminders','U') IS NULL
 CREATE TABLE dbo.finance_reminders(
     finance_reminder_id int IDENTITY(1,1) PRIMARY KEY,
@@ -2108,6 +2124,81 @@ WHERE reserve_pot_id=@potId AND [status]='Open' AND reminder_type='TargetDue'
             if (!committed) await tx.RollbackAsync();
             throw;
         }
+    }
+
+
+    public async Task<ReservePotActionResult> PayReservePotInFullAsync(int potId, decimal amount, string operationKey)
+    {
+        await EnsureModernTablesAsync();
+        if (string.IsNullOrWhiteSpace(operationKey)) throw new ArgumentException("An operation key is required.", nameof(operationKey));
+
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var tx = await con.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            await using var existing = new SqlCommand("SELECT action_type,amount,resulting_balance FROM dbo.reserve_pot_actions WHERE operation_key=@key", con, (SqlTransaction)tx);
+            existing.Parameters.AddWithValue("@key", operationKey.Trim());
+            await using (var reader = await existing.ExecuteReaderAsync())
+            {
+                if (await reader.ReadAsync())
+                {
+                    return new ReservePotActionResult { Succeeded = true, WasAlreadyApplied = true, PotId = potId, Amount = reader.GetDecimal(1), ResultingBalance = reader.GetDecimal(2), Message = "This action was already applied." };
+                }
+            }
+
+            string potName;
+            decimal current;
+            decimal? target;
+            await using (var get = new SqlCommand("SELECT [name],allocated_amount,target_amount FROM dbo.reserve_pots WITH (UPDLOCK,HOLDLOCK) WHERE reserve_pot_id=@id AND is_active=1", con, (SqlTransaction)tx))
+            {
+                get.Parameters.AddWithValue("@id", potId);
+                await using var reader = await get.ExecuteReaderAsync();
+                if (!await reader.ReadAsync()) return new ReservePotActionResult { PotId = potId, Message = "The pot could not be found or is inactive." };
+                potName = reader.GetString(0); current = reader.GetDecimal(1); target = reader.IsDBNull(2) ? null : reader.GetDecimal(2);
+            }
+            if (!target.HasValue) return new ReservePotActionResult { PotId = potId, PotName = potName, Message = "Set a target before paying this pot in full." };
+            var required = Math.Max(0m, target.Value-current);
+            var applied = Math.Min(amount, required);
+            if (applied <= 0m) return new ReservePotActionResult { PotId=potId, PotName=potName, Message="This pot is already fully funded." };
+            var after = current + applied;
+
+            await using var cmd = new SqlCommand(@"INSERT INTO dbo.savings([name],amount,[date],[length],notes) VALUES(@name,@amount,CONVERT(date,GETDATE()),'One-off','Pot paid in full from unallocated reserve surplus.');
+UPDATE dbo.reserve_pots SET allocated_amount=@after,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id;
+INSERT INTO dbo.reserve_pot_actions(operation_key,reserve_pot_id,action_type,amount,action_date,reason,resulting_balance) VALUES(@key,@id,'PayInFull',@amount,CONVERT(date,GETDATE()),'Pot paid in full',@after);
+INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source) VALUES('Household Reserve','PotPaidInFull','ReservePot',@id,@title,@description,@amount,'User');
+UPDATE dbo.finance_reminders SET [status]='Completed',snoozed_until=NULL,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id AND [status]='Open' AND reminder_type IN ('Funding','TargetDue');", con, (SqlTransaction)tx);
+            cmd.Parameters.AddWithValue("@name",potName); cmd.Parameters.AddWithValue("@amount",applied); cmd.Parameters.AddWithValue("@after",after); cmd.Parameters.AddWithValue("@id",potId); cmd.Parameters.AddWithValue("@key",operationKey.Trim()); cmd.Parameters.AddWithValue("@title",$"{potName} paid in full"); cmd.Parameters.AddWithValue("@description","The remaining target amount was deliberately allocated from reserve surplus.");
+            await cmd.ExecuteNonQueryAsync();
+            await tx.CommitAsync();
+            await SyncReservePotContributionAverageAsync(potName);
+            await RebuildReservePotFundingHistoryAsync(potId);
+            return new ReservePotActionResult { Succeeded=true, PotId=potId, PotName=potName, Amount=applied, ResultingBalance=after, Message=$"{potName} was paid in full with {applied:C}." };
+        }
+        catch { await tx.RollbackAsync(); throw; }
+    }
+
+    public async Task<ReservePotActionResult> WithdrawFromReservePotAsync(int potId, decimal amount, DateTime withdrawalDate, string reason, string operationKey)
+    {
+        await EnsureModernTablesAsync();
+        if (string.IsNullOrWhiteSpace(operationKey)) throw new ArgumentException("An operation key is required.", nameof(operationKey));
+        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var tx = await con.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            await using var duplicate = new SqlCommand("SELECT amount,resulting_balance FROM dbo.reserve_pot_actions WHERE operation_key=@key",con,(SqlTransaction)tx); duplicate.Parameters.AddWithValue("@key",operationKey.Trim());
+            await using(var reader=await duplicate.ExecuteReaderAsync()) if(await reader.ReadAsync()) return new ReservePotActionResult { Succeeded=true, WasAlreadyApplied=true, PotId=potId, Amount=reader.GetDecimal(0), ResultingBalance=reader.GetDecimal(1), Message="This withdrawal was already recorded." };
+            string name; decimal current;
+            await using(var get=new SqlCommand("SELECT [name],allocated_amount FROM dbo.reserve_pots WITH (UPDLOCK,HOLDLOCK) WHERE reserve_pot_id=@id",con,(SqlTransaction)tx)) { get.Parameters.AddWithValue("@id",potId); await using var reader=await get.ExecuteReaderAsync(); if(!await reader.ReadAsync()) return new ReservePotActionResult { PotId=potId, Message="The pot could not be found." }; name=reader.GetString(0); current=reader.GetDecimal(1); }
+            var after=current-amount;
+            await using var cmd=new SqlCommand(@"UPDATE dbo.reserve_pots SET allocated_amount=@after,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id;
+INSERT INTO dbo.reserve_pot_actions(operation_key,reserve_pot_id,action_type,amount,action_date,reason,resulting_balance) VALUES(@key,@id,'Withdrawal',@amount,@date,@reason,@after);
+INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source) VALUES('Household Reserve',CASE WHEN @after<0 THEN 'PotOverdrawn' ELSE 'PotWithdrawal' END,'ReservePot',@id,@title,@description,@negativeAmount,'User');",con,(SqlTransaction)tx);
+            cmd.Parameters.AddWithValue("@after",after); cmd.Parameters.AddWithValue("@id",potId); cmd.Parameters.AddWithValue("@key",operationKey.Trim()); cmd.Parameters.AddWithValue("@amount",amount); cmd.Parameters.AddWithValue("@date",withdrawalDate.Date); cmd.Parameters.AddWithValue("@reason",reason.Trim()); cmd.Parameters.AddWithValue("@title",$"Withdrawal from {name}"); cmd.Parameters.AddWithValue("@description",$"{amount:C} withdrawn on {withdrawalDate:dd MMM yyyy}. Reason: {reason.Trim()}. Resulting balance: {after:C}."); cmd.Parameters.AddWithValue("@negativeAmount",-amount);
+            await cmd.ExecuteNonQueryAsync(); await tx.CommitAsync();
+            return new ReservePotActionResult { Succeeded=true, PotId=potId, PotName=name, Amount=amount, ResultingBalance=after, Message=after<0 ? $"Withdrew {amount:C} from {name}. The pot is now {after:C}." : $"Withdrew {amount:C} from {name}." };
+        }
+        catch { await tx.RollbackAsync(); throw; }
     }
 
     public async Task DeleteReservePotAsync(int id)

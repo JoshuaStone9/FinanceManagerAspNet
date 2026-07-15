@@ -704,6 +704,29 @@ public sealed class HouseholdReserveViewModel
 
 
 
+public sealed class ReservePotWithdrawalViewModel
+{
+    public int PotId { get; set; }
+    public string PotName { get; set; } = string.Empty;
+    public decimal CurrentBalance { get; set; }
+    public decimal Amount { get; set; }
+    public DateTime WithdrawalDate { get; set; } = DateTime.Today;
+    public string? Reason { get; set; }
+    public string OperationKey { get; set; } = Guid.NewGuid().ToString("N");
+    public decimal ResultingBalance => CurrentBalance - Amount;
+}
+
+public sealed class ReservePotActionResult
+{
+    public bool Succeeded { get; set; }
+    public bool WasAlreadyApplied { get; set; }
+    public int PotId { get; set; }
+    public string PotName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public decimal ResultingBalance { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 public sealed class MonthlyFundingReview
 {
     public int Year { get; set; }

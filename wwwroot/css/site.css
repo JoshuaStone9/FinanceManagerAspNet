@@ -29,3 +29,18 @@
 
 /* Phase 6.1-6.3 */
 .reserve-account-option{display:flex;gap:12px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--soft);cursor:pointer}.reserve-account-option input{width:auto}.reserve-account-option span{display:flex;flex-direction:column;gap:4px}.reserve-account-option small,.pot-title-row small{color:var(--muted)}.pot-disclosure>summary{list-style:none}.pot-disclosure>summary::-webkit-details-marker{display:none}.pot-title-row{display:flex;justify-content:space-between;align-items:center;gap:16px;cursor:pointer}.pot-title-row>span:first-child{display:flex;flex-direction:column;gap:5px}.pot-title-row:after{content:'+';font-size:1.5rem;font-weight:800}.pot-disclosure[open]>.pot-title-row:after{content:'−'}.pot-expanded{padding-top:18px;border-top:1px solid var(--line);margin-top:16px}
+
+.pot-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.button-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
