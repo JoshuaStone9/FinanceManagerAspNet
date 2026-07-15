@@ -184,6 +184,17 @@ CREATE TABLE dbo.finance_events(
     source nvarchar(40) NOT NULL DEFAULT 'System'
 );
 
+IF OBJECT_ID('dbo.recommendation_applications','U') IS NULL
+CREATE TABLE dbo.recommendation_applications(
+    recommendation_application_id bigint IDENTITY(1,1) PRIMARY KEY,
+    operation_key nvarchar(180) NOT NULL,
+    reserve_pot_id int NOT NULL,
+    amount decimal(18,2) NOT NULL,
+    applied_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UX_recommendation_applications_operation UNIQUE(operation_key),
+    CONSTRAINT FK_recommendation_applications_reserve_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE
+);
+
 IF OBJECT_ID('dbo.finance_reminders','U') IS NULL
 CREATE TABLE dbo.finance_reminders(
     finance_reminder_id int IDENTITY(1,1) PRIMARY KEY,
@@ -1541,16 +1552,24 @@ VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,
         return id;
     }
 
-    public async Task<Dictionary<int, ReservePotFundingSummary>> GetReservePotFundingSummariesAsync(List<ReservePot>? pots = null)
+    public async Task<Dictionary<int, ReservePotFundingSummary>>
+     GetReservePotFundingSummariesAsync(
+         IReadOnlyList<ReservePot>? pots = null)
     {
         await EnsureModernTablesAsync();
+
         pots ??= await GetReservePotsAsync();
+
         var result = new Dictionary<int, ReservePotFundingSummary>();
+
         foreach (var pot in pots)
         {
             await RebuildReservePotFundingHistoryAsync(pot.Id);
-            result[pot.Id] = await GetReservePotFundingSummaryAsync(pot);
+
+            result[pot.Id] =
+                await GetReservePotFundingSummaryAsync(pot);
         }
+
         return result;
     }
 
@@ -1896,6 +1915,159 @@ VALUES(@potId,@title,@description,@dueDate,'TargetDue','Open',1,@key);",
         }
 
         await ExecuteAsync("UPDATE dbo.finance_reminders SET [status]='Dismissed',updated_at=SYSUTCDATETIME() WHERE is_system_generated=1 AND [status]='Open' AND system_key LIKE 'funding:%' AND due_date<DATEFROMPARTS(YEAR(GETDATE()),MONTH(GETDATE()),1)");
+    }
+
+
+    public async Task<ApplyRecommendationResult> ApplyRecoveryRecommendationAsync(
+        int potId,
+        decimal requestedAmount,
+        string operationKey)
+    {
+        if (requestedAmount <= 0m)
+            return new ApplyRecommendationResult { PotId = potId, Message = "The amount must be greater than zero." };
+        if (string.IsNullOrWhiteSpace(operationKey))
+            throw new ArgumentException("An operation key is required.", nameof(operationKey));
+
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var tx = (SqlTransaction)await con.BeginTransactionAsync(IsolationLevel.Serializable);
+        var committed = false;
+
+        try
+        {
+            await using (var existing = new SqlCommand(@"SELECT a.amount,p.[name]
+FROM dbo.recommendation_applications a
+INNER JOIN dbo.reserve_pots p ON p.reserve_pot_id=a.reserve_pot_id
+WHERE a.operation_key=@key", con, tx))
+            {
+                existing.Parameters.AddWithValue("@key", operationKey.Trim());
+                await using var reader = await existing.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    var amount = reader.GetDecimal(0);
+                    var name = reader.GetString(1);
+                    await reader.DisposeAsync();
+                    await tx.CommitAsync();
+                    return new ApplyRecommendationResult
+                    {
+                        Succeeded = true,
+                        WasAlreadyApplied = true,
+                        PotId = potId,
+                        PotName = name,
+                        AppliedAmount = amount,
+                        Message = "This recommendation was already applied."
+                    };
+                }
+            }
+
+            string potName;
+            decimal allocatedAmount;
+            decimal? targetAmount;
+            await using (var potCmd = new SqlCommand(@"SELECT [name],allocated_amount,target_amount
+FROM dbo.reserve_pots WITH (UPDLOCK,HOLDLOCK)
+WHERE reserve_pot_id=@potId AND is_active=1", con, tx))
+            {
+                potCmd.Parameters.AddWithValue("@potId", potId);
+                await using var reader = await potCmd.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                {
+                    await reader.DisposeAsync();
+                    await tx.RollbackAsync();
+                    return new ApplyRecommendationResult { PotId = potId, Message = "The selected pot is not active or could not be found." };
+                }
+                potName = reader.GetString(0);
+                allocatedAmount = reader.GetDecimal(1);
+                targetAmount = reader.IsDBNull(2) ? null : reader.GetDecimal(2);
+            }
+
+            decimal available;
+            await using (var availableCmd = new SqlCommand(@"SELECT CASE WHEN hr.balance-ISNULL(SUM(CASE WHEN p.is_active=1 THEN p.allocated_amount ELSE 0 END),0)<0 THEN 0
+ELSE hr.balance-ISNULL(SUM(CASE WHEN p.is_active=1 THEN p.allocated_amount ELSE 0 END),0) END
+FROM dbo.household_reserve hr WITH (UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.reserve_pots p WITH (UPDLOCK,HOLDLOCK) ON 1=1
+WHERE hr.household_reserve_id=1
+GROUP BY hr.balance", con, tx))
+            {
+                available = Convert.ToDecimal(await availableCmd.ExecuteScalarAsync() ?? 0m);
+            }
+
+            decimal recovery;
+            await using (var recoveryCmd = new SqlCommand(@"SELECT ISNULL((SELECT TOP 1 recovery_balance
+FROM dbo.reserve_pot_monthly_funding
+WHERE reserve_pot_id=@potId
+ORDER BY [year] DESC,[month] DESC),0)", con, tx))
+            {
+                recoveryCmd.Parameters.AddWithValue("@potId", potId);
+                recovery = Convert.ToDecimal(await recoveryCmd.ExecuteScalarAsync() ?? 0m);
+            }
+
+            var amountToApply = Math.Min(requestedAmount, Math.Min(available, recovery));
+            if (amountToApply <= 0m)
+            {
+                await tx.RollbackAsync();
+                return new ApplyRecommendationResult
+                {
+                    PotId = potId,
+                    PotName = potName,
+                    Message = "No amount can be applied because the reserve or recovery balance has changed."
+                };
+            }
+
+            await using (var apply = new SqlCommand(@"INSERT INTO dbo.savings([name],amount,[date],[length],notes)
+VALUES(@name,@amount,CONVERT(date,GETDATE()),'One-off','Applied from unallocated Household Reserve using a recovery recommendation.');
+
+UPDATE dbo.reserve_pots
+SET allocated_amount=allocated_amount+@amount,updated_at=SYSUTCDATETIME()
+WHERE reserve_pot_id=@potId;
+
+INSERT INTO dbo.recommendation_applications(operation_key,reserve_pot_id,amount)
+VALUES(@key,@potId,@amount);
+
+INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source)
+VALUES('Household Reserve','RecoveryRecommendationApplied','ReservePot',@potId,@title,@description,@amount,'Recommendation');
+
+UPDATE dbo.finance_reminders
+SET [status]='Completed',snoozed_until=NULL,updated_at=SYSUTCDATETIME()
+WHERE reserve_pot_id=@potId AND [status]='Open' AND reminder_type='Funding' AND @amount>=@recovery;
+
+UPDATE dbo.finance_reminders
+SET [status]='Completed',snoozed_until=NULL,updated_at=SYSUTCDATETIME()
+WHERE reserve_pot_id=@potId AND [status]='Open' AND reminder_type='TargetDue'
+  AND @targetAmount IS NOT NULL AND @allocatedAfter>=@targetAmount;", con, tx))
+            {
+                apply.Parameters.AddWithValue("@name", potName);
+                apply.Parameters.AddWithValue("@amount", amountToApply);
+                apply.Parameters.AddWithValue("@potId", potId);
+                apply.Parameters.AddWithValue("@key", operationKey.Trim());
+                apply.Parameters.AddWithValue("@title", $"{potName} recovery recommendation applied");
+                apply.Parameters.AddWithValue("@description", "Unallocated Household Reserve money was deliberately reassigned to this pot to reduce outstanding recovery.");
+                apply.Parameters.AddWithValue("@recovery", recovery);
+                apply.Parameters.AddWithValue("@targetAmount", targetAmount.HasValue ? targetAmount.Value : DBNull.Value);
+                apply.Parameters.AddWithValue("@allocatedAfter", allocatedAmount + amountToApply);
+                await apply.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+            committed = true;
+
+            await SyncReservePotContributionAverageAsync(potName);
+            await RebuildReservePotFundingHistoryAsync(potId);
+
+            return new ApplyRecommendationResult
+            {
+                Succeeded = true,
+                PotId = potId,
+                PotName = potName,
+                AppliedAmount = amountToApply,
+                Message = $"Applied {amountToApply:C} to {potName}."
+            };
+        }
+        catch
+        {
+            if (!committed) await tx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task DeleteReservePotAsync(int id)

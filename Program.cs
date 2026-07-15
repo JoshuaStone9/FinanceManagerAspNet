@@ -37,6 +37,7 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IFundingEngineService, FundingEngineService>();
 builder.Services.AddScoped<IReserveRecommendationService, ReserveRecommendationService>();
+builder.Services.AddScoped<IRecommendationApplicationService, RecommendationApplicationService>();
 builder.Services.AddScoped<IDashboardSummaryService, DashboardSummaryService>();
 builder.Services.AddScoped<FinanceRepository>();
 builder.Services.AddScoped<FinanceCalculator>();

@@ -17,15 +17,14 @@ public sealed class DashboardSummaryService(
         HouseholdReserve reserve,
         IReadOnlyList<ReservePot> pots)
     {
-        var potList = pots.ToList();
-        var activePots = potList
+        var activePots = pots
             .Where(x => x.IsActive)
             .ToList();
 
-        var summaries = await repo.GetReservePotFundingSummariesAsync(potList);
+        var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
 
         await repo.SyncFundingRemindersAsync(
-            potList,
+            pots,
             summaries);
 
         var allocated = activePots.Sum(x => x.AllocatedAmount);
@@ -72,7 +71,8 @@ public sealed class DashboardSummaryService(
             x.TargetAmount.HasValue &&
             x.AllocatedAmount >= x.TargetAmount.Value);
 
-        var pausedCount = activePots.Count(x => x.IsFundingPaused);
+        var pausedCount = activePots.Count(x =>
+            x.IsFundingPaused);
 
         var overdueOrMissedCount = currentSummaries.Count(x =>
             x.CurrentStatus is "Overdue" or "Missed");
@@ -113,16 +113,20 @@ public sealed class DashboardSummaryService(
                         StringComparison.OrdinalIgnoreCase))
                 .Sum(x => x.IntendedMonthlyContribution),
 
-            FundedThisMonth = currentSummaries
-                .Sum(x => x.CurrentMonthEffectiveFunding),
+            FundedThisMonth = currentSummaries.Sum(x =>
+                x.CurrentMonthEffectiveFunding),
 
-            RemainingThisMonth = currentSummaries
-                .Sum(x => x.CurrentMonthRemaining),
+            RemainingThisMonth = currentSummaries.Sum(x =>
+                x.CurrentMonthRemaining),
 
             DueReminderCount = dueReminders.Count,
+
             OverdueOrMissedCount = overdueOrMissedCount,
+
             PartiallyFundedCount = partiallyFundedCount,
+
             PausedCount = pausedCount,
+
             CompletedCount = completedCount,
 
             HealthyCount = Math.Max(
@@ -134,8 +138,8 @@ public sealed class DashboardSummaryService(
 
             AvailableReserve = availableReserve,
 
-            RecommendedAllocationTotal = recommendations
-                .Sum(x => x.RecommendedAmount),
+            RecommendedAllocationTotal = recommendations.Sum(x =>
+                x.RecommendedAmount),
 
             Recommendations = recommendations,
 

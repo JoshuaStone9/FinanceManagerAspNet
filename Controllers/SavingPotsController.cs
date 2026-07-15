@@ -4,7 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class SavingPotsController(FinanceRepository repo, IReserveRecommendationService recommendationService) : Controller
+public sealed class SavingPotsController(
+    FinanceRepository repo,
+    IReserveRecommendationService recommendationService,
+    IRecommendationApplicationService applicationService) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -23,6 +26,28 @@ public sealed class SavingPotsController(FinanceRepository repo, IReserveRecomme
             RecoveryRecommendations = recommendations,
             DueReminders = dueReminders
         });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApplyRecommendation(int potId, decimal amount, string operationKey)
+    {
+        if (!CanEdit()) return LoginRedirect();
+
+        var result = await applicationService.ApplyAsync(potId, amount, operationKey);
+        TempData[result.Succeeded ? "Success" : "Error"] = result.Message;
+        return Redirect($"{Url.Action(nameof(Index))}#recommendations");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApplyAllRecommendations(string operationKey)
+    {
+        if (!CanEdit()) return LoginRedirect();
+
+        var result = await applicationService.ApplyAllAsync(operationKey);
+        TempData[result.AppliedCount > 0 ? "Success" : "Error"] = result.Message;
+        return Redirect($"{Url.Action(nameof(Index))}#recommendations");
     }
 
     [HttpPost]

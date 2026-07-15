@@ -595,6 +595,27 @@ public sealed class ReserveRecoveryRecommendation
     public decimal RemainingAfterRecommendation => Math.Max(0m, OutstandingRecovery - RecommendedAmount);
 }
 
+
+public sealed class ApplyRecommendationResult
+{
+    public bool Succeeded { get; set; }
+    public bool WasAlreadyApplied { get; set; }
+    public int PotId { get; set; }
+    public string PotName { get; set; } = string.Empty;
+    public decimal AppliedAmount { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public sealed class ApplyAllRecommendationsResult
+{
+    public int AppliedCount { get; set; }
+    public decimal TotalApplied { get; set; }
+    public List<ApplyRecommendationResult> Results { get; set; } = [];
+    public string Message => AppliedCount == 0
+        ? "No recommendations were applied."
+        : $"Applied {TotalApplied:C} across {AppliedCount} pot{(AppliedCount == 1 ? string.Empty : "s")}.";
+}
+
 public sealed record FinanceReminderRow(
     int Id,
     int? ReservePotId,
