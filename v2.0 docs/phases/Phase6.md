@@ -1,21 +1,14 @@
-# Phase 6
+# Phase 6 – Forecasting & Planning
+
+## Status
+Planned
 
 ## Objectives
+Forecast future financial progress.
 
-## Features
-
-## Architecture Impact
-
-## Database Changes
-
-## Services
-
-## UI
-
-## Business Rules
-
-## Testing
-
-## Completion Criteria
-
-## Future Improvements
+### Planned Features
+- Forecast engine
+- What-if planner
+- Goal risk analysis
+- Scenario management
+- Forecast dashboard

@@ -1,21 +1,10 @@
-# Phase 8
+# Phase 8 – Automation
 
-## Objectives
+## Status
+Planned
 
-## Features
-
-## Architecture Impact
-
-## Database Changes
-
-## Services
-
-## UI
-
-## Business Rules
-
-## Testing
-
-## Completion Criteria
-
-## Future Improvements
+### Planned Features
+- Scheduled reviews
+- Background reminder generation
+- Smart funding checks
+- Automated notifications

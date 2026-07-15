@@ -1,21 +1,11 @@
-# Phase 7
+# Phase 7 – Reporting & Export
 
-## Objectives
+## Status
+Planned
 
-## Features
-
-## Architecture Impact
-
-## Database Changes
-
-## Services
-
-## UI
-
-## Business Rules
-
-## Testing
-
-## Completion Criteria
-
-## Future Improvements
+### Planned Features
+- PDF export
+- Excel export
+- CSV export
+- Annual reporting
+- Pot history exports

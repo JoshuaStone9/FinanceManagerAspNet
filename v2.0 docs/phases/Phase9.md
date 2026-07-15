@@ -1,21 +1,11 @@
-# Phase 9
+# Phase 9 – Financial Intelligence
 
-## Objectives
+## Status
+Planned
 
-## Features
-
-## Architecture Impact
-
-## Database Changes
-
-## Services
-
-## UI
-
-## Business Rules
-
-## Testing
-
-## Completion Criteria
-
-## Future Improvements
+### Planned Features
+- Saving insights
+- Spending trends
+- Goal optimisation
+- Financial health scoring
+- AI-assisted recommendations
