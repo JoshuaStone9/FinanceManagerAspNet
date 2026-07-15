@@ -1,11 +1,8 @@
-# Phase 9 – Financial Intelligence
+# Phase 9 – Automation
 
-## Status
-Planned
+Status: ⏳ Planned
 
-### Planned Features
-- Saving insights
-- Spending trends
-- Goal optimisation
-- Financial health scoring
-- AI-assisted recommendations
+- Scheduled reviews
+- Background reminder generation
+- Smart funding checks
+- Automated notifications

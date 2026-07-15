@@ -1,24 +1,15 @@
 # Roadmap
 
 ## Completed
-1. Savings Command Centre
-2. Funding Engine
-3. Events, Recommendations & Reminders
-4. Dashboard Intelligence
-5. Monthly Funding Review
+- ✅ Phase 1 – Savings Command Centre
+- ✅ Phase 2 – Funding Engine
+- ✅ Phase 3 – Events, Recommendations & Reminders
+- ✅ Phase 4 – Dashboard Intelligence
+- ✅ Phase 5 – Monthly Funding Review
 
-## Phase 6 - Forecasting & Planning
-6.1 Forecast Engine
-6.2 Forecast Dashboard
-6.3 What-if Planner
-6.4 Goal Risk Analysis
-6.5 Scenario Management
-
-## Phase 7 - Reporting & Export
-PDF, Excel, CSV, annual reports.
-
-## Phase 8 - Automation
-Scheduled reviews, smart reminders, background processing.
-
-## Phase 9 - Financial Intelligence
-Insights, trends, optimisation, financial health scoring.
+## Planned
+- 🚧 Phase 6 – Household Reserve & Pot Management Enhancements
+- ⏳ Phase 7 – Forecasting & Planning
+- ⏳ Phase 8 – Reporting & Export
+- ⏳ Phase 9 – Automation
+- ⏳ Phase 10 – Financial Intelligence

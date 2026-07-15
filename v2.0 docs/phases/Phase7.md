@@ -1,11 +1,9 @@
-# Phase 7 – Reporting & Export
+# Phase 7 – Forecasting & Planning
 
-## Status
-Planned
+Status: ⏳ Planned
 
-### Planned Features
-- PDF export
-- Excel export
-- CSV export
-- Annual reporting
-- Pot history exports
+- Forecast engine
+- Forecast dashboard
+- What-if planner
+- Goal risk analysis
+- Scenario management

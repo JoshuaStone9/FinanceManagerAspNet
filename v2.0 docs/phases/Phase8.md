@@ -1,10 +1,9 @@
-# Phase 8 – Automation
+# Phase 8 – Reporting & Export
 
-## Status
-Planned
+Status: ⏳ Planned
 
-### Planned Features
-- Scheduled reviews
-- Background reminder generation
-- Smart funding checks
-- Automated notifications
+- PDF export
+- Excel export
+- CSV export
+- Annual reporting
+- Pot history exports
