@@ -140,7 +140,7 @@ else
     var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id) ?? new FinanceManagerAspNet.Models.ReservePotFundingSummary { PotId = pot.Id };
 <details class="card pot-disclosure" id="pot-@pot.Id">
 <summary class="pot-title-row"><span><strong>@pot.Name</strong><small>@pot.AllocatedAmount.ToString("C", gb)@(pot.TargetAmount.HasValue ? $" of {pot.TargetAmount.Value.ToString("C", gb)}" : "")</small></span><span class="@summary.StatusCssClass">@summary.CurrentStatus</span></summary>
-<div class="pot-expanded"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div><div><a class="secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">Events</a></div></div>
+<div class="pot-expanded"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div></div>
 @if (pot.IsOverdrawn)
 {
 <div class="alert error negative-pot-warning">
@@ -180,7 +180,7 @@ else
 <label>Extra recovery contribution
 <input name="amount" type="number" min="0.01" max="@pot.NegativeBalanceRecoveryRequired" step="0.01" value="@pot.NegativeBalanceRecoveryRequired" required/>
 </label>
-<button class="primary" type="submit">Restore pot</button>
+<button class="pot-action-button pot-action-primary" type="submit">Restore pot</button>
 </form>
 }
 @if (pot.TargetAmount.HasValue && pot.AllocatedAmount < pot.TargetAmount.Value && !pot.IsOverdrawn)
@@ -189,10 +189,11 @@ else
 @Html.AntiForgeryToken()
 <input type="hidden" name="potId" value="@pot.Id"/>
 <input type="hidden" name="operationKey" value="@(Guid.NewGuid().ToString("N"))"/>
-<button class="primary" type="submit">Pay this pot in full now</button>
+<button class="pot-action-button pot-action-success" type="submit">Pay this pot in full now</button>
 </form>
 }
-<a class="secondary button-link" asp-action="Withdraw" asp-route-id="@pot.Id">Withdraw from pot</a>
+<a class="pot-action-button pot-action-danger" asp-action="Withdraw" asp-route-id="@pot.Id">Withdraw from pot</a>
+<a class="pot-action-button pot-action-secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">View events</a>
 </div>
 }
 

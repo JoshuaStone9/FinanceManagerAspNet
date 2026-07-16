@@ -34,8 +34,70 @@
     display: flex;
     flex-wrap: wrap;
     gap: .75rem;
+    align-items: stretch;
+    margin: 1.25rem 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+}
+
+.pot-action-row form {
+    display: flex;
+    margin: 0;
+}
+
+.pot-action-button {
+    min-height: 46px;
+    display: inline-flex;
     align-items: center;
-    margin: 1rem 0;
+    justify-content: center;
+    gap: .45rem;
+    padding: .75rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease, filter .15s ease;
+}
+
+.pot-action-button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.07);
+}
+
+.pot-action-primary {
+    background: linear-gradient(135deg,var(--brand),var(--brand-2));
+    color: #fff;
+}
+
+.pot-action-success {
+    background: var(--good);
+    color: #07150d;
+}
+
+.pot-action-danger {
+    background: transparent;
+    border-color: var(--bad);
+    color: var(--bad);
+}
+
+.pot-action-secondary {
+    background: var(--soft);
+    border-color: var(--line);
+    color: var(--ink);
+}
+
+.inline-recovery-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: end;
+}
+
+.inline-recovery-form label {
+    min-width: 220px;
 }
 
 .button-link {
@@ -43,4 +105,22 @@
     align-items: center;
     justify-content: center;
     text-decoration: none;
+}
+
+@media(max-width:700px) {
+    .pot-action-row {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .pot-action-row form,
+    .pot-action-row .pot-action-button,
+    .pot-action-row form .pot-action-button {
+        width: 100%;
+    }
+
+    .inline-recovery-form label {
+        min-width: 0;
+        width: 100%;
+    }
 }
