@@ -124,3 +124,61 @@
         width: 100%;
     }
 }
+
+
+/* Phase 6.6.2 global action button standardisation */
+.fm-action-button {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+    padding: .7rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform .15s ease, filter .15s ease, border-color .15s ease;
+}
+
+.fm-action-button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+}
+
+.fm-action-primary {
+    background: linear-gradient(135deg,var(--brand),var(--brand-2));
+    color: #fff;
+}
+
+.fm-action-secondary {
+    background: var(--soft);
+    border-color: var(--line);
+    color: var(--ink);
+}
+
+.fm-action-small {
+    min-height: 36px;
+    padding: .55rem .8rem;
+    font-size: .85rem;
+}
+
+.monthly-review-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.monthly-review-card .fm-action-button {
+    margin-top: auto;
+}
+
+@media(max-width:700px) {
+    .page-header .fm-action-button,
+    .hero .fm-action-button {
+        width: 100%;
+    }
+}

@@ -1,7 +1,7 @@
 @model FinanceManagerAspNet.Models.HouseholdReserveViewModel
 @using System.Globalization
 @{ ViewData["Title"] = "Household Reserve"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentMonth = DateTime.Today.ToString("MMMM yyyy"); var applyAllOperationKey = Guid.NewGuid().ToString("N"); }
-<section class="hero card"><div><p class="eyebrow">One physical fund, clear virtual allocations</p><h1>Household Reserve</h1><p class="muted">Dashboard reserve allocations automatically increase the matching pot and now update its monthly funding history.</p></div><div><a class="secondary" asp-controller="Events" asp-action="Index">Events</a></div></section>
+<section class="hero card"><div><p class="eyebrow">One physical fund, clear virtual allocations</p><h1>Household Reserve</h1><p class="muted">Dashboard reserve allocations automatically increase the matching pot and now update its monthly funding history.</p></div><div><a class="fm-action-button fm-action-secondary" asp-controller="Events" asp-action="Index">View events</a></div></section>
 <section class="grid cards-4">
 <article class="card"><p class="eyebrow">Total reserve balance</p><h2>@Model.AccountSummary.TotalBalance.ToString("C", gb)</h2><p class="muted">Across selected reserve accounts.</p></article>
 <article class="card"><p class="eyebrow">Protected baseline</p><h2>@Model.AccountSummary.Baseline.ToString("C", gb)</h2><p class="@(Model.AccountSummary.BaselineShortfall > 0 ? "bad" : "good")">@(Model.AccountSummary.BaselineShortfall > 0 ? $"{Model.AccountSummary.BaselineShortfall.ToString("C", gb)} still needed" : "Baseline covered")</p></article>
@@ -87,7 +87,7 @@ else
 {
     var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id);
     if (summary is null) continue;
-    <article><p class="eyebrow">@pot.Name</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) / @summary.CurrentMonthExpected.ToString("C", gb) this month</p><a href="#pot-@pot.Id">Review</a></article>
+    <article class="monthly-review-card"><p class="eyebrow">@pot.Name</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) / @summary.CurrentMonthExpected.ToString("C", gb) this month</p><a class="fm-action-button fm-action-primary fm-action-small" href="#pot-@pot.Id">Review</a></article>
 }
 </div></section>
 
