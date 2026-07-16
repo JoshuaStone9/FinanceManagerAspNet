@@ -1,6 +1,6 @@
 # Phase 6 – Household Reserve & Pot Management Enhancements
 
-Status: 🚧 Planned
+Status: ✅ Implemented
 
 ## 6.1 Reserve Account Selection
 - Select existing ISAs/accounts
@@ -33,4 +33,6 @@ Status: 🚧 Planned
 ## 6.6 Interest Forecast
 - Forecast to any selected date
 - Per-account interest calculations
+- Optional configured monthly contributions
 - Combined reserve forecast
+- Read-only forecasting that does not alter live data

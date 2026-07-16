@@ -30,6 +30,56 @@ else
 }
 </section>
 
+<section class="card" id="interest-forecast">
+<div class="section-head">
+<div><p class="eyebrow">Reserve interest forecast</p><h2>Project the full selected reserve balance</h2><p class="muted">Uses each selected account's own AER. This forecast is informational and does not change live balances.</p></div>
+</div>
+<form asp-action="Index" method="get" class="account-form">
+<label>Forecast date
+<input name="forecastDate" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")" value="@Model.InterestForecast.ForecastDate.ToString("yyyy-MM-dd")"/>
+</label>
+<label class="reserve-account-option">
+<input name="includeFutureContributions" type="checkbox" value="true" checked="@Model.InterestForecast.IncludeFutureContributions"/>
+<span><strong>Include future monthly contributions</strong><small>Uses the monthly contribution configured on each selected account.</small></span>
+</label>
+<button class="primary" type="submit">Update forecast</button>
+</form>
+
+<div class="grid cards-4 compact-grid">
+<article><p class="eyebrow">Current selected balance</p><strong>@Model.InterestForecast.CurrentTotal.ToString("C", gb)</strong></article>
+<article><p class="eyebrow">Forecast date</p><strong>@Model.InterestForecast.ForecastDate.ToString("dd MMM yyyy")</strong><p class="muted">@Model.InterestForecast.ForecastDays days</p></article>
+<article><p class="eyebrow">Future contributions</p><strong>@Model.InterestForecast.FutureContributions.ToString("C", gb)</strong></article>
+<article><p class="eyebrow">Estimated interest</p><strong class="good">@Model.InterestForecast.EstimatedInterest.ToString("C", gb)</strong></article>
+<article><p class="eyebrow">Projected total</p><strong>@Model.InterestForecast.ProjectedTotal.ToString("C", gb)</strong></article>
+</div>
+
+@if (Model.InterestForecast.Accounts.Count > 0)
+{
+<div class="table-wrap">
+<table>
+<thead><tr><th>Account</th><th>Current</th><th>AER</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead>
+<tbody>
+@foreach (var account in Model.InterestForecast.Accounts)
+{
+<tr>
+<td><strong>@account.AccountName</strong>@if (Model.InterestForecast.IncludeFutureContributions && account.MonthlyContribution > 0){<small class="muted">@account.MonthlyContribution.ToString("C", gb) monthly</small>}</td>
+<td>@account.OpeningBalance.ToString("C", gb)</td>
+<td>@account.AnnualInterestRate.ToString("0.##")%</td>
+<td>@account.ContributionsAdded.ToString("C", gb)</td>
+<td class="good">@account.EstimatedInterest.ToString("C", gb)</td>
+<td><strong>@account.ProjectedBalance.ToString("C", gb)</strong></td>
+</tr>
+}
+</tbody>
+</table>
+</div>
+}
+else
+{
+<p class="muted">Select reserve accounts before calculating an interest forecast.</p>
+}
+</section>
+
 @{ var activeSummaries = Model.Pots.Where(x => x.IsActive).Select(x => Model.FundingSummaries.GetValueOrDefault(x.Id)).Where(x => x is not null).ToList(); var attention = activeSummaries.Count(x => x!.CurrentStatus is "Overdrawn" or "Overdue" or "Missed" or "Partially funded"); var expectedThisMonth = activeSummaries.Sum(x => x!.CurrentMonthExpected); var actualThisMonth = activeSummaries.Sum(x => x!.CurrentMonthEffectiveFunding); }
 <section class="card" id="monthly-checklist"><div class="section-head"><div><p class="eyebrow">Monthly funding checklist</p><h2>@currentMonth</h2><p class="muted">@attention pot@(attention == 1 ? "" : "s") need attention. @actualThisMonth.ToString("C", gb) of @expectedThisMonth.ToString("C", gb) funded.</p></div></div>
 <div class="grid cards-4 compact-grid">

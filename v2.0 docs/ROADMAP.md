@@ -6,9 +6,9 @@
 - ✅ Phase 3 – Events, Recommendations & Reminders
 - ✅ Phase 4 – Dashboard Intelligence
 - ✅ Phase 5 – Monthly Funding Review
+- ✅ Phase 6 – Household Reserve & Pot Management Enhancements
 
 ## Planned
-- 🚧 Phase 6 – Household Reserve & Pot Management Enhancements
 - ⏳ Phase 7 – Forecasting & Planning
 - ⏳ Phase 8 – Reporting & Export
 - ⏳ Phase 9 – Automation

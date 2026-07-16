@@ -449,7 +449,32 @@ public sealed record ReserveAccountOption(
     string Name,
     decimal Balance,
     decimal InterestRate,
+    decimal MonthlyContribution,
     bool IsSelected);
+
+
+public sealed record ReserveAccountInterestForecast(
+    int AccountId,
+    string AccountName,
+    decimal OpeningBalance,
+    decimal AnnualInterestRate,
+    decimal MonthlyContribution,
+    decimal ContributionsAdded,
+    decimal EstimatedInterest,
+    decimal ProjectedBalance);
+
+public sealed class ReserveInterestForecast
+{
+    public DateTime StartDate { get; init; } = DateTime.Today;
+    public DateTime ForecastDate { get; init; } = DateTime.Today.AddYears(1);
+    public bool IncludeFutureContributions { get; init; }
+    public IReadOnlyList<ReserveAccountInterestForecast> Accounts { get; init; } = Array.Empty<ReserveAccountInterestForecast>();
+    public int ForecastDays => Math.Max(0, (ForecastDate.Date - StartDate.Date).Days);
+    public decimal CurrentTotal => Accounts.Sum(x => x.OpeningBalance);
+    public decimal FutureContributions => Accounts.Sum(x => x.ContributionsAdded);
+    public decimal EstimatedInterest => Accounts.Sum(x => x.EstimatedInterest);
+    public decimal ProjectedTotal => Accounts.Sum(x => x.ProjectedBalance);
+}
 
 public sealed class HouseholdReserveAccountSummary
 {
@@ -695,6 +720,7 @@ public sealed class HouseholdReserveViewModel
     public HouseholdReserve Reserve { get; set; } = new(0, 0, "Money market fund", DateTime.MinValue);
     public HouseholdReserveAccountSummary AccountSummary { get; set; } = new();
     public bool ShowAccountSelector { get; set; }
+    public ReserveInterestForecast InterestForecast { get; set; } = new();
     public List<ReservePot> Pots { get; set; } = [];
     public List<ReserveRecoveryRecommendation> RecoveryRecommendations { get; set; } = [];
     public List<FinanceReminderRow> DueReminders { get; set; } = [];

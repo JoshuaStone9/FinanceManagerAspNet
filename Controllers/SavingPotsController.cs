@@ -9,12 +9,17 @@ public sealed class SavingPotsController(
     IReserveRecommendationService recommendationService,
     IRecommendationApplicationService applicationService,
     IReserveAccountSelectionService reserveAccountSelectionService,
-    IReservePotActionService reservePotActionService) : Controller
+    IReservePotActionService reservePotActionService,
+    IReserveInterestForecastService reserveInterestForecastService) : Controller
 {
-    public async Task<IActionResult> Index(bool reselect = false)
+    public async Task<IActionResult> Index(bool reselect = false, DateTime? forecastDate = null, bool includeFutureContributions = false)
     {
         var reserve = await repo.GetHouseholdReserveAsync();
         var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
+        var interestForecast = reserveInterestForecastService.Build(
+            accountSummary.SelectedAccounts,
+            forecastDate ?? DateTime.Today.AddYears(1),
+            includeFutureContributions);
         var pots = await repo.GetReservePotsAsync();
         var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
         await repo.SyncFundingRemindersAsync(pots, summaries);
@@ -28,6 +33,7 @@ public sealed class SavingPotsController(
             Reserve = reserve,
             AccountSummary = accountSummary,
             ShowAccountSelector = reselect || !accountSummary.HasSelection,
+            InterestForecast = interestForecast,
             Pots = pots,
             FundingSummaries = summaries,
             RecoveryRecommendations = recommendations,
