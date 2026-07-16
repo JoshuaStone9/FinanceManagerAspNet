@@ -1670,9 +1670,25 @@ VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,
         for (var month = start; month <= current; month = month.AddMonths(1))
         {
             var next = month.AddMonths(1);
-            var actual = Convert.ToDecimal(await ScalarAsync(
+            var grossContributions = Convert.ToDecimal(await ScalarAsync(
                 "SELECT ISNULL(SUM(amount),0) FROM dbo.savings WHERE [name]=@name AND [date]>=@start AND [date]<@end AND amount>0",
                 ("@name", pot.Name), ("@start", month), ("@end", next)) ?? 0m);
+
+            var withdrawals = Convert.ToDecimal(await ScalarAsync(
+                @"SELECT ISNULL(SUM(amount),0)
+FROM dbo.reserve_pot_actions
+WHERE reserve_pot_id=@id
+  AND action_type='Withdrawal'
+  AND action_date>=@start
+  AND action_date<@end",
+                ("@id", potId), ("@start", month), ("@end", next)) ?? 0m);
+
+            // Withdrawals first reverse funding recorded in the same month. Any remaining
+            // withdrawal then consumes carried excess from earlier months. A withdrawal
+            // must never appear as new funding or create additional available credit.
+            var actual = Math.Max(0m, grossContributions - withdrawals);
+            var withdrawalRemaining = Math.Max(0m, withdrawals - grossContributions);
+            carriedExcess = Math.Max(0m, carriedExcess - withdrawalRemaining);
 
             var calculation = fundingEngine.Calculate(new FundingEngineInput(
                 Pot: pot,
@@ -1803,12 +1819,21 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
             extraRequired = Math.Max(0m, requiredMonthly.Value - pot.IntendedMonthlyContribution);
         }
 
-        var status = current?.Status ?? (pot.IsActive ? "Not configured" : "Inactive");
+        var currentMonthStatus = current?.Status ?? (pot.IsActive ? "Not configured" : "Inactive");
+        var status = !pot.IsActive
+            ? "Inactive"
+            : pot.AllocatedAmount < 0m
+                ? "Overdrawn"
+                : pot.TargetAmount.HasValue && pot.AllocatedAmount >= pot.TargetAmount.Value
+                    ? "Completed"
+                    : pot.AllocatedAmount == 0m
+                        ? "Not started"
+                        : "In progress";
         var css = status switch
         {
-            "Funded" or "Overfunded" or "Funded from carried excess" => "good",
-            "Pending" or "In progress" or "Paused" or "Paused – voluntary contribution" => "warn",
-            "Overdue" or "Missed" or "Partially funded" => "bad",
+            "Completed" => "good",
+            "Not started" or "In progress" => "warn",
+            "Overdrawn" => "bad",
             _ => "muted"
         };
 
@@ -1816,6 +1841,7 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
         {
             PotId = pot.Id,
             CurrentStatus = status,
+            CurrentMonthStatus = currentMonthStatus,
             StatusCssClass = css,
             CurrentMonthExpected = current?.ExpectedAmount ?? 0m,
             CurrentMonthActual = current?.ActualAmount ?? 0m,
@@ -1939,6 +1965,27 @@ VALUES(@potId,@title,@description,@dueDate,'Manual','Open',0)",
         foreach (var pot in pots.Where(x => x.IsActive))
         {
             if (!summaries.TryGetValue(pot.Id, out var summary)) continue;
+
+            var negativeKey = $"negative:{pot.Id}";
+            if (pot.AllocatedAmount < 0m)
+            {
+                var negativeAmount = Math.Abs(pot.AllocatedAmount);
+                await ExecuteAsync(@"MERGE dbo.finance_reminders AS target
+USING (SELECT @key system_key) source ON target.system_key=source.system_key
+WHEN MATCHED THEN UPDATE SET reserve_pot_id=@potId,title=@title,[description]=@description,due_date=@dueDate,reminder_type='NegativeBalance',updated_at=SYSUTCDATETIME(),[status]='Open'
+WHEN NOT MATCHED THEN INSERT(reserve_pot_id,title,[description],due_date,reminder_type,[status],is_system_generated,system_key)
+VALUES(@potId,@title,@description,@dueDate,'NegativeBalance','Open',1,@key);",
+                    ("@key", negativeKey),
+                    ("@potId", pot.Id),
+                    ("@title", $"{pot.Name} is overdrawn"),
+                    ("@description", $"The pot requires {negativeAmount:C} to return to £0. Normal monthly funding remains unchanged."),
+                    ("@dueDate", today));
+            }
+            else
+            {
+                await ExecuteAsync("UPDATE dbo.finance_reminders SET [status]='Completed',snoozed_until=NULL,updated_at=SYSUTCDATETIME() WHERE system_key=@key AND [status]='Open'", ("@key", negativeKey));
+            }
+
             if (summary.CurrentStatus is "Overdue" or "Missed" or "Partially funded")
             {
                 var key = $"funding:{pot.Id}:{today:yyyyMM}";
@@ -2058,7 +2105,9 @@ ORDER BY [year] DESC,[month] DESC),0)", con, tx))
                 recovery = Convert.ToDecimal(await recoveryCmd.ExecuteScalarAsync() ?? 0m);
             }
 
-            var amountToApply = Math.Min(requestedAmount, Math.Min(available, recovery));
+            var negativeBalanceRecovery = Math.Max(0m, -allocatedAmount);
+            var totalRecoveryRequired = negativeBalanceRecovery + recovery;
+            var amountToApply = Math.Min(requestedAmount, Math.Min(available, totalRecoveryRequired));
             if (amountToApply <= 0m)
             {
                 await tx.RollbackAsync();
@@ -2097,8 +2146,10 @@ WHERE reserve_pot_id=@potId AND [status]='Open' AND reminder_type='TargetDue'
                 apply.Parameters.AddWithValue("@potId", potId);
                 apply.Parameters.AddWithValue("@key", operationKey.Trim());
                 apply.Parameters.AddWithValue("@title", $"{potName} recovery recommendation applied");
-                apply.Parameters.AddWithValue("@description", "Unallocated Household Reserve money was deliberately reassigned to this pot to reduce outstanding recovery.");
-                apply.Parameters.AddWithValue("@recovery", recovery);
+                apply.Parameters.AddWithValue("@description", negativeBalanceRecovery > 0m
+                    ? "Unallocated Household Reserve money was deliberately reassigned to restore a negative pot balance and then reduce funding recovery."
+                    : "Unallocated Household Reserve money was deliberately reassigned to this pot to reduce outstanding recovery.");
+                apply.Parameters.AddWithValue("@recovery", totalRecoveryRequired);
                 apply.Parameters.AddWithValue("@targetAmount", targetAmount.HasValue ? targetAmount.Value : DBNull.Value);
                 apply.Parameters.AddWithValue("@allocatedAfter", allocatedAmount + amountToApply);
                 await apply.ExecuteNonQueryAsync();
@@ -2195,10 +2246,106 @@ UPDATE dbo.finance_reminders SET [status]='Completed',snoozed_until=NULL,updated
 INSERT INTO dbo.reserve_pot_actions(operation_key,reserve_pot_id,action_type,amount,action_date,reason,resulting_balance) VALUES(@key,@id,'Withdrawal',@amount,@date,@reason,@after);
 INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source) VALUES('Household Reserve',CASE WHEN @after<0 THEN 'PotOverdrawn' ELSE 'PotWithdrawal' END,'ReservePot',@id,@title,@description,@negativeAmount,'User');",con,(SqlTransaction)tx);
             cmd.Parameters.AddWithValue("@after",after); cmd.Parameters.AddWithValue("@id",potId); cmd.Parameters.AddWithValue("@key",operationKey.Trim()); cmd.Parameters.AddWithValue("@amount",amount); cmd.Parameters.AddWithValue("@date",withdrawalDate.Date); cmd.Parameters.AddWithValue("@reason",reason.Trim()); cmd.Parameters.AddWithValue("@title",$"Withdrawal from {name}"); cmd.Parameters.AddWithValue("@description",$"{amount:C} withdrawn on {withdrawalDate:dd MMM yyyy}. Reason: {reason.Trim()}. Resulting balance: {after:C}."); cmd.Parameters.AddWithValue("@negativeAmount",-amount);
-            await cmd.ExecuteNonQueryAsync(); await tx.CommitAsync();
+            await cmd.ExecuteNonQueryAsync();
+            await tx.CommitAsync();
+            await RebuildReservePotFundingHistoryAsync(potId);
             return new ReservePotActionResult { Succeeded=true, PotId=potId, PotName=name, Amount=amount, ResultingBalance=after, Message=after<0 ? $"Withdrew {amount:C} from {name}. The pot is now {after:C}." : $"Withdrew {amount:C} from {name}." };
         }
         catch { await tx.RollbackAsync(); throw; }
+    }
+
+    public async Task<ReservePotActionResult> RestoreNegativeReservePotBalanceAsync(int potId, decimal requestedAmount, string operationKey)
+    {
+        await EnsureModernTablesAsync();
+        if (requestedAmount <= 0m) return new ReservePotActionResult { PotId = potId, Message = "The recovery contribution must be greater than zero." };
+        if (string.IsNullOrWhiteSpace(operationKey)) throw new ArgumentException("An operation key is required.", nameof(operationKey));
+
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var tx = await con.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            await using (var duplicate = new SqlCommand("SELECT amount,resulting_balance FROM dbo.reserve_pot_actions WHERE operation_key=@key", con, (SqlTransaction)tx))
+            {
+                duplicate.Parameters.AddWithValue("@key", operationKey.Trim());
+                await using var reader = await duplicate.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    return new ReservePotActionResult
+                    {
+                        Succeeded = true,
+                        WasAlreadyApplied = true,
+                        PotId = potId,
+                        Amount = reader.GetDecimal(0),
+                        ResultingBalance = reader.GetDecimal(1),
+                        Message = "This recovery contribution was already recorded."
+                    };
+                }
+            }
+
+            string potName;
+            decimal currentBalance;
+            await using (var get = new SqlCommand("SELECT [name],allocated_amount FROM dbo.reserve_pots WITH (UPDLOCK,HOLDLOCK) WHERE reserve_pot_id=@id AND is_active=1", con, (SqlTransaction)tx))
+            {
+                get.Parameters.AddWithValue("@id", potId);
+                await using var reader = await get.ExecuteReaderAsync();
+                if (!await reader.ReadAsync()) return new ReservePotActionResult { PotId = potId, Message = "The pot could not be found or is inactive." };
+                potName = reader.GetString(0);
+                currentBalance = reader.GetDecimal(1);
+            }
+
+            if (currentBalance >= 0m) return new ReservePotActionResult { PotId = potId, PotName = potName, Message = "This pot no longer has a negative balance." };
+
+            var amountRequired = Math.Abs(currentBalance);
+            var applied = Math.Min(requestedAmount, amountRequired);
+            var resultingBalance = currentBalance + applied;
+            var restored = resultingBalance >= 0m;
+            var eventType = restored ? "NegativeBalanceRestored" : "NegativeBalancePartiallyRestored";
+
+            await using var cmd = new SqlCommand(@"INSERT INTO dbo.savings([name],amount,[date],[length],notes)
+VALUES(@name,@amount,CONVERT(date,GETDATE()),'One-off','Additional contribution to restore a negative pot balance.');
+UPDATE dbo.reserve_pots SET allocated_amount=@after,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id;
+INSERT INTO dbo.reserve_pot_actions(operation_key,reserve_pot_id,action_type,amount,action_date,reason,resulting_balance)
+VALUES(@key,@id,'NegativeBalanceRecovery',@amount,CONVERT(date,GETDATE()),'Additional contribution to restore negative balance',@after);
+INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source)
+VALUES('Household Reserve',@eventType,'ReservePot',@id,@title,@description,@amount,'User');
+UPDATE dbo.finance_reminders SET [status]=CASE WHEN @restored=1 THEN 'Completed' ELSE 'Open' END,snoozed_until=NULL,updated_at=SYSUTCDATETIME()
+WHERE system_key=@negativeKey;", con, (SqlTransaction)tx);
+            cmd.Parameters.AddWithValue("@name", potName);
+            cmd.Parameters.AddWithValue("@amount", applied);
+            cmd.Parameters.AddWithValue("@after", resultingBalance);
+            cmd.Parameters.AddWithValue("@id", potId);
+            cmd.Parameters.AddWithValue("@key", operationKey.Trim());
+            cmd.Parameters.AddWithValue("@eventType", eventType);
+            cmd.Parameters.AddWithValue("@title", restored ? $"{potName} restored to £0" : $"{potName} negative balance reduced");
+            cmd.Parameters.AddWithValue("@description", restored
+                ? $"An additional {applied:C} contribution restored the pot from {currentBalance:C} to £0."
+                : $"An additional {applied:C} contribution reduced the negative balance from {currentBalance:C} to {resultingBalance:C}.");
+            cmd.Parameters.AddWithValue("@restored", restored);
+            cmd.Parameters.AddWithValue("@negativeKey", $"negative:{potId}");
+            await cmd.ExecuteNonQueryAsync();
+            await tx.CommitAsync();
+
+            await SyncReservePotContributionAverageAsync(potName);
+            await RebuildReservePotFundingHistoryAsync(potId);
+
+            return new ReservePotActionResult
+            {
+                Succeeded = true,
+                PotId = potId,
+                PotName = potName,
+                Amount = applied,
+                ResultingBalance = resultingBalance,
+                Message = restored
+                    ? $"{potName} has been restored to £0 with an additional {applied:C} contribution."
+                    : $"Added {applied:C} to {potName}. {Math.Abs(resultingBalance):C} remains to restore the pot to £0."
+            };
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task DeleteReservePotAsync(int id)

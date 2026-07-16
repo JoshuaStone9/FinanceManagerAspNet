@@ -501,6 +501,8 @@ public sealed record ReservePot(
         ? "Fund when available"
         : $"{IntendedMonthlyContribution:C} {FundingFrequency.ToLowerInvariant()}";
 
+    public bool IsOverdrawn => AllocatedAmount < 0m;
+    public decimal NegativeBalanceRecoveryRequired => Math.Max(0m, -AllocatedAmount);
     public decimal RemainingToTarget => TargetAmount.HasValue ? Math.Max(0, TargetAmount.Value - AllocatedAmount) : 0m;
 
     public int? MonthsUntilDue
@@ -581,6 +583,7 @@ public sealed class ReservePotFundingSummary
 {
     public int PotId { get; set; }
     public string CurrentStatus { get; set; } = "Not configured";
+    public string CurrentMonthStatus { get; set; } = "Not configured";
     public string StatusCssClass { get; set; } = "muted";
     public decimal CurrentMonthExpected { get; set; }
     public decimal CurrentMonthActual { get; set; }
@@ -611,6 +614,8 @@ public sealed class ReserveRecoveryRecommendation
     public string PotName { get; set; } = string.Empty;
     public int Priority { get; set; }
     public decimal OutstandingRecovery { get; set; }
+    public decimal NegativeBalanceRecovery { get; set; }
+    public bool IsNegativeBalanceRecommendation => NegativeBalanceRecovery > 0m;
     public decimal RecommendedAmount { get; set; }
     public decimal RemainingAfterRecommendation => Math.Max(0m, OutstandingRecovery - RecommendedAmount);
 }

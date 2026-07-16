@@ -87,6 +87,16 @@ public sealed class SavingPotsController(
         return Redirect($"{Url.Action(nameof(Index))}#pot-{potId}");
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RestoreNegativeBalance(int potId, decimal amount, string operationKey)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        var result = await reservePotActionService.RestoreNegativeBalanceAsync(potId, amount, operationKey);
+        TempData[result.Succeeded ? "Success" : "Error"] = result.Message;
+        return Redirect($"{Url.Action(nameof(Index))}#pot-{potId}");
+    }
+
     [HttpGet]
     public async Task<IActionResult> Withdraw(int id)
     {

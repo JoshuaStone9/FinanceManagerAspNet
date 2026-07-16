@@ -20,12 +20,17 @@ public sealed class ReserveRecommendationService : IReserveRecommendationService
         var remaining = Math.Max(0m, availableAmount);
         var recommendations = new List<ReserveRecoveryRecommendation>();
 
-        foreach (var pot in pots.Where(x => x.IsActive).OrderBy(x => x.Priority).ThenBy(x => x.Name))
+        foreach (var pot in pots.Where(x => x.IsActive)
+                     .OrderByDescending(x => x.IsOverdrawn)
+                     .ThenBy(x => x.Priority)
+                     .ThenBy(x => x.Name))
         {
             if (remaining <= 0m) break;
             if (!summaries.TryGetValue(pot.Id, out var summary)) continue;
 
-            var outstanding = Math.Max(0m, summary.OutstandingRecovery);
+            var negativeRecovery = pot.NegativeBalanceRecoveryRequired;
+            var fundingRecovery = Math.Max(0m, summary.OutstandingRecovery);
+            var outstanding = negativeRecovery + fundingRecovery;
             if (outstanding <= 0m) continue;
 
             var amount = Math.Min(outstanding, remaining);
@@ -35,6 +40,7 @@ public sealed class ReserveRecommendationService : IReserveRecommendationService
                 PotName = pot.Name,
                 Priority = pot.Priority,
                 OutstandingRecovery = outstanding,
+                NegativeBalanceRecovery = negativeRecovery,
                 RecommendedAmount = amount
             });
             remaining -= amount;

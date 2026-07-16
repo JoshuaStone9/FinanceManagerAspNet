@@ -7,6 +7,7 @@ public interface IReservePotActionService
     Task<ReservePotActionResult> PayInFullAsync(int potId, string operationKey);
     Task<ReservePotWithdrawalViewModel?> BuildWithdrawalAsync(int potId);
     Task<ReservePotActionResult> WithdrawAsync(ReservePotWithdrawalViewModel input);
+    Task<ReservePotActionResult> RestoreNegativeBalanceAsync(int potId, decimal amount, string operationKey);
 }
 
 public sealed class ReservePotActionService(
@@ -57,6 +58,20 @@ public sealed class ReservePotActionService(
 
         return await repo.WithdrawFromReservePotAsync(
             input.PotId, input.Amount, input.WithdrawalDate, input.Reason, input.OperationKey);
+    }
+
+    public async Task<ReservePotActionResult> RestoreNegativeBalanceAsync(int potId, decimal amount, string operationKey)
+    {
+        if (amount <= 0m)
+            return Failure(potId, null, "The recovery contribution must be greater than zero.");
+
+        var pot = (await repo.GetReservePotsAsync()).FirstOrDefault(x => x.Id == potId);
+        if (pot is null || !pot.IsActive)
+            return Failure(potId, pot?.Name, "The selected pot is not active or could not be found.");
+        if (!pot.IsOverdrawn)
+            return Failure(potId, pot.Name, "This pot no longer has a negative balance.");
+
+        return await repo.RestoreNegativeReservePotBalanceAsync(potId, amount, operationKey);
     }
 
     private static ReservePotActionResult Failure(int potId, string? potName, string message) => new()

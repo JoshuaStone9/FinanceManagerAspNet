@@ -50,7 +50,7 @@ public sealed class DashboardSummaryService(
 
         var completedCount = activePots.Count(x => x.TargetAmount.HasValue && x.AllocatedAmount >= x.TargetAmount.Value);
         var pausedCount = activePots.Count(x => x.IsFundingPaused);
-        var overdueOrMissedCount = currentSummaries.Count(x => x.CurrentStatus is "Overdue" or "Missed");
+        var overdueOrMissedCount = currentSummaries.Count(x => x.CurrentStatus is "Overdrawn" or "Overdue" or "Missed");
         var partiallyFundedCount = currentSummaries.Count(x => x.CurrentStatus == "Partially funded");
         var unhealthyIds = activePots
             .Where(x => x.IsFundingPaused || (x.TargetAmount.HasValue && x.AllocatedAmount >= x.TargetAmount.Value))
@@ -59,7 +59,7 @@ public sealed class DashboardSummaryService(
         foreach (var pot in activePots)
         {
             if (summaries.TryGetValue(pot.Id, out var summary) &&
-                (summary.CurrentStatus is "Overdue" or "Missed" or "Partially funded"))
+                (summary.CurrentStatus is "Overdrawn" or "Overdue" or "Missed" or "Partially funded"))
             {
                 unhealthyIds.Add(pot.Id);
             }
