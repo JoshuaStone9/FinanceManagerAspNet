@@ -69,7 +69,7 @@ public sealed class DashboardSummaryService(
         {
             ActivePotCount = activePots.Count,
             MonthlyPlanned = activePots
-                .Where(x => !x.IsFundingPaused && !string.Equals(x.FundingFrequency, "Irregular", StringComparison.OrdinalIgnoreCase))
+                .Where(x => !x.IsFundingPaused)
                 .Sum(x => x.IntendedMonthlyContribution),
             FundedThisMonth = currentSummaries.Sum(x => x.CurrentMonthEffectiveFunding),
             RemainingThisMonth = currentSummaries.Sum(x => x.CurrentMonthRemaining),

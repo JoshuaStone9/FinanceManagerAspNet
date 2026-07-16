@@ -1563,13 +1563,10 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
         await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
 
-        var allowedFrequencies = new[] { "Monthly", "Weekly", "Irregular" };
-        var normalisedFrequency = allowedFrequencies.Contains(fundingFrequency, StringComparer.OrdinalIgnoreCase)
-            ? allowedFrequencies.First(x => x.Equals(fundingFrequency, StringComparison.OrdinalIgnoreCase))
-            : "Monthly";
-
-        if (expectedFundingDay is < 1 or > 31)
-            throw new ArgumentOutOfRangeException(nameof(expectedFundingDay), "Expected funding day must be between 1 and 31.");
+        // Frequency and expected funding day are retained in the schema for backwards
+        // compatibility, but V2 now uses flexible monthly funding.
+        const string normalisedFrequency = "Monthly";
+        expectedFundingDay = null;
 
         if (fundingPausedUntil.HasValue && !fundingPausedFrom.HasValue)
             fundingPausedFrom = DateTime.Today;

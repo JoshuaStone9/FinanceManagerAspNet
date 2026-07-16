@@ -522,9 +522,7 @@ public sealed record ReservePot(
         var from = (FundingPausedFrom ?? DateTime.Today).Date;
         return date.Date >= from && date.Date <= FundingPausedUntil.Value.Date;
     }
-    public string FundingPlanLabel => FundingFrequency == "Irregular"
-        ? "Fund when available"
-        : $"{IntendedMonthlyContribution:C} {FundingFrequency.ToLowerInvariant()}";
+    public string FundingPlanLabel => $"{IntendedMonthlyContribution:C} flexible monthly target";
 
     public bool IsOverdrawn => AllocatedAmount < 0m;
     public decimal NegativeBalanceRecoveryRequired => Math.Max(0m, -AllocatedAmount);

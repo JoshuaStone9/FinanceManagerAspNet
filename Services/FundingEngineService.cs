@@ -62,8 +62,9 @@ public sealed class FundingEngineService : IFundingEngineService
             && pauseFrom.Value <= periodEnd
             && pauseUntil.Value >= periodStart;
 
-        var expected = !pot.IsActive || paused ||
-                       pot.FundingFrequency.Equals("Irregular", StringComparison.OrdinalIgnoreCase)
+        // Funding is flexible within the month. There is no frequency or expected-day rule;
+        // the engine only assesses the total contributed during the monthly period.
+        var expected = !pot.IsActive || paused
             ? 0m
             : Math.Max(0m, pot.IntendedMonthlyContribution);
 
@@ -201,13 +202,11 @@ public sealed class FundingEngineService : IFundingEngineService
         if (!isCurrentPeriod)
             return effectiveFunding > 0m ? "Partially funded" : "Missed";
 
-        var lastDay = DateTime.DaysInMonth(periodStart.Year, periodStart.Month);
-        var dueDay = Math.Min(pot.ExpectedFundingDay ?? lastDay, lastDay);
-        var dueDate = new DateTime(periodStart.Year, periodStart.Month, dueDay);
-
+        // Contributions can be made on any day. A current month does not become overdue
+        // until it has ended; historic periods are handled above as Missed/Partially funded.
         if (effectiveFunding > 0m)
-            return asOfDate.Date > dueDate ? "Partially funded" : "In progress";
+            return "In progress";
 
-        return asOfDate.Date > dueDate ? "Overdue" : "Pending";
+        return "Pending";
     }
 }
