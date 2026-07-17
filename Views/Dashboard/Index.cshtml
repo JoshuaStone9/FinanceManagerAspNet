@@ -25,9 +25,13 @@
         <p class="muted">Review this month's position, reserve health, upcoming actions and 12-month outlook.</p>
     </div>
     <nav class="fm-dashboard-month" aria-label="Change dashboard month">
-        <a class="arrow" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month">‹</a>
-        <strong>@Model.MonthStart.ToString("MMMM yyyy")</strong>
-        <a class="arrow" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month">›</a>
+        <a class="fm-month-button" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month" title="Previous month">
+            <i data-lucide="chevron-left"></i>
+        </a>
+        <span class="fm-month-label" aria-live="polite">@Model.MonthStart.ToString("MMMM yyyy")</span>
+        <a class="fm-month-button" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month" title="Next month">
+            <i data-lucide="chevron-right"></i>
+        </a>
     </nav>
 </header>
 

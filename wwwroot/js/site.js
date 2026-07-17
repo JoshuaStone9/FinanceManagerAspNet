@@ -145,13 +145,29 @@ window.addEventListener('load', () => {
     const mobileButton = document.getElementById('fmMobileMenu');
     const storageKey = 'fm-sidebar-collapsed';
 
+    const updateSidebarControl = () => {
+        if (!shell || !collapseButton) return;
+        const isCollapsed = shell.classList.contains('sidebar-collapsed');
+        collapseButton.setAttribute('aria-expanded', String(!isCollapsed));
+        collapseButton.setAttribute('aria-label', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        collapseButton.setAttribute('title', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+
+        const icon = collapseButton.querySelector('[data-sidebar-icon]');
+        if (icon) {
+            icon.setAttribute('data-lucide', isCollapsed ? 'chevron-right' : 'chevron-left');
+            window.lucide?.createIcons();
+        }
+    };
+
     if (shell && localStorage.getItem(storageKey) === 'true') {
         shell.classList.add('sidebar-collapsed');
     }
+    updateSidebarControl();
 
     collapseButton?.addEventListener('click', () => {
         shell?.classList.toggle('sidebar-collapsed');
         localStorage.setItem(storageKey, String(shell?.classList.contains('sidebar-collapsed')));
+        updateSidebarControl();
     });
 
     const closeMobileNavigation = () => {
