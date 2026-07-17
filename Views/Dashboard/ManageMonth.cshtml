@@ -9,6 +9,10 @@
     var reserveAllocated = (decimal)(ViewBag.ReserveAllocated ?? 0m);
     var reserveUnallocated = (decimal)(ViewBag.ReserveUnallocated ?? 0m);
     var selectedSource = ViewBag.SelectedSource as string;
+    var defaultEntryDate = new DateTime(
+        Model.Year,
+        Model.Month,
+        Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(Model.Year, Model.Month)));
     var budgetSections = new[]
     {
         (Title: "Essential bills", Source: "bills", Anchor: "bills", Rows: Model.Bills, Help: "Mortgage, council tax, utilities, insurance and fixed bills.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingBills),
@@ -96,7 +100,7 @@
 
             <label>Name<input class="payment-name" name="name" required /></label>
             <label>Amount<input class="payment-amount" name="amount" type="number" min="0" step="0.01" required /></label>
-            <label>Date<input name="date" type="date" value="@Model.MonthStart.ToString("yyyy-MM-dd")" /></label>
+            <label>Date<input name="date" type="date" value="@defaultEntryDate.ToString("yyyy-MM-dd")" /></label>
             <label>Notes<input class="payment-notes" name="notes" /></label>
             <button class="primary">Add</button>
         </form>

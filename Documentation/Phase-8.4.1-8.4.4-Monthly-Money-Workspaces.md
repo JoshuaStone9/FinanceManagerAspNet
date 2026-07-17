@@ -74,3 +74,16 @@ The update action reloads the existing payment before saving and preserves every
 ## Deferred work
 
 Phase 8.4.5 will implement the Household Reserve Existing Pot / New Pot allocation picker. Shared component extraction and the complete keyboard-first workflow remain Phase 8.4.6–8.4.7.
+
+## Phase 8.4.4.2 — Intelligent default entry dates
+
+New entries in Essential Bills, Everyday Spending, Extra Expenses and
+Investments default to today's day number within the month currently being
+managed. For example, if today is 17 July, the July workspace defaults to
+17 July and the August workspace defaults to 17 August.
+
+- The date remains editable before the entry is saved.
+- The default always stays within the selected workspace month.
+- For shorter months, the date is capped at that month's final valid day.
+- Existing and edited records retain their stored dates.
+- The legacy combined Manage Month screen follows the same rule.

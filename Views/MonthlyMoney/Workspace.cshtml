@@ -6,6 +6,10 @@
     ViewData["Title"] = $"{Model.Title} - {Model.MonthStart:MMMM yyyy}";
     var gb = CultureInfo.GetCultureInfo("en-GB");
     var canEdit = User.Identity?.IsAuthenticated == true;
+    var defaultEntryDate = new DateTime(
+        Model.Year,
+        Model.Month,
+        Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(Model.Year, Model.Month)));
     var optionsJson = JsonSerializer.Serialize(Model.ExistingOptions);
 }
 
@@ -236,7 +240,7 @@
 
                 <label>
                     Date
-                    <input name="date" type="date" value="@Model.MonthStart.ToString("yyyy-MM-dd")" required />
+                    <input name="date" type="date" value="@defaultEntryDate.ToString("yyyy-MM-dd")" required />
                 </label>
 
                 @if (Model.SupportsCategory)

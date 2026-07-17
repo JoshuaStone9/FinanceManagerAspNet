@@ -264,3 +264,10 @@ Essential Bills, Everyday Spending, Extra Expenses and Investments now open as d
 ## Phase 8.4.4.1 — Inline amount editing
 
 Recorded monthly entries now support click-to-edit amounts in Essential Bills, Everyday Spending, Extra Expenses and Investments. Enter saves, Escape cancels, and the update changes only the selected monthly record before returning to the same row.
+
+## Phase 8.4.4.2 — Default entry date
+
+New monthly bills, everyday spending entries, extra expenses and investment
+contributions now default to today's day number within the selected month.
+The date remains editable and is capped to the final valid day for shorter
+months.
