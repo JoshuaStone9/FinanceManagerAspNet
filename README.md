@@ -285,3 +285,22 @@ Monthly Money now includes a dedicated Money Pots workspace for recording contri
 ## Phase 8.4.7 — Keyboard-first monthly workflow
 
 The five monthly money workspaces now support consistent keyboard entry: Enter saves, Escape clears, successful saves return focus to the first input, and validation failures preserve the current draft. Previous-entry selection and inline amount editing remain optimized for rapid monthly updates.
+
+## Phase 8.4.8 — Recurring monthly entries and month setup
+
+Bills, everyday spending, investments and selected Money Pot contributions can now repeat each month. Month setup uses the latest recorded amount before the month being prepared, so changing an amount once becomes the starting value for the following month without maintaining a separate default. Historical months remain unchanged, duplicates are prevented, extra expenses stay one-off, and inactive or paused Money Pots are excluded.
+
+
+## Phase 8.4.8.2 — Clear recurring status
+
+Monthly workspace rows now show a compact **Repeats monthly** or **One-off** switch beneath the entry date. The switch communicates the current state directly and replaces the previous large repeat/stop-repeating action button, leaving Edit and Delete as the primary row actions.
+
+
+## Phase 8.4.8.3 — Functional recurring switches
+
+Recurring status switches now update in place without a full-page reload. The control is disabled while saving, displays live feedback, and immediately changes between `Repeats monthly` and `One-off` after the server confirms the update.
+
+
+## Phase 8.4.8.4 — Two-state recurring toggle
+
+Recurring controls now display only two visual states: **One-off** and **Repeats monthly**. The switch track and thumb use fixed positioning for consistent alignment, while AJAX confirmation remains available to screen readers without leaving a third-looking status message beneath the entry.

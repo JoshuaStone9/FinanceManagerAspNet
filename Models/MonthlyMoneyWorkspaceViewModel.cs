@@ -24,6 +24,13 @@ public sealed class MonthlyMoneyWorkspaceViewModel
     public IReadOnlyList<ReservePot> PotOptions { get; init; } = [];
     public IReadOnlyList<PaymentRow> Rows { get; init; } = [];
     public IReadOnlyList<ExistingPaymentOption> ExistingOptions { get; init; } = [];
+    public IReadOnlyList<MonthlyEntryTemplate> PermanentTemplates { get; init; } = [];
+    public IReadOnlyList<MonthlyEntryTemplate> MissingPermanentTemplates { get; init; } = [];
+
+    public bool SupportsPermanentEntries => Source != "extra_expenses";
+    public bool HasMonthSetupItems => MissingPermanentTemplates.Count > 0;
+    public bool IsPermanent(string name) => PermanentTemplates.Any(x =>
+        string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
 
     public DateTime MonthStart => new(Year, Month, 1);
     public DateTime PreviousMonth => MonthStart.AddMonths(-1);

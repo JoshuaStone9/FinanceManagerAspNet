@@ -827,6 +827,32 @@ public sealed record ExistingPaymentOption(
     string? Length,
     string? Notes);
 
+public sealed record MonthlyEntryTemplate(
+    int Id,
+    string Source,
+    string Name,
+    decimal DefaultAmount,
+    string? Category,
+    string? Type,
+    string? Length,
+    string? Notes,
+    bool IsActive);
+
+public sealed class MonthSetupItemInput
+{
+    public int TemplateId { get; set; }
+    public bool Include { get; set; } = true;
+    public decimal Amount { get; set; }
+}
+
+public sealed class MonthSetupInput
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Source { get; set; } = string.Empty;
+    public List<MonthSetupItemInput> Items { get; set; } = [];
+}
+
 public sealed class CarryOverItemInput
 {
     public bool Include { get; set; } = true;

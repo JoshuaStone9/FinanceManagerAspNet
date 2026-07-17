@@ -24,3 +24,7 @@ Restores monthly pot contribution entry as a dedicated workspace with active-pot
 ### 8.4.7 Keyboard-First Monthly Workflow — Complete
 
 All five monthly workspaces now share a faster keyboard workflow. Enter submits the current quick entry, Escape clears it, previous-entry selection moves directly to the amount, and successful saves return focus to the first field ready for another entry. Invalid submissions preserve the entered draft and focus the field that needs attention. Inline amount editing continues to support Enter to save and Escape to cancel.
+
+### 8.4.8 Recurring Monthly Entries and Month Setup — Complete
+
+Recurring entry status, selectable month setup, latest-recorded-amount carry-forward, duplicate prevention and active/paused Money Pot safeguards are now implemented across the monthly workspaces. Extra expenses remain one-off by design. Recurring state is now displayed using a compact, explicit Repeats monthly / One-off switch within each row.

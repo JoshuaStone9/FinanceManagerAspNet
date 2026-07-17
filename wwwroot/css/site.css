@@ -828,3 +828,30 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-keyboard-hint{display:flex;align-items:center;gap:6px;margin:10px 0 0;color:var(--muted);font-size:.74rem}
 .fm-keyboard-hint kbd{display:inline-grid;place-items:center;min-width:30px;padding:3px 7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:rgba(15,23,42,.55);color:var(--ink);font:inherit;font-weight:800}
 .fm-workspace-form-error{margin-top:14px;padding:11px 12px;border:1px solid rgba(239,68,68,.45);border-radius:10px;background:rgba(239,68,68,.09);color:#fecaca;font-size:.82rem;font-weight:700}
+
+
+/* Phase 8.4.8: permanent monthly entries and month setup */
+.fm-month-setup-card,.fm-permanent-defaults-card{margin:0 0 18px;padding:20px;border:1px solid rgba(139,92,246,.38);border-radius:17px;background:linear-gradient(135deg,rgba(139,92,246,.1),var(--panel) 58%)}
+.fm-month-setup-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:15px}.fm-month-setup-head h2,.fm-permanent-defaults-card h2{margin:3px 0 5px}.fm-month-setup-head p{margin-bottom:0}.fm-status-pill,.fm-permanent-badge{display:inline-flex;align-items:center;border:1px solid rgba(139,92,246,.38);border-radius:999px;background:rgba(139,92,246,.12);color:var(--ink);font-size:.7rem;font-weight:800;white-space:nowrap}.fm-status-pill{padding:7px 10px}.fm-permanent-badge{margin-left:7px;padding:3px 7px;vertical-align:middle}
+.fm-month-setup-list,.fm-permanent-defaults-list{display:grid;gap:8px}.fm-month-setup-row,.fm-permanent-default-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(15,23,42,.3)}.fm-month-setup-row>input[type=checkbox]{width:18px;height:18px;accent-color:var(--brand)}.fm-month-setup-copy strong,.fm-month-setup-copy small,.fm-permanent-default-row strong,.fm-permanent-default-row small{display:block}.fm-month-setup-copy small,.fm-permanent-default-row small{margin-top:3px;color:var(--muted);font-size:.72rem}.fm-month-setup-amount,.fm-permanent-default-row label{display:flex;align-items:center;gap:5px}.fm-month-setup-amount input,.fm-permanent-default-row input{width:112px;border:1px solid var(--line);border-radius:9px;background:rgba(15,23,42,.55);color:var(--ink);padding:8px 9px;font:inherit;font-weight:800}.fm-month-setup-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.fm-month-setup-actions span{color:var(--muted);font-size:.76rem}
+.fm-checkbox-row{display:flex!important;grid-template-columns:none!important;align-items:flex-start;gap:10px!important;padding:11px;border:1px solid var(--line);border-radius:11px;background:rgba(139,92,246,.06)}.fm-checkbox-row>input{flex:0 0 auto;width:18px!important;height:18px;margin-top:2px;accent-color:var(--brand)}.fm-checkbox-row strong,.fm-checkbox-row small{display:block}.fm-checkbox-row strong{color:var(--ink)}.fm-checkbox-row small{margin-top:3px;color:var(--muted);font-size:.7rem;font-weight:500}.fm-permanent-defaults-card{margin-top:18px;background:var(--panel)}.fm-permanent-default-row{grid-template-columns:minmax(0,1fr) auto auto}.fm-permanent-default-row label{color:var(--muted);font-size:.8rem}.fm-permanent-default-row .button{white-space:nowrap}
+@media(max-width:760px){.fm-month-setup-head,.fm-month-setup-actions{align-items:flex-start;flex-direction:column}.fm-month-setup-row{grid-template-columns:auto minmax(0,1fr)}.fm-month-setup-amount{grid-column:2}.fm-permanent-default-row{grid-template-columns:1fr}.fm-permanent-default-row label{justify-content:flex-start}.fm-permanent-default-row input{width:100%}}
+
+
+/* Phase 8.4.8.2-8.4.8.4: two-state recurring toggle */
+.fm-recurring-state-form{display:block;margin:5px 0 0}
+.fm-recurring-state{display:inline-flex;align-items:center;gap:8px;padding:2px 0;border:0;background:transparent;color:var(--muted);font:inherit;font-size:.72rem;font-weight:750;line-height:1;cursor:pointer}
+.fm-recurring-state:hover,.fm-recurring-state:focus-visible{color:var(--ink)}
+.fm-recurring-state:focus-visible{outline:2px solid rgba(139,92,246,.55);outline-offset:4px;border-radius:999px}
+.fm-recurring-switch{position:relative;display:inline-block;flex:0 0 auto;width:30px;height:17px;border:1px solid rgba(148,163,184,.38);border-radius:999px;background:rgba(148,163,184,.16);box-sizing:border-box;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}
+.fm-recurring-switch span{position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:#94a3b8;box-shadow:0 1px 3px rgba(0,0,0,.35);transform:translateX(0);transition:transform .16s ease,background .16s ease}
+.fm-recurring-state.is-recurring{color:#86efac}
+.fm-recurring-state.is-recurring .fm-recurring-switch{border-color:rgba(34,197,94,.75);background:rgba(34,197,94,.28);box-shadow:inset 0 0 0 1px rgba(34,197,94,.08)}
+.fm-recurring-state.is-recurring .fm-recurring-switch span{background:#4ade80;transform:translateX(13px)}
+.fm-recurring-state.is-one-off{color:var(--muted)}
+.fm-recurring-state.is-one-off .fm-recurring-switch span{transform:translateX(0)}
+.fm-recurring-readonly{display:block;margin-top:5px;color:var(--muted);font-size:.72rem;font-weight:750}
+.fm-recurring-state:disabled{cursor:wait;opacity:.65}
+.fm-recurring-feedback{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.fm-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+

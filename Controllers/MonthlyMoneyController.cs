@@ -108,6 +108,88 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetPermanent(
+        string source,
+        int id,
+        int year,
+        int month,
+        bool isPermanent)
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return Unauthorized();
+
+        if (source == "extra_expenses")
+            return BadRequest("Extra expenses are always one-off entries.");
+
+        var entry = await repo.GetPaymentAsync(source, id);
+        if (entry is null)
+            return NotFound();
+
+        string message;
+
+        if (isPermanent)
+        {
+            await repo.UpsertMonthlyEntryTemplateAsync(
+                source,
+                entry.Name,
+                entry.Amount,
+                entry.Category,
+                entry.Type,
+                entry.Length,
+                entry.Notes);
+            message = $"{entry.DisplayName} now repeats monthly.";
+        }
+        else
+        {
+            await repo.SetMonthlyEntryTemplateActiveAsync(source, entry.Name, false);
+            message = $"{entry.DisplayName} is now a one-off entry.";
+        }
+
+        if (string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase))
+        {
+            return Json(new
+            {
+                success = true,
+                isPermanent,
+                message
+            });
+        }
+
+        TempData["Success"] = message;
+        var destination = Url.Action(GetWorkspaceAction(source), new { year, month });
+        return Redirect($"{destination}#entry-{id}");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetupMonth(MonthSetupInput input)
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return Unauthorized();
+
+        if (input.Month is < 1 or > 12)
+            return BadRequest("Month must be between 1 and 12.");
+
+        var added = await repo.SetupMonthFromTemplatesAsync(
+            input.Year,
+            input.Month,
+            input.Source,
+            input.Items);
+
+        TempData["Success"] = added == 0
+            ? "No new recurring entries were added. Existing entries were left unchanged."
+            : $"{added} recurring entr{(added == 1 ? "y" : "ies")} added to {new DateTime(input.Year, input.Month, 1):MMMM yyyy}.";
+
+        return RedirectToAction(GetWorkspaceAction(input.Source), new
+        {
+            year = input.Year,
+            month = input.Month,
+            focus = "monthly-review"
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateAmount(
         string source,
         int id,
@@ -190,6 +272,13 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
 
         await repo.EnsureModernTablesAsync();
 
+        List<MonthlyEntryTemplate> permanentTemplates = source == "extra_expenses"
+            ? []
+            : await repo.GetMonthlyEntryTemplatesAsync(source);
+        List<MonthlyEntryTemplate> missingPermanentTemplates = source == "extra_expenses"
+            ? []
+            : await repo.GetMissingMonthlyEntryTemplatesAsync(source, selectedYear, selectedMonth);
+
         var model = new MonthlyMoneyWorkspaceViewModel
         {
             Year = selectedYear,
@@ -213,6 +302,8 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             IsMoneyPots = isMoneyPots,
             Rows = await repo.GetRowsAsync(source, selectedMonth, selectedYear),
             ExistingOptions = await repo.GetExistingPaymentOptionsAsync(source),
+            PermanentTemplates = permanentTemplates,
+            MissingPermanentTemplates = missingPermanentTemplates,
             PotOptions = isMoneyPots
                 ? (await repo.GetReservePotsAsync()).Where(x => x.IsActive).OrderBy(x => x.Priority).ThenBy(x => x.Name).ToList()
                 : []

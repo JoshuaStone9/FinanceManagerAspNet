@@ -128,7 +128,7 @@ public sealed class DashboardController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, string? returnAnchor)
+    public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, string? returnAnchor, bool isPermanent = false)
     {
         if (!CanEdit()) return LoginRedirect();
 
@@ -159,6 +159,9 @@ public sealed class DashboardController(
         await repo.AddPaymentAsync(source, name, amount, selectedDate, category, type, length, notes);
         if (source == "savings" && amount > 0)
             await repo.ApplyReserveAllocationAsync(name, amount);
+
+        if (isPermanent && source != "extra_expenses")
+            await repo.UpsertMonthlyEntryTemplateAsync(source, name, amount, category, type, length, notes);
 
         TempData["Success"] = source == "savings"
             ? $"Contribution added to {name}."

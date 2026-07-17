@@ -33,6 +33,23 @@ CREATE TABLE dbo.investments(investments_id int IDENTITY(1,1) PRIMARY KEY, [name
 IF OBJECT_ID('dbo.savings','U') IS NULL
 CREATE TABLE dbo.savings(savings_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
 
+
+IF OBJECT_ID('dbo.monthly_entry_templates','U') IS NULL
+CREATE TABLE dbo.monthly_entry_templates(
+    monthly_entry_template_id int IDENTITY(1,1) PRIMARY KEY,
+    source nvarchar(40) NOT NULL,
+    [name] nvarchar(150) NOT NULL,
+    default_amount decimal(18,2) NOT NULL DEFAULT 0,
+    category nvarchar(100) NULL,
+    [type] nvarchar(80) NULL,
+    [length] nvarchar(50) NULL,
+    notes nvarchar(500) NULL,
+    is_active bit NOT NULL DEFAULT 1,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_monthly_entry_templates UNIQUE(source,[name])
+);
+
 IF OBJECT_ID('dbo.emergency_fund','U') IS NULL
 CREATE TABLE dbo.emergency_fund(emergency_fund_id int IDENTITY(1,1) PRIMARY KEY, amount decimal(18,2) NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
@@ -2491,6 +2508,199 @@ WHERE system_key=@negativeKey;", con, (SqlTransaction)tx);
         var pot = (await GetReservePotsAsync()).FirstOrDefault(x => x.Id == id);
         if (pot is not null) await AddFinanceEventAsync("Household Reserve", "PotDeleted", "ReservePot", id, $"{pot.Name} deleted", "The virtual allocation was deleted.", pot.AllocatedAmount, "User");
         await ExecuteAsync("DELETE FROM dbo.reserve_pots WHERE reserve_pot_id=@id", ("@id",id));
+    }
+
+    public async Task<List<MonthlyEntryTemplate>> GetMonthlyEntryTemplatesAsync(string source, bool activeOnly = true)
+    {
+        await EnsureModernTablesAsync();
+        var templates = new List<MonthlyEntryTemplate>();
+        const string sql = @"SELECT monthly_entry_template_id,source,[name],default_amount,category,[type],[length],notes,is_active
+FROM dbo.monthly_entry_templates
+WHERE source=@source AND (@activeOnly=0 OR is_active=1)
+ORDER BY [name]";
+
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(sql, con);
+        cmd.Parameters.AddWithValue("@source", source);
+        cmd.Parameters.AddWithValue("@activeOnly", activeOnly);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            templates.Add(new MonthlyEntryTemplate(
+                reader.GetInt32(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetDecimal(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.GetBoolean(8)));
+        }
+        return templates;
+    }
+
+    public async Task UpsertMonthlyEntryTemplateAsync(
+        string source,
+        string name,
+        decimal defaultAmount,
+        string? category,
+        string? type,
+        string? length,
+        string? notes)
+    {
+        await EnsureModernTablesAsync();
+        if (source == "extra_expenses")
+            throw new InvalidOperationException("Extra expenses are one-off entries and cannot be permanent.");
+
+        const string sql = @"MERGE dbo.monthly_entry_templates AS target
+USING (SELECT @source AS source, @name AS [name]) AS incoming
+ON target.source=incoming.source AND LOWER(LTRIM(RTRIM(target.[name])))=LOWER(LTRIM(RTRIM(incoming.[name])))
+WHEN MATCHED THEN UPDATE SET [name]=@name,default_amount=@amount,category=@category,[type]=@type,[length]=@length,notes=@notes,is_active=1,updated_at=SYSUTCDATETIME()
+WHEN NOT MATCHED THEN INSERT(source,[name],default_amount,category,[type],[length],notes,is_active)
+VALUES(@source,@name,@amount,@category,@type,@length,@notes,1);";
+        await ExecuteAsync(sql,
+            ("@source", source), ("@name", name.Trim()), ("@amount", defaultAmount),
+            ("@category", DbValue(category)), ("@type", DbValue(type)),
+            ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+    }
+
+    public async Task SetMonthlyEntryTemplateActiveAsync(string source, string name, bool isActive)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"UPDATE dbo.monthly_entry_templates
+SET is_active=@isActive,updated_at=SYSUTCDATETIME()
+WHERE source=@source AND LOWER(LTRIM(RTRIM([name])))=LOWER(LTRIM(RTRIM(@name)))",
+            ("@source", source), ("@name", name.Trim()), ("@isActive", isActive));
+    }
+
+
+    private async Task<Dictionary<string, ExistingPaymentOption>> GetLatestPaymentOptionsBeforeMonthAsync(
+        string source,
+        int year,
+        int month)
+    {
+        await EnsureModernTablesAsync();
+        var map = source switch
+        {
+            "bills" => (Table: "dbo.bills", Date: "[date]", Category: "NULL", Type: "[type]", Length: "[length]", Notes: "[description]"),
+            "everyday_spending" => (Table: "dbo.everyday_spending", Date: "[date]", Category: "category", Type: "[type]", Length: "[length]", Notes: "[description]"),
+            "investments" => (Table: "dbo.investments", Date: "[date]", Category: "category", Type: "NULL", Length: "[length]", Notes: "notes"),
+            "savings" => (Table: "dbo.savings", Date: "[date]", Category: "NULL", Type: "NULL", Length: "[length]", Notes: "notes"),
+            _ => throw new ArgumentOutOfRangeException(nameof(source))
+        };
+
+        var sql = $@"WITH ranked AS
+(
+    SELECT [name], amount, {map.Category} AS category, {map.Type} AS [type],
+           {map.Length} AS [length], {map.Notes} AS notes,
+           ROW_NUMBER() OVER(PARTITION BY LOWER(LTRIM(RTRIM([name]))) ORDER BY {map.Date} DESC) AS rn
+    FROM {map.Table}
+    WHERE {map.Date} < @monthStart
+)
+SELECT [name], amount, category, [type], [length], notes
+FROM ranked
+WHERE rn = 1;";
+
+        var items = new Dictionary<string, ExistingPaymentOption>(StringComparer.OrdinalIgnoreCase);
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(sql, con);
+        cmd.Parameters.AddWithValue("@monthStart", new DateTime(year, month, 1));
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var item = new ExistingPaymentOption(
+                reader.GetString(0),
+                reader.GetDecimal(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5));
+            items[item.Name.Trim()] = item;
+        }
+
+        return items;
+    }
+
+    public async Task<List<MonthlyEntryTemplate>> GetMissingMonthlyEntryTemplatesAsync(string source, int year, int month)
+    {
+        var templates = await GetMonthlyEntryTemplatesAsync(source);
+        var rows = await GetRowsAsync(source, month, year);
+        var existingNames = rows.Select(x => x.Name.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var latestValues = await GetLatestPaymentOptionsBeforeMonthAsync(source, year, month);
+
+        var recurringEntries = templates
+            .Where(x => !existingNames.Contains(x.Name))
+            .Select(template =>
+            {
+                if (!latestValues.TryGetValue(template.Name.Trim(), out var latest))
+                    return template;
+
+                return template with
+                {
+                    DefaultAmount = latest.Amount,
+                    Category = latest.Category,
+                    Type = latest.Type,
+                    Length = latest.Length,
+                    Notes = latest.Notes
+                };
+            });
+
+        if (source == "savings")
+        {
+            var availablePots = (await GetReservePotsAsync())
+                .Where(x => x.IsActive && !x.IsPausedFor(new DateTime(year, month, 1)))
+                .Select(x => x.Name.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            recurringEntries = recurringEntries.Where(x => availablePots.Contains(x.Name));
+        }
+
+        return recurringEntries.ToList();
+    }
+
+    public async Task<int> SetupMonthFromTemplatesAsync(int year, int month, string source, IEnumerable<MonthSetupItemInput> items)
+    {
+        await EnsureModernTablesAsync();
+        if (month is < 1 or > 12) throw new ArgumentOutOfRangeException(nameof(month));
+        if (source == "extra_expenses") return 0;
+
+        var selected = items.Where(x => x.Include && x.Amount >= 0).ToList();
+        if (selected.Count == 0) return 0;
+
+        var templates = await GetMonthlyEntryTemplatesAsync(source);
+        var selectedIds = selected.Select(x => x.TemplateId).ToHashSet();
+        var allowed = templates.Where(x => selectedIds.Contains(x.Id)).ToDictionary(x => x.Id);
+        var existing = (await GetRowsAsync(source, month, year))
+            .Select(x => x.Name.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var date = new DateTime(year, month, Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month)));
+        var added = 0;
+
+        HashSet<string>? availablePots = null;
+        if (source == "savings")
+        {
+            availablePots = (await GetReservePotsAsync())
+                .Where(x => x.IsActive && !x.IsPausedFor(new DateTime(year, month, 1)))
+                .Select(x => x.Name.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        foreach (var input in selected)
+        {
+            if (!allowed.TryGetValue(input.TemplateId, out var template)) continue;
+            if (existing.Contains(template.Name)) continue;
+            if (availablePots is not null && !availablePots.Contains(template.Name)) continue;
+
+            await AddPaymentAsync(source, template.Name, input.Amount, date, template.Category, template.Type, template.Length, template.Notes);
+            if (source == "savings" && input.Amount > 0)
+                await ApplyReserveAllocationAsync(template.Name, input.Amount);
+            existing.Add(template.Name);
+            added++;
+        }
+
+        return added;
     }
 
 }
