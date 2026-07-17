@@ -87,3 +87,15 @@ managed. For example, if today is 17 July, the July workspace defaults to
 - For shorter months, the date is capped at that month's final valid day.
 - Existing and edited records retain their stored dates.
 - The legacy combined Manage Month screen follows the same rule.
+
+## Phase 8.4.7 — Keyboard-first monthly workflow
+
+The shared workspace form now behaves consistently across Essential Bills, Everyday Spending, Extra Expenses, Investments and Money Pots.
+
+- Enter saves the current quick entry.
+- Enter from the notes field also saves rather than adding an accidental new line.
+- Escape resets the draft and restores the selected month's default date.
+- Selecting a previous entry prefills the form and moves focus to Amount.
+- After a successful save, the workspace returns to the same month and focuses the first field for the next entry.
+- Invalid server-side submissions preserve the draft values and show an inline error.
+- Inline row editing retains Enter-to-save and Escape-to-cancel behaviour.

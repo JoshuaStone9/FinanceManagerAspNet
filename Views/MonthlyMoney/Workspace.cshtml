@@ -11,6 +11,17 @@
         Model.Month,
         Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(Model.Year, Model.Month)));
     var optionsJson = JsonSerializer.Serialize(Model.ExistingOptions);
+    var workspaceError = TempData["WorkspaceError"] as string;
+    var draftName = TempData["WorkspaceDraftName"] as string ?? string.Empty;
+    var draftAmount = TempData["WorkspaceDraftAmount"] as string ?? string.Empty;
+    var draftDate = TempData["WorkspaceDraftDate"] as string;
+    var draftCategory = TempData["WorkspaceDraftCategory"] as string ?? string.Empty;
+    var draftType = TempData["WorkspaceDraftType"] as string ?? string.Empty;
+    var draftLength = TempData["WorkspaceDraftLength"] as string ?? string.Empty;
+    var draftNotes = TempData["WorkspaceDraftNotes"] as string ?? string.Empty;
+    var entryDateValue = string.IsNullOrWhiteSpace(draftDate)
+        ? defaultEntryDate.ToString("yyyy-MM-dd")
+        : draftDate;
 }
 
 <header class="fm-workspace-hero">
@@ -188,14 +199,22 @@
         <p class="eyebrow">Quick entry</p>
         <h2 id="add-entry-title">@Model.AddTitle</h2>
         <p class="muted">Choose a previous entry to prefill the form, or create a new one.</p>
+        <p class="fm-keyboard-hint"><kbd>Enter</kbd> saves · <kbd>Esc</kbd> clears the form</p>
+
+        @if (!string.IsNullOrWhiteSpace(workspaceError))
+        {
+            <div class="fm-workspace-form-error" role="alert">@workspaceError</div>
+        }
 
         @if (canEdit)
         {
             <form asp-controller="Dashboard"
                   asp-action="AddPayment"
                   method="post"
+                  id="quick-entry-form"
                   class="fm-workspace-form remembered-payment-form"
-                  data-options="@optionsJson">
+                  data-options="@optionsJson"
+                  data-default-date="@defaultEntryDate.ToString("yyyy-MM-dd")">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="year" value="@Model.Year" />
                 <input type="hidden" name="month" value="@Model.Month" />
@@ -210,7 +229,7 @@
                             <option value="">Choose an active money pot...</option>
                             @foreach (var pot in Model.PotOptions)
                             {
-                                <option value="@pot.Name">@pot.Name · @pot.AllocatedAmount.ToString("C", gb)</option>
+                                <option value="@pot.Name" selected="@(draftName == pot.Name ? "selected" : null)">@pot.Name · @pot.AllocatedAmount.ToString("C", gb)</option>
                             }
                         </select>
                     </label>
@@ -247,25 +266,25 @@
 
                     <label>
                         @Model.NameLabel
-                        <input class="payment-name" name="name" required autocomplete="off" />
+                        <input class="payment-name" name="name" value="@draftName" required autocomplete="off" />
                     </label>
                 }
 
                 <label>
                     Amount
-                    <input class="payment-amount" name="amount" type="number" min="0" step="0.01" required inputmode="decimal" />
+                    <input class="payment-amount" name="amount" type="number" min="0" step="0.01" value="@draftAmount" required inputmode="decimal" />
                 </label>
 
                 <label>
                     Date
-                    <input name="date" type="date" value="@defaultEntryDate.ToString("yyyy-MM-dd")" required />
+                    <input class="payment-date" name="date" type="date" value="@entryDateValue" required />
                 </label>
 
                 @if (Model.SupportsCategory)
                 {
                     <label>
                         Category
-                        <input class="payment-category" name="category" autocomplete="off" />
+                        <input class="payment-category" name="category" value="@draftCategory" autocomplete="off" />
                     </label>
                 }
 
@@ -273,7 +292,7 @@
                 {
                     <label>
                         Type
-                        <input class="payment-type" name="type" autocomplete="off" />
+                        <input class="payment-type" name="type" value="@draftType" autocomplete="off" />
                     </label>
                 }
 
@@ -281,13 +300,13 @@
                 {
                     <label>
                         Length in months
-                        <input class="payment-length" name="length" type="number" min="1" step="1" />
+                        <input class="payment-length" name="length" type="number" min="1" step="1" value="@draftLength" />
                     </label>
                 }
 
                 <label>
                     @Model.NotesLabel
-                    <textarea class="payment-notes" name="notes" rows="3"></textarea>
+                    <textarea class="payment-notes" name="notes" rows="3">@draftNotes</textarea>
                 </label>
 
                 <button class="primary" type="submit">@(Model.IsMoneyPots ? "Add contribution" : "Save entry")</button>
@@ -351,6 +370,57 @@
 
                 form.querySelector('.payment-amount')?.focus();
             });
+        });
+
+        document.querySelectorAll('.remembered-payment-form').forEach(form => {
+            const firstField = form.querySelector('.payment-name, select.payment-name, .existing-choice');
+            const amountField = form.querySelector('.payment-amount');
+            const dateField = form.querySelector('.payment-date');
+            const notesField = form.querySelector('.payment-notes');
+
+            const focusFirstField = () => {
+                const target = form.querySelector('select.payment-name') || form.querySelector('.existing-choice') || form.querySelector('.payment-name');
+                target?.focus();
+            };
+
+            form.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    form.reset();
+                    if (dateField) dateField.value = form.dataset.defaultDate || '';
+                    focusFirstField();
+                    return;
+                }
+
+                if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+                    return;
+                }
+
+                if (event.target === notesField) {
+                    event.preventDefault();
+                    form.requestSubmit();
+                    return;
+                }
+
+                if (event.target instanceof HTMLTextAreaElement) {
+                    return;
+                }
+
+                event.preventDefault();
+                form.requestSubmit();
+            });
+
+            if (new URLSearchParams(window.location.search).get('focus') === 'quick-entry') {
+                requestAnimationFrame(focusFirstField);
+            }
+
+            if (@Json.Serialize(!string.IsNullOrWhiteSpace(workspaceError))) {
+                requestAnimationFrame(() => {
+                    const invalidTarget = !firstField?.value ? firstField : amountField;
+                    invalidTarget?.focus();
+                    invalidTarget?.select?.();
+                });
+            }
         });
 
         document.querySelectorAll('.fm-workspace-row').forEach(row => {

@@ -281,3 +281,7 @@ The former Household Reserve workspace is now presented as **Money Pots** throug
 ## Phase 8.4.6 — Money Pots monthly funding
 
 Monthly Money now includes a dedicated Money Pots workspace for recording contributions to active pots. Contributions update existing pot balances and can be added, edited, deleted or adjusted inline without returning the management form to the dashboard.
+
+## Phase 8.4.7 — Keyboard-first monthly workflow
+
+The five monthly money workspaces now support consistent keyboard entry: Enter saves, Escape clears, successful saves return focus to the first input, and validation failures preserve the current draft. Previous-entry selection and inline amount editing remain optimized for rapid monthly updates.

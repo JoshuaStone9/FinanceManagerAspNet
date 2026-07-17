@@ -20,3 +20,7 @@
 ### 8.4.6 Money Pots Monthly Funding Workspace — Complete
 
 Restores monthly pot contribution entry as a dedicated workspace with active-pot selection and synchronized balances.
+
+### 8.4.7 Keyboard-First Monthly Workflow — Complete
+
+All five monthly workspaces now share a faster keyboard workflow. Enter submits the current quick entry, Escape clears it, previous-entry selection moves directly to the amount, and successful saves return focus to the first field ready for another entry. Invalid submissions preserve the entered draft and focus the field that needs attention. Inline amount editing continues to support Enter to save and Escape to cancel.

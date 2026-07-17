@@ -823,3 +823,8 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .pot-title-row{padding:4px 0}
 .pot-title-row>span:first-child strong{font-size:1.05rem}
 @media(max-width:760px){.money-pots-hero .button-row{width:100%}.money-pots-hero .fm-action-button{flex:1;text-align:center}}
+
+/* Phase 8.4.7: keyboard-first monthly entry workflow */
+.fm-keyboard-hint{display:flex;align-items:center;gap:6px;margin:10px 0 0;color:var(--muted);font-size:.74rem}
+.fm-keyboard-hint kbd{display:inline-grid;place-items:center;min-width:30px;padding:3px 7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:rgba(15,23,42,.55);color:var(--ink);font:inherit;font-weight:800}
+.fm-workspace-form-error{margin-top:14px;padding:11px 12px;border:1px solid rgba(239,68,68,.45);border-radius:10px;background:rgba(239,68,68,.09);color:#fecaca;font-size:.82rem;font-weight:700}

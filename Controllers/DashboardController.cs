@@ -131,9 +131,40 @@ public sealed class DashboardController(
     public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, string? returnAnchor)
     {
         if (!CanEdit()) return LoginRedirect();
-        await repo.AddPaymentAsync(source, name, Math.Max(0, amount), date == default ? new DateTime(year, month, 1) : date, category, type, length, notes);
-        if (source == "savings" && amount > 0) await repo.ApplyReserveAllocationAsync(name, amount);
-        return RedirectToDashboard(year, month, returnAnchor ?? source);
+
+        name = name?.Trim() ?? string.Empty;
+        var anchor = returnAnchor ?? source;
+
+        if (month is < 1 or > 12 || string.IsNullOrWhiteSpace(name) || amount < 0)
+        {
+            TempData["WorkspaceError"] = string.IsNullOrWhiteSpace(name)
+                ? "Enter a name before saving."
+                : amount < 0
+                    ? "Amount cannot be negative."
+                    : "The selected month is invalid.";
+            TempData["WorkspaceDraftName"] = name;
+            TempData["WorkspaceDraftAmount"] = amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            TempData["WorkspaceDraftDate"] = date == default ? string.Empty : date.ToString("yyyy-MM-dd");
+            TempData["WorkspaceDraftCategory"] = category;
+            TempData["WorkspaceDraftType"] = type;
+            TempData["WorkspaceDraftLength"] = length;
+            TempData["WorkspaceDraftNotes"] = notes;
+            return RedirectToWorkspace(year, month, anchor, focusQuickEntry: true);
+        }
+
+        var selectedDate = date == default
+            ? new DateTime(year, month, Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month)))
+            : date;
+
+        await repo.AddPaymentAsync(source, name, amount, selectedDate, category, type, length, notes);
+        if (source == "savings" && amount > 0)
+            await repo.ApplyReserveAllocationAsync(name, amount);
+
+        TempData["Success"] = source == "savings"
+            ? $"Contribution added to {name}."
+            : $"{name} added.";
+
+        return RedirectToWorkspace(year, month, anchor, focusQuickEntry: true);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -240,6 +271,9 @@ public sealed class DashboardController(
     }
 
     private IActionResult RedirectToDashboard(int year, int month, string anchor)
+        => RedirectToWorkspace(year, month, anchor, focusQuickEntry: false);
+
+    private IActionResult RedirectToWorkspace(int year, int month, string anchor, bool focusQuickEntry)
     {
         var workspaceAction = anchor switch
         {
@@ -252,7 +286,12 @@ public sealed class DashboardController(
         };
 
         if (workspaceAction is not null)
-            return RedirectToAction(workspaceAction, "MonthlyMoney", new { year, month });
+            return RedirectToAction(workspaceAction, "MonthlyMoney", new
+            {
+                year,
+                month,
+                focus = focusQuickEntry ? "quick-entry" : null
+            });
 
         return Redirect($"{Url.Action(nameof(Index), new { year, month, manage = true, source = anchor })}#{anchor}");
     }
