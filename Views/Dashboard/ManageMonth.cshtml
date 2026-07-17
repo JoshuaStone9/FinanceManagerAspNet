@@ -1,0 +1,456 @@
+@model FinanceManagerAspNet.Models.DashboardViewModel
+@using FinanceManagerAspNet.Models
+@using System.Globalization
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Manage month";
+
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+    var reserveAllocated = (decimal)(ViewBag.ReserveAllocated ?? 0m);
+    var reserveUnallocated = (decimal)(ViewBag.ReserveUnallocated ?? 0m);
+    var selectedSource = ViewBag.SelectedSource as string;
+
+    var budgetSections = new[]
+    {
+        (
+            Title: "Essential bills",
+            Source: "bills",
+            Anchor: "bills",
+            Rows: Model.Bills,
+            Help: "Mortgage, council tax, utilities, insurance and fixed bills.",
+            Existing: (List<ExistingPaymentOption>)ViewBag.ExistingBills
+        ),
+        (
+            Title: "Everyday spending",
+            Source: "everyday_spending",
+            Anchor: "everyday",
+            Rows: Model.Expenses,
+            Help: "Food, fuel and general monthly allowances. These can be carried over.",
+            Existing: (List<ExistingPaymentOption>)ViewBag.ExistingEveryday
+        ),
+        (
+            Title: "Extra expenses",
+            Source: "extra_expenses",
+            Anchor: "extras",
+            Rows: Model.ExtraExpenses,
+            Help: "One-off costs for this month only. These are never included in Carry over all.",
+            Existing: (List<ExistingPaymentOption>)ViewBag.ExistingExtras
+        ),
+        (
+            Title: "Investments",
+            Source: "investments",
+            Anchor: "investments",
+            Rows: Model.Investments,
+            Help: "Long-term investments kept separate from the household reserve.",
+            Existing: (List<ExistingPaymentOption>)ViewBag.ExistingInvestments
+        ),
+        (
+            Title: "Household reserve allocations",
+            Source: "savings",
+            Anchor: "savings",
+            Rows: Model.Savings,
+            Help: "Each allocation increases the matching virtual pot and household reserve total.",
+            Existing: (List<ExistingPaymentOption>)ViewBag.ExistingSavings
+        )
+    };
+
+    var visibleSections = string.IsNullOrWhiteSpace(selectedSource)
+        ? budgetSections
+        : budgetSections
+            .Where(x => x.Source == selectedSource || x.Anchor == selectedSource)
+            .ToArray();
+}
+
+<header class="fm-dashboard-hero fm-management-hero">
+    <div>
+        <p class="eyebrow">Monthly money</p>
+        <h1>Manage @Model.MonthStart.ToString("MMMM yyyy")</h1>
+        <p>Review and update the detailed entries behind the dashboard totals.</p>
+
+        <a class="button"
+           asp-action="Index"
+           asp-route-year="@Model.Year"
+           asp-route-month="@Model.Month">
+            Back to dashboard
+        </a>
+    </div>
+
+    <nav class="fm-dashboard-month" aria-label="Change management month">
+        <a class="fm-month-button"
+           asp-action="Index"
+           asp-route-year="@Model.PreviousMonth.Year"
+           asp-route-month="@Model.PreviousMonth.Month"
+           asp-route-manage="true"
+           asp-route-source="@selectedSource"
+           aria-label="Previous month">
+            <i data-lucide="chevron-left"></i>
+        </a>
+
+        <span class="fm-month-label">@Model.MonthStart.ToString("MMMM yyyy")</span>
+
+        <a class="fm-month-button"
+           asp-action="Index"
+           asp-route-year="@Model.NextMonth.Year"
+           asp-route-month="@Model.NextMonth.Month"
+           asp-route-manage="true"
+           asp-route-source="@selectedSource"
+           aria-label="Next month">
+            <i data-lucide="chevron-right"></i>
+        </a>
+    </nav>
+</header>
+
+<nav class="fm-management-tabs" aria-label="Monthly money sections">
+    <a class="@(string.IsNullOrWhiteSpace(selectedSource) ? "active" : "")"
+       asp-action="Index"
+       asp-route-year="@Model.Year"
+       asp-route-month="@Model.Month"
+       asp-route-manage="true">
+        All
+    </a>
+
+    @foreach (var budgetSection in budgetSections)
+    {
+        <a class="@(selectedSource == budgetSection.Source || selectedSource == budgetSection.Anchor ? "active" : "")"
+           asp-action="Index"
+           asp-route-year="@Model.Year"
+           asp-route-month="@Model.Month"
+           asp-route-manage="true"
+           asp-route-source="@budgetSection.Source">
+            @budgetSection.Title
+        </a>
+    }
+</nav>
+
+@if (canEdit && string.IsNullOrWhiteSpace(selectedSource))
+{
+    <section class="card" id="carry-forward">
+        <p class="eyebrow">Carry forward</p>
+        <h2>Edit this month's starting adjustment</h2>
+        <p class="muted">
+            Calculated from the previous month:
+            @Model.CarryForwardCalculated.ToString("C", gb).
+        </p>
+
+        <form asp-action="SaveCarryForwardOverride"
+              method="post"
+              class="account-form">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="month" value="@Model.Month" />
+
+            <label>
+                Carry forward amount
+                <input name="amount"
+                       type="number"
+                       step="0.01"
+                       value="@Model.CarryForwardAmount" />
+            </label>
+
+            <label>
+                Reason (optional)
+                <input name="reason"
+                       maxlength="500"
+                       value="@Model.CarryForwardOverrideReason" />
+            </label>
+
+            <button class="primary" type="submit">Save override</button>
+        </form>
+
+        @if (Model.HasCarryForwardOverride)
+        {
+            <form asp-action="RecalculateCarryForward"
+                  method="post"
+                  style="margin-top:12px"
+                  data-confirm="Remove the manual override?">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="year" value="@Model.Year" />
+                <input type="hidden" name="month" value="@Model.Month" />
+
+                <button class="button" type="submit">Use calculated amount</button>
+            </form>
+        }
+    </section>
+
+    <section class="card" id="income">
+        <p class="eyebrow">Income</p>
+        <h2>Household income</h2>
+
+        <form asp-action="SaveIncome"
+              method="post"
+              class="account-form">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="month" value="@Model.Month" />
+
+            <label>
+                Income
+                <input name="amount"
+                       type="number"
+                       step="0.01"
+                       min="0"
+                       value="@Model.MonthlyIncome" />
+            </label>
+
+            <input type="hidden" name="sickDays" value="@Model.SickDays" />
+
+            <button class="primary" type="submit">Save income</button>
+        </form>
+    </section>
+}
+
+@foreach (var budgetBlock in visibleSections)
+{
+    <section class="card fm-manage-card" id="@budgetBlock.Anchor">
+        <div class="section-head">
+            <div>
+                <p class="eyebrow">@budgetBlock.Title</p>
+                <h2>@budgetBlock.Rows.Sum(x => x.Amount).ToString("C", gb)</h2>
+                <p class="muted">@budgetBlock.Help</p>
+            </div>
+        </div>
+
+        @if (budgetBlock.Rows.Count == 0)
+        {
+            <div class="fm-empty-inline">Nothing entered for this month yet.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Amount</th>
+                            <th>Date</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in budgetBlock.Rows)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@row.DisplayName</strong><br />
+                                    <span class="muted">@row.Notes</span>
+                                </td>
+                                <td>@row.Amount.ToString("C", gb)</td>
+                                <td>@row.Date.ToString("dd MMM")</td>
+                                <td>
+                                    @if (canEdit)
+                                    {
+                                        <a class="button"
+                                           asp-action="EditPayment"
+                                           asp-route-source="@row.Source"
+                                           asp-route-id="@row.Id"
+                                           asp-route-year="@Model.Year"
+                                           asp-route-month="@Model.Month">
+                                            Edit
+                                        </a>
+
+                                        <form asp-action="DeletePayment"
+                                              method="post"
+                                              style="display:inline"
+                                              data-confirm="Delete this item?">
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden" name="year" value="@Model.Year" />
+                                            <input type="hidden" name="month" value="@Model.Month" />
+                                            <input type="hidden" name="source" value="@row.Source" />
+                                            <input type="hidden" name="id" value="@row.Id" />
+                                            <input type="hidden" name="returnAnchor" value="@budgetBlock.Anchor" />
+
+                                            <button class="button danger-inline" type="submit">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (canEdit)
+        {
+            var optionsJson = JsonSerializer.Serialize(budgetBlock.Existing);
+
+            <form asp-action="AddPayment"
+                  method="post"
+                  class="account-form remembered-payment-form"
+                  style="margin-top:16px"
+                  data-options="@optionsJson">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="year" value="@Model.Year" />
+                <input type="hidden" name="month" value="@Model.Month" />
+                <input type="hidden" name="source" value="@budgetBlock.Source" />
+                <input type="hidden" name="returnAnchor" value="@budgetBlock.Anchor" />
+
+                <div class="full-row existing-picker">
+                    <label for="existing-@budgetBlock.Anchor">Pick from existing</label>
+
+                    @if (budgetBlock.Existing.Count > 25)
+                    {
+                        <input id="existing-@budgetBlock.Anchor"
+                               class="existing-choice"
+                               list="existing-options-@budgetBlock.Anchor"
+                               placeholder="Search previous entries..."
+                               autocomplete="off" />
+
+                        <datalist id="existing-options-@budgetBlock.Anchor">
+                            @foreach (var option in budgetBlock.Existing)
+                            {
+                                <option value="@option.Name"></option>
+                            }
+                        </datalist>
+                    }
+                    else
+                    {
+                        <select id="existing-@budgetBlock.Anchor"
+                                class="existing-choice">
+                            <option value="">Choose a previous entry...</option>
+
+                            @foreach (var option in budgetBlock.Existing)
+                            {
+                                <option value="@option.Name">@option.Name</option>
+                            }
+                        </select>
+                    }
+                </div>
+
+                <label>
+                    Name
+                    <input class="payment-name"
+                           name="name"
+                           required />
+                </label>
+
+                <label>
+                    Amount
+                    <input class="payment-amount"
+                           name="amount"
+                           type="number"
+                           min="0"
+                           step="0.01"
+                           required />
+                </label>
+
+                <label>
+                    Date
+                    <input name="date"
+                           type="date"
+                           value="@Model.MonthStart.ToString("yyyy-MM-dd")" />
+                </label>
+
+                <label>
+                    Notes
+                    <input class="payment-notes"
+                           name="notes" />
+                </label>
+
+                <button class="primary" type="submit">Add</button>
+            </form>
+        }
+    </section>
+}
+
+<section class="grid two">
+    <article class="card">
+        <p class="eyebrow">Virtual pots allocated</p>
+        <h2>@reserveAllocated.ToString("C", gb)</h2>
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">Reserve unassigned</p>
+        <h2 class="@(reserveUnallocated < 0 ? "bad" : "good")">
+            @reserveUnallocated.ToString("C", gb)
+        </h2>
+        <p>
+            <a asp-controller="SavingPots" asp-action="Index">
+                Manage reserve and virtual pots
+            </a>
+        </p>
+    </article>
+</section>
+
+@if (canEdit && Model.RemainingFund > 0)
+{
+    <section class="card">
+        <p class="eyebrow">Finish the plan</p>
+        <h2>Allocate the remaining @Model.RemainingFund.ToString("C", gb)</h2>
+
+        <form asp-action="AllocateRemainingToReserve"
+              method="post"
+              class="account-form">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="month" value="@Model.Month" />
+
+            <label>
+                Amount
+                <input name="amount"
+                       type="number"
+                       step="0.01"
+                       min="0"
+                       max="@Model.RemainingFund"
+                       value="@Model.RemainingFund" />
+            </label>
+
+            <button class="primary" type="submit">
+                Add to unallocated reserve
+            </button>
+        </form>
+    </section>
+}
+
+@if (canEdit)
+{
+    <section class="card">
+        <p class="eyebrow">Next month</p>
+        <h2>Carry over and confirm</h2>
+        <p class="muted">
+            Review every recurring entry before it is copied.
+            Extra expenses remain excluded.
+        </p>
+
+        <a class="button primary"
+           asp-action="CarryOver"
+           asp-route-year="@Model.Year"
+           asp-route-month="@Model.Month">
+            Review carry over all
+        </a>
+    </section>
+}
+
+@section Scripts
+{
+    <script>
+        document.querySelectorAll('.remembered-payment-form').forEach(form => {
+            const options = JSON.parse(form.dataset.options || '[]');
+            const picker = form.querySelector('.existing-choice');
+
+            picker?.addEventListener('change', () => {
+                const selectedName = picker.value.trim().toLowerCase();
+                const found = options.find(option =>
+                    option.Name.toLowerCase() === selectedName);
+
+                if (!found) {
+                    return;
+                }
+
+                form.querySelector('.payment-name').value = found.Name;
+                form.querySelector('.payment-amount').value = found.Amount;
+                form.querySelector('.payment-notes').value = found.Notes || '';
+            });
+        });
+    </script>
+}

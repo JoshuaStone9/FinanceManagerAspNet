@@ -249,3 +249,9 @@ The dashboard now includes a monthly money journey, category summaries, planning
 ## Phase 8.3.7 — Razor rendering corrections
 
 Corrected dashboard Razor expressions that were being emitted as literal text rather than evaluated values. Arithmetic and negative currency expressions are now enclosed as complete Razor expressions before formatting. The remembered-payment picker was also restructured so its conditional searchable input/select markup is parsed as Razor rather than displayed on screen.
+
+## Phase 8.3.5 — Dashboard simplification and navigation
+
+The Finance Manager dashboard is now a read-only command centre. Detailed monthly forms, tables and editing controls have moved to a separate monthly-management view. Dashboard summary cards preserve the selected year and month when opening the relevant management area, while Household Reserve and Forecast continue to open their existing dedicated workspaces.
+
+The sidebar now includes direct monthly-money navigation for Essential Bills, Everyday Spending, Extra Expenses and Investments. Recent activity uses natural record-first wording, and the dashboard ends after Planning and Attention/Activity.

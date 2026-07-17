@@ -14,7 +14,7 @@ public sealed class DashboardController(
     IWhatIfForecastService whatIfForecastService,
     IForecastScenarioService forecastScenarioService) : Controller
 {
-    public async Task<IActionResult> Index(int? year, int? month)
+    public async Task<IActionResult> Index(int? year, int? month, bool manage = false, string? source = null)
     {
         var now = DateTime.Today;
         var y = year ?? now.Year;
@@ -87,12 +87,17 @@ public sealed class DashboardController(
 
         vm.Experience = dashboardExperienceService.Build(vm);
 
-        ViewBag.ExistingBills = await repo.GetExistingPaymentOptionsAsync("bills");
-        ViewBag.ExistingEveryday = await repo.GetExistingPaymentOptionsAsync("everyday_spending");
-        ViewBag.ExistingExtras = await repo.GetExistingPaymentOptionsAsync("extra_expenses");
-        ViewBag.ExistingInvestments = await repo.GetExistingPaymentOptionsAsync("investments");
-        ViewBag.ExistingSavings = await repo.GetExistingPaymentOptionsAsync("savings");
-        return View(vm);
+        if (manage)
+        {
+            ViewBag.SelectedSource = source;
+            ViewBag.ExistingBills = await repo.GetExistingPaymentOptionsAsync("bills");
+            ViewBag.ExistingEveryday = await repo.GetExistingPaymentOptionsAsync("everyday_spending");
+            ViewBag.ExistingExtras = await repo.GetExistingPaymentOptionsAsync("extra_expenses");
+            ViewBag.ExistingInvestments = await repo.GetExistingPaymentOptionsAsync("investments");
+            ViewBag.ExistingSavings = await repo.GetExistingPaymentOptionsAsync("savings");
+        }
+
+        return View(manage ? "ManageMonth" : "Index", vm);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -225,7 +230,7 @@ public sealed class DashboardController(
     }
 
     private IActionResult RedirectToDashboard(int year, int month, string anchor)
-        => Redirect($"{Url.Action(nameof(Index), new { year, month })}#{anchor}");
+        => Redirect($"{Url.Action(nameof(Index), new { year, month, manage = true, source = anchor })}#{anchor}");
     private bool CanEdit() => User.Identity?.IsAuthenticated == true;
     private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
 }

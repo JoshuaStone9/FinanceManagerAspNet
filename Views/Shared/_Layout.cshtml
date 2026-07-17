@@ -146,6 +146,14 @@ else
         </div>
 
         <div class="fm-nav-group">
+          <p class="fm-nav-heading">Monthly money</p>
+          <a class="fm-nav-item @(controller == "Dashboard" && Context.Request.Query["source"] == "bills" ? "active" : "")" data-tooltip="Essential Bills" asp-controller="Dashboard" asp-action="Index" asp-route-manage="true" asp-route-source="bills"><i data-lucide="receipt"></i><span>Essential Bills</span></a>
+          <a class="fm-nav-item @(controller == "Dashboard" && Context.Request.Query["source"] == "everyday_spending" ? "active" : "")" data-tooltip="Everyday Spending" asp-controller="Dashboard" asp-action="Index" asp-route-manage="true" asp-route-source="everyday_spending"><i data-lucide="shopping-basket"></i><span>Everyday Spending</span></a>
+          <a class="fm-nav-item @(controller == "Dashboard" && Context.Request.Query["source"] == "extra_expenses" ? "active" : "")" data-tooltip="Extra Expenses" asp-controller="Dashboard" asp-action="Index" asp-route-manage="true" asp-route-source="extra_expenses"><i data-lucide="circle-plus"></i><span>Extra Expenses</span></a>
+          <a class="fm-nav-item @(controller == "Dashboard" && Context.Request.Query["source"] == "investments" ? "active" : "")" data-tooltip="Investments" asp-controller="Dashboard" asp-action="Index" asp-route-manage="true" asp-route-source="investments"><i data-lucide="chart-pie"></i><span>Investments</span></a>
+        </div>
+
+        <div class="fm-nav-group">
           <p class="fm-nav-heading">Money</p>
           <a class="fm-nav-item @(controller == "Assets" ? "active" : "")" data-tooltip="Assets" asp-controller="Assets" asp-action="Index"><i data-lucide="landmark"></i><span>Assets</span></a>
           <a class="fm-nav-item @(controller == "SavingPots" ? "active" : "")" data-tooltip="Household Reserve" asp-controller="SavingPots" asp-action="Index"><i data-lucide="piggy-bank"></i><span>Household Reserve</span></a>

@@ -64,8 +64,8 @@ public sealed class DashboardExperienceServiceTests
         var result = _service.Build(dashboard);
 
         Assert.Equal(2, result.RecentActivity.Count);
-        Assert.Equal("Wedding", result.RecentActivity[0].Detail);
-        Assert.Equal("Reserve allocation recorded", result.RecentActivity[0].Title);
+        Assert.Equal("Wedding", result.RecentActivity[0].Title);
+        Assert.Equal("Reserve allocation recorded", result.RecentActivity[0].Detail);
     }
 
     [Fact]

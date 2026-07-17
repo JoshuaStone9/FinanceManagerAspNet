@@ -98,6 +98,6 @@ public sealed class DashboardExperienceService : IDashboardExperienceService
             _ => ("Monthly item recorded", "circle-dollar-sign")
         };
 
-        return new DashboardActivityItem(label, row.DisplayName, row.Date, icon, row.Amount);
+        return new DashboardActivityItem(row.DisplayName, label, row.Date, icon, row.Amount);
     }
 }
