@@ -114,6 +114,71 @@ public sealed class FinancialForecastServiceTests
         Assert.Equal(50m, pot.AdditionalMonthlyContributionRequired);
     }
 
+
+    [Fact]
+    public void Build_CalculatesMonthsLateAndRecommendation()
+    {
+        var result = Build(pots: [Pot(balance: 0m, target: 1200m, contribution: 50m, dueDate: Start.AddMonths(12))], months: 24);
+
+        var pot = result.Pots.Single();
+        Assert.Equal(12, pot.MonthsEarlyOrLate);
+        Assert.Contains("Increase", pot.RecommendedAction);
+    }
+
+    [Fact]
+    public void Build_OneOffContributionCanBringGoalOnTrack()
+    {
+        var pot = Pot(balance: 0m, target: 1200m, contribution: 50m, dueDate: Start.AddMonths(12));
+        var result = _service.Build(new FinancialForecastRequest
+        {
+            StartDate = Start,
+            EndDate = Start.AddMonths(12),
+            ProtectedReserveBaseline = 12000m,
+            Accounts = [Account(1, 12000m, 0m, 0m)],
+            Pots = [pot],
+            PotOneOffContributions = new Dictionary<int, decimal> { [pot.Id] = 600m }
+        });
+
+        Assert.Equal(ForecastGoalStatus.OnTrack, result.Pots.Single().Status);
+        Assert.Equal(600m, result.Pots.Single().OneOffContribution);
+    }
+
+    [Fact]
+    public void Build_DeductsFutureExpenseInSelectedMonth()
+    {
+        var result = _service.Build(new FinancialForecastRequest
+        {
+            StartDate = Start,
+            EndDate = Start.AddMonths(3),
+            ProtectedReserveBaseline = 12000m,
+            Accounts = [Account(1, 15000m, 0m, 0m)],
+            Pots = [],
+            FutureExpenseAmount = 1000m,
+            FutureExpenseDate = Start.AddMonths(2)
+        });
+
+        Assert.Equal(1000m, result.ProjectedFutureExpenses);
+        Assert.Equal(14000m, result.ProjectedReserveBalance);
+        Assert.Single(result.Months.Where(x => x.FutureExpenses == 1000m));
+    }
+
+    [Fact]
+    public void Build_DoesNotMutateLivePot()
+    {
+        var pot = Pot(balance: 100m, target: 1000m, contribution: 100m, dueDate: Start.AddMonths(12));
+        _service.Build(new FinancialForecastRequest
+        {
+            StartDate = Start,
+            EndDate = Start.AddMonths(12),
+            Accounts = [Account(1, 12000m, 0m, 0m)],
+            Pots = [pot],
+            PotOneOffContributions = new Dictionary<int, decimal> { [pot.Id] = 250m }
+        });
+
+        Assert.Equal(100m, pot.AllocatedAmount);
+        Assert.Equal(100m, pot.IntendedMonthlyContribution);
+    }
+
     private FinancialForecastResult Build(
         IReadOnlyList<ReserveAccountOption>? accounts = null,
         IReadOnlyList<ReservePot>? pots = null,

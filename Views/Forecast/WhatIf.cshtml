@@ -1,0 +1,98 @@
+@model WhatIfForecastViewModel
+@{
+    ViewData["Title"] = "What-if Planner";
+    var current = Model.CurrentPlan;
+    var scenario = Model.ScenarioPlan;
+}
+
+<div class="page-header forecast-page-header">
+    <div>
+        <p class="eyebrow">Phase 7.4 · Temporary planning</p>
+        <h1>What-if Planner</h1>
+        <p class="muted">Test changes without updating live pot settings, balances or contribution history.</p>
+    </div>
+    <a asp-action="Index" class="fm-action-button fm-action-secondary">Back to forecast</a>
+</div>
+
+<form method="get" class="card what-if-form">
+    <div class="what-if-grid">
+        <label>Forecast timeframe
+            <select asp-for="Input.Months" name="Months">
+                <option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option><option value="24">24 months</option>
+            </select>
+        </label>
+        <label>Pot to test
+            <select asp-for="Input.PotId" name="PotId">
+                <option value="">No pot-specific change</option>
+                @foreach (var pot in Model.AvailablePots) { <option value="@pot.Id">@pot.Name</option> }
+            </select>
+        </label>
+        <label>Monthly contribution
+            <input asp-for="Input.MonthlyContributionOverride" name="MonthlyContributionOverride" type="number" min="0" step="0.01" placeholder="Keep current" />
+        </label>
+        <label>Target amount
+            <input asp-for="Input.TargetAmountOverride" name="TargetAmountOverride" type="number" min="0" step="0.01" placeholder="Keep current" />
+        </label>
+        <label>Target date
+            <input asp-for="Input.TargetDateOverride" name="TargetDateOverride" type="date" />
+        </label>
+        <label>One-off contribution
+            <input asp-for="Input.OneOffContribution" name="OneOffContribution" type="number" min="0" step="0.01" />
+        </label>
+        <label>Account interest rate (%)
+            <input asp-for="Input.InterestRateOverride" name="InterestRateOverride" type="number" min="0" step="0.01" placeholder="Keep current" />
+        </label>
+        <label>Protected reserve baseline
+            <input asp-for="Input.ProtectedBaselineOverride" name="ProtectedBaselineOverride" type="number" min="0" step="0.01" placeholder="Keep current" />
+        </label>
+        <label>Future expense
+            <input asp-for="Input.FutureExpenseAmount" name="FutureExpenseAmount" type="number" min="0" step="0.01" />
+        </label>
+        <label>Future expense date
+            <input asp-for="Input.FutureExpenseDate" name="FutureExpenseDate" type="date" />
+        </label>
+    </div>
+    <div class="what-if-actions">
+        <button type="submit" class="fm-action-button fm-action-primary">Compare scenario</button>
+        <a asp-action="WhatIf" class="fm-action-button fm-action-secondary">Reset</a>
+    </div>
+</form>
+
+@if (Model.HasScenario)
+{
+    <section class="card forecast-section">
+        <div class="section-heading"><div><p class="eyebrow">Current versus temporary</p><h2>Scenario comparison</h2></div></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Result</th><th>Current plan</th><th>Scenario plan</th><th>Difference</th></tr></thead>
+                <tbody>
+                    <tr><td>Projected reserve</td><td>@current.ProjectedReserveBalance.ToString("C")</td><td>@scenario.ProjectedReserveBalance.ToString("C")</td><td>@((scenario.ProjectedReserveBalance-current.ProjectedReserveBalance).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+                    <tr><td>Projected interest</td><td>@current.ProjectedInterest.ToString("C")</td><td>@scenario.ProjectedInterest.ToString("C")</td><td>@((scenario.ProjectedInterest-current.ProjectedInterest).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+                    <tr><td>Future expenses</td><td>@current.ProjectedFutureExpenses.ToString("C")</td><td>@scenario.ProjectedFutureExpenses.ToString("C")</td><td>@((scenario.ProjectedFutureExpenses-current.ProjectedFutureExpenses).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+                    <tr><td>Unallocated surplus</td><td>@current.ProjectedUnallocatedSurplus.ToString("C")</td><td>@scenario.ProjectedUnallocatedSurplus.ToString("C")</td><td>@((scenario.ProjectedUnallocatedSurplus-current.ProjectedUnallocatedSurplus).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+                    <tr><td>Goals needing attention</td><td>@current.AtRiskPotCount</td><td>@scenario.AtRiskPotCount</td><td>@(scenario.AtRiskPotCount-current.AtRiskPotCount)</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (Model.CurrentPot is not null && Model.ScenarioPot is not null)
+    {
+        <section class="card forecast-section">
+            <div class="section-heading"><div><p class="eyebrow">Selected goal</p><h2>@Model.CurrentPot.PotName</h2></div></div>
+            <div class="scenario-pot-comparison">
+                <article><h3>Current plan</h3><span class="status-pill @Model.CurrentPot.StatusCssClass">@Model.CurrentPot.StatusLabel</span><p>Completion: @(Model.CurrentPot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not available")</p><p>Contribution: @Model.CurrentPot.IntendedMonthlyContribution.ToString("C") / month</p><p>@Model.CurrentPot.Explanation</p></article>
+                <article><h3>Scenario plan</h3><span class="status-pill @Model.ScenarioPot.StatusCssClass">@Model.ScenarioPot.StatusLabel</span><p>Completion: @(Model.ScenarioPot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not available")</p><p>Contribution: @Model.ScenarioPot.IntendedMonthlyContribution.ToString("C") / month</p><p>@Model.ScenarioPot.Explanation</p></article>
+            </div>
+        </section>
+    }
+
+    <section class="card forecast-section scenario-safety-note">
+        <strong>No live data was changed.</strong>
+        <p class="muted">This comparison exists only for the current request. It does not update pot settings, reserve accounts, balances or historical records.</p>
+    </section>
+}
+else
+{
+    <section class="card forecast-section"><p class="muted">Choose one or more temporary changes above, then select <strong>Compare scenario</strong>.</p></section>
+}

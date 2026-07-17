@@ -22,12 +22,13 @@ public sealed class FinancialForecastService : IFinancialForecastService
         var openingReserve = accounts.Sum(x => Math.Max(0m, x.Balance));
         var accountStates = accounts.ToDictionary(x => x.Id, x => Math.Max(0m, x.Balance));
         var monthlyRows = new List<MonthlyForecastRow>();
-        var potBalances = pots.ToDictionary(x => x.Id, x => x.AllocatedAmount);
+        var potBalances = pots.ToDictionary(x => x.Id, x => x.AllocatedAmount + GetOneOff(request, x.Id));
 
         var month = new DateTime(startDate.Year, startDate.Month, 1).AddMonths(1);
         var endMonth = new DateTime(endDate.Year, endDate.Month, 1);
         decimal totalInterest = 0m;
         decimal totalContributions = 0m;
+        decimal totalExpenses = 0m;
 
         while (month <= endMonth)
         {
@@ -44,6 +45,15 @@ public sealed class FinancialForecastService : IFinancialForecastService
                 accountStates[account.Id] = current + interest;
                 monthContributions += contribution;
                 monthInterest += interest;
+            }
+
+            var monthExpense = IsSameMonth(request.FutureExpenseDate, month)
+                ? Math.Max(0m, request.FutureExpenseAmount)
+                : 0m;
+            if (monthExpense > 0m)
+            {
+                DeductExpense(accountStates, monthExpense);
+                totalExpenses += monthExpense;
             }
 
             foreach (var pot in pots)
@@ -65,6 +75,7 @@ public sealed class FinancialForecastService : IFinancialForecastService
                 Math.Round(opening, 2),
                 Math.Round(monthContributions, 2),
                 Math.Round(monthInterest, 2),
+                Math.Round(monthExpense, 2),
                 Math.Round(closing, 2),
                 baseline,
                 Math.Round(allocated, 2),
@@ -73,7 +84,11 @@ public sealed class FinancialForecastService : IFinancialForecastService
             month = month.AddMonths(1);
         }
 
-        var potResults = pots.Select(pot => BuildPotForecast(pot, startDate, endDate)).ToList();
+        var potResults = pots.Select(pot => BuildPotForecast(
+            pot,
+            startDate,
+            endDate,
+            GetOneOff(request, pot.Id))).ToList();
         var projectedReserve = accountStates.Values.Sum();
         var projectedAllocated = potResults.Sum(x => Math.Max(0m, x.ProjectedBalance));
         var surplus = Math.Max(0m, projectedReserve - baseline);
@@ -87,6 +102,7 @@ public sealed class FinancialForecastService : IFinancialForecastService
             ProjectedReserveBalance = Math.Round(projectedReserve, 2),
             ProjectedInterest = Math.Round(totalInterest, 2),
             ProjectedAccountContributions = Math.Round(totalContributions, 2),
+            ProjectedFutureExpenses = Math.Round(totalExpenses, 2),
             ProjectedAllocatedToPots = Math.Round(projectedAllocated, 2),
             ProjectedSurplusAboveBaseline = Math.Round(surplus, 2),
             ProjectedUnallocatedSurplus = Math.Round(Math.Max(0m, surplus - projectedAllocated), 2),
@@ -100,43 +116,52 @@ public sealed class FinancialForecastService : IFinancialForecastService
                     ? "Configured monthly reserve-account contributions are included."
                     : "Future reserve-account contributions are excluded.",
                 "Pot contributions are treated as virtual allocations within the household reserve, not additional cash leaving the reserve.",
+                request.FutureExpenseAmount > 0m
+                    ? "The selected future expense is deducted once from the reserve in its chosen month."
+                    : "No additional future expense is included.",
                 "The protected reserve baseline remains unavailable for pot allocation.",
                 "Forecasts are advisory and do not change live balances, settings or historical records."
             }
         };
     }
 
-    private static PotForecastResult BuildPotForecast(ReservePot pot, DateTime startDate, DateTime endDate)
+    private static PotForecastResult BuildPotForecast(ReservePot pot, DateTime startDate, DateTime endDate, decimal oneOffContribution)
     {
         var contribution = Math.Max(0m, pot.IntendedMonthlyContribution);
         var target = pot.TargetAmount;
         var current = pot.AllocatedAmount;
+        var effectiveOpening = current + Math.Max(0m, oneOffContribution);
         var monthsInForecast = Math.Max(0, MonthDifference(startDate, endDate));
-        var projected = current + (contribution * monthsInForecast);
+        var projected = effectiveOpening + (contribution * monthsInForecast);
         if (target.HasValue) projected = Math.Min(projected, target.Value);
 
         DateTime? completionDate = null;
-        if (target.HasValue && current < target.Value && contribution > 0m)
+        if (target.HasValue && effectiveOpening < target.Value && contribution > 0m)
         {
-            var monthsRequired = (int)Math.Ceiling((target.Value - current) / contribution);
+            var monthsRequired = (int)Math.Ceiling((target.Value - effectiveOpening) / contribution);
             completionDate = new DateTime(startDate.Year, startDate.Month, 1).AddMonths(monthsRequired);
         }
-        else if (target.HasValue && current >= target.Value)
+        else if (target.HasValue && effectiveOpening >= target.Value)
         {
             completionDate = startDate;
         }
 
         decimal? required = null;
-        if (target.HasValue && pot.DueDate.HasValue && current < target.Value)
+        if (target.HasValue && pot.DueDate.HasValue && effectiveOpening < target.Value)
         {
             var monthsUntilDue = Math.Max(0, MonthDifference(startDate, pot.DueDate.Value));
             required = monthsUntilDue == 0
-                ? target.Value - current
-                : Math.Round((target.Value - current) / monthsUntilDue, 2);
+                ? target.Value - effectiveOpening
+                : Math.Round((target.Value - effectiveOpening) / monthsUntilDue, 2);
         }
 
-        var status = DetermineStatus(pot, startDate, completionDate);
-        decimal? additional = required.HasValue ? Math.Round(Math.Max(0m, required.Value - contribution), 2) : null;
+        var status = DetermineStatus(pot, effectiveOpening, startDate, completionDate);
+        decimal? additional = required.HasValue
+            ? Math.Round(Math.Max(0m, required.Value - contribution), 2)
+            : null;
+        int? monthsEarlyOrLate = completionDate.HasValue && pot.DueDate.HasValue
+            ? SignedMonthDifference(pot.DueDate.Value, completionDate.Value)
+            : null;
 
         return new PotForecastResult
         {
@@ -146,20 +171,23 @@ public sealed class FinancialForecastService : IFinancialForecastService
             TargetAmount = target,
             DueDate = pot.DueDate,
             IntendedMonthlyContribution = contribution,
+            OneOffContribution = Math.Max(0m, oneOffContribution),
             ProjectedBalance = Math.Round(projected, 2),
             ProjectedCompletionDate = completionDate,
             RequiredMonthlyContribution = required,
             AdditionalMonthlyContributionRequired = additional,
+            MonthsEarlyOrLate = monthsEarlyOrLate,
             Status = status,
-            Explanation = BuildExplanation(status, pot, completionDate, additional)
+            Explanation = BuildExplanation(status, pot, completionDate, additional, monthsEarlyOrLate),
+            RecommendedAction = BuildRecommendation(status, pot, additional)
         };
     }
 
-    private static ForecastGoalStatus DetermineStatus(ReservePot pot, DateTime startDate, DateTime? completionDate)
+    private static ForecastGoalStatus DetermineStatus(ReservePot pot, decimal effectiveOpening, DateTime startDate, DateTime? completionDate)
     {
-        if (pot.AllocatedAmount < 0m) return ForecastGoalStatus.Overdrawn;
+        if (effectiveOpening < 0m) return ForecastGoalStatus.Overdrawn;
         if (!pot.TargetAmount.HasValue || pot.TargetAmount.Value <= 0m) return ForecastGoalStatus.NoTarget;
-        if (pot.AllocatedAmount >= pot.TargetAmount.Value) return ForecastGoalStatus.Completed;
+        if (effectiveOpening >= pot.TargetAmount.Value) return ForecastGoalStatus.Completed;
         if (!pot.DueDate.HasValue) return ForecastGoalStatus.NoDueDate;
         if (pot.IntendedMonthlyContribution <= 0m) return ForecastGoalStatus.NoContributionPlanned;
         if (pot.DueDate.Value.Date < startDate.Date) return ForecastGoalStatus.Behind;
@@ -169,26 +197,72 @@ public sealed class FinancialForecastService : IFinancialForecastService
         return ForecastGoalStatus.Behind;
     }
 
-    private static string BuildExplanation(ForecastGoalStatus status, ReservePot pot, DateTime? completionDate, decimal? additional)
+    private static string BuildExplanation(
+        ForecastGoalStatus status,
+        ReservePot pot,
+        DateTime? completionDate,
+        decimal? additional,
+        int? monthsEarlyOrLate)
         => status switch
         {
             ForecastGoalStatus.Completed => "The target has already been reached.",
-            ForecastGoalStatus.OnTrack => $"At the current intended contribution, this pot is projected to complete by {completionDate:MMMM yyyy}.",
-            ForecastGoalStatus.AtRisk => $"This pot is projected to complete shortly after its due date. Add approximately {additional.GetValueOrDefault():C} per month to bring it back on track.",
-            ForecastGoalStatus.Behind => additional.GetValueOrDefault() > 0m
-                ? $"The current contribution is insufficient for the due date. Add approximately {additional.Value:C} per month."
-                : "The target is already overdue or cannot be reached with the current plan.",
+            ForecastGoalStatus.OnTrack when monthsEarlyOrLate < 0 => $"At the current contribution, this pot should finish {Math.Abs(monthsEarlyOrLate.Value)} month(s) before its due date.",
+            ForecastGoalStatus.OnTrack => $"At the current contribution, this pot is projected to complete by {completionDate:MMMM yyyy}.",
+            ForecastGoalStatus.AtRisk => $"This pot is projected to finish {Math.Max(1, monthsEarlyOrLate.GetValueOrDefault())} month(s) after its target date.",
+            ForecastGoalStatus.Behind when monthsEarlyOrLate > 0 => $"This pot is projected to finish {monthsEarlyOrLate.Value} month(s) after its target date.",
+            ForecastGoalStatus.Behind when additional.GetValueOrDefault() > 0m => $"The current contribution is insufficient. An additional {additional.Value:C} per month is required.",
+            ForecastGoalStatus.Behind => "The target is overdue or cannot be reached with the current plan.",
             ForecastGoalStatus.NoContributionPlanned => "A target and due date exist, but no intended monthly contribution is planned.",
-            ForecastGoalStatus.NoTarget => "Add a target amount before a completion forecast can be calculated.",
-            ForecastGoalStatus.NoDueDate => "The pot can be projected forward, but a risk status requires a due date.",
-            ForecastGoalStatus.Overdrawn => $"Restore the negative balance of {Math.Abs(pot.AllocatedAmount):C} before progressing towards the target.",
+            ForecastGoalStatus.NoTarget => "A completion forecast cannot be calculated until a target amount is set.",
+            ForecastGoalStatus.NoDueDate => "A balance can be projected, but goal risk cannot be measured without a due date.",
+            ForecastGoalStatus.Overdrawn => $"The pot is {Math.Abs(pot.AllocatedAmount):C} overdrawn and must first recover to £0.",
             _ => string.Empty
         };
+
+    private static string BuildRecommendation(ForecastGoalStatus status, ReservePot pot, decimal? additional)
+        => status switch
+        {
+            ForecastGoalStatus.Completed => "No action is required.",
+            ForecastGoalStatus.OnTrack => "Continue with the current contribution.",
+            ForecastGoalStatus.AtRisk or ForecastGoalStatus.Behind when additional.GetValueOrDefault() > 0m
+                => $"Increase the intended contribution by {additional.Value:C} per month.",
+            ForecastGoalStatus.NoContributionPlanned when pot.TargetAmount.HasValue && pot.DueDate.HasValue
+                => "Add a monthly contribution or make a one-off contribution.",
+            ForecastGoalStatus.NoTarget => "Set a target amount.",
+            ForecastGoalStatus.NoDueDate => "Set a target date to enable risk analysis.",
+            ForecastGoalStatus.Overdrawn => $"Restore {Math.Abs(pot.AllocatedAmount):C} before allocating towards the target.",
+            _ => "Review the target, due date or planned contribution."
+        };
+
+    private static decimal GetOneOff(FinancialForecastRequest request, int potId)
+        => request.PotOneOffContributions.TryGetValue(potId, out var amount) ? Math.Max(0m, amount) : 0m;
+
+    private static bool IsSameMonth(DateTime? date, DateTime month)
+        => date.HasValue && date.Value.Year == month.Year && date.Value.Month == month.Month;
+
+    private static void DeductExpense(IDictionary<int, decimal> accountStates, decimal expense)
+    {
+        var remaining = expense;
+        foreach (var accountId in accountStates.Keys.OrderBy(x => x).ToList())
+        {
+            if (remaining <= 0m) break;
+            var deduction = Math.Min(accountStates[accountId], remaining);
+            accountStates[accountId] -= deduction;
+            remaining -= deduction;
+        }
+    }
 
     private static int MonthDifference(DateTime from, DateTime to)
     {
         var fromMonth = new DateTime(from.Year, from.Month, 1);
         var toMonth = new DateTime(to.Year, to.Month, 1);
         return Math.Max(0, ((toMonth.Year - fromMonth.Year) * 12) + toMonth.Month - fromMonth.Month);
+    }
+
+    private static int SignedMonthDifference(DateTime from, DateTime to)
+    {
+        var fromMonth = new DateTime(from.Year, from.Month, 1);
+        var toMonth = new DateTime(to.Year, to.Month, 1);
+        return ((toMonth.Year - fromMonth.Year) * 12) + toMonth.Month - fromMonth.Month;
     }
 }

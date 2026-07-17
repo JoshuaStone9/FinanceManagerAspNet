@@ -10,6 +10,7 @@
         <h1>Financial Forecast</h1>
         <p class="muted">Explore the likely future position of your household reserve and savings pots without changing live data.</p>
     </div>
+    <a asp-action="WhatIf" class="fm-action-button fm-action-secondary">Open what-if planner</a>
 </div>
 
 <form method="get" class="card forecast-controls">
@@ -60,7 +61,7 @@
     {
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Month</th><th>Opening</th><th>Contributions</th><th>Interest</th><th>Closing</th><th>Allocated to pots</th><th>Available surplus</th></tr></thead>
+                <thead><tr><th>Month</th><th>Opening</th><th>Contributions</th><th>Interest</th><th>Future expenses</th><th>Closing</th><th>Allocated to pots</th><th>Available surplus</th></tr></thead>
                 <tbody>
                 @foreach (var row in forecast.Months)
                 {
@@ -69,6 +70,7 @@
                         <td>@row.OpeningReserveBalance.ToString("C")</td>
                         <td>@row.Contributions.ToString("C")</td>
                         <td>@row.Interest.ToString("C")</td>
+                        <td>@row.FutureExpenses.ToString("C")</td>
                         <td><strong>@row.ClosingReserveBalance.ToString("C")</strong></td>
                         <td>@row.ProjectedAllocatedToPots.ToString("C")</td>
                         <td>@row.AvailableSurplus.ToString("C")</td>
@@ -100,8 +102,11 @@
                     <div><dt>Projected completion</dt><dd>@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not available")</dd></div>
                     <div><dt>Intended contribution</dt><dd>@pot.IntendedMonthlyContribution.ToString("C") / month</dd></div>
                     <div><dt>Required contribution</dt><dd>@(pot.RequiredMonthlyContribution.HasValue ? $"{pot.RequiredMonthlyContribution.Value:C} / month" : "Not available")</dd></div>
+                    <div><dt>Additional required</dt><dd>@(pot.AdditionalMonthlyContributionRequired.HasValue ? $"{pot.AdditionalMonthlyContributionRequired.Value:C} / month" : "None")</dd></div>
+                    <div><dt>Timing</dt><dd>@(pot.MonthsEarlyOrLate.HasValue ? (pot.MonthsEarlyOrLate.Value > 0 ? $"{pot.MonthsEarlyOrLate.Value} month(s) late" : pot.MonthsEarlyOrLate.Value < 0 ? $"{Math.Abs(pot.MonthsEarlyOrLate.Value)} month(s) early" : "On target month") : "Not available")</dd></div>
                 </dl>
                 <p class="muted">@pot.Explanation</p>
+                <p class="forecast-recommendation"><strong>Recommended action:</strong> @pot.RecommendedAction</p>
             </article>
         }
         </div>

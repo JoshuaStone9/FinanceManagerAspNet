@@ -7,7 +7,8 @@ namespace FinanceManagerAspNet.Controllers;
 public sealed class ForecastController(
     FinanceRepository repo,
     IReserveAccountSelectionService reserveAccountSelectionService,
-    IFinancialForecastService financialForecastService) : Controller
+    IFinancialForecastService financialForecastService,
+    IWhatIfForecastService whatIfForecastService) : Controller
 {
     [HttpGet]
     public async Task<IActionResult> Index(int months = 12, DateTime? customEndDate = null, bool includeAccountContributions = true)
@@ -35,5 +36,13 @@ public sealed class ForecastController(
             IncludeAccountContributions = includeAccountContributions,
             Forecast = forecast
         });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> WhatIf([FromQuery] WhatIfForecastInput input)
+    {
+        var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
+        var pots = await repo.GetReservePotsAsync();
+        return View(whatIfForecastService.Build(input, accountSummary, pots));
     }
 }

@@ -18,8 +18,11 @@ public sealed class FinancialForecastRequest
     public DateTime EndDate { get; init; } = DateTime.Today.AddYears(1);
     public decimal ProtectedReserveBaseline { get; init; } = 12000m;
     public bool IncludeAccountContributions { get; init; } = true;
+    public decimal FutureExpenseAmount { get; init; }
+    public DateTime? FutureExpenseDate { get; init; }
     public IReadOnlyList<ReserveAccountOption> Accounts { get; init; } = Array.Empty<ReserveAccountOption>();
     public IReadOnlyList<ReservePot> Pots { get; init; } = Array.Empty<ReservePot>();
+    public IReadOnlyDictionary<int, decimal> PotOneOffContributions { get; init; } = new Dictionary<int, decimal>();
 }
 
 public sealed class FinancialForecastResult
@@ -31,6 +34,7 @@ public sealed class FinancialForecastResult
     public decimal ProjectedReserveBalance { get; init; }
     public decimal ProjectedInterest { get; init; }
     public decimal ProjectedAccountContributions { get; init; }
+    public decimal ProjectedFutureExpenses { get; init; }
     public decimal ProjectedAllocatedToPots { get; init; }
     public decimal ProjectedSurplusAboveBaseline { get; init; }
     public decimal ProjectedUnallocatedSurplus { get; init; }
@@ -46,6 +50,7 @@ public sealed record MonthlyForecastRow(
     decimal OpeningReserveBalance,
     decimal Contributions,
     decimal Interest,
+    decimal FutureExpenses,
     decimal ClosingReserveBalance,
     decimal ProtectedBaseline,
     decimal ProjectedAllocatedToPots,
@@ -62,12 +67,15 @@ public sealed class PotForecastResult
     public decimal? TargetAmount { get; init; }
     public DateTime? DueDate { get; init; }
     public decimal IntendedMonthlyContribution { get; init; }
+    public decimal OneOffContribution { get; init; }
     public decimal ProjectedBalance { get; init; }
     public DateTime? ProjectedCompletionDate { get; init; }
     public decimal? RequiredMonthlyContribution { get; init; }
     public decimal? AdditionalMonthlyContributionRequired { get; init; }
+    public int? MonthsEarlyOrLate { get; init; }
     public ForecastGoalStatus Status { get; init; }
     public string Explanation { get; init; } = string.Empty;
+    public string RecommendedAction { get; init; } = string.Empty;
     public string StatusLabel => Status switch
     {
         ForecastGoalStatus.OnTrack => "On track",
@@ -93,4 +101,29 @@ public sealed class ForecastPageViewModel
     public bool IncludeAccountContributions { get; set; } = true;
     public FinancialForecastResult Forecast { get; set; } = new();
     public DateTime SelectedEndDate => CustomEndDate?.Date ?? DateTime.Today.AddMonths(Math.Max(1, Months));
+}
+
+public sealed class WhatIfForecastInput
+{
+    public int Months { get; set; } = 12;
+    public int? PotId { get; set; }
+    public decimal? MonthlyContributionOverride { get; set; }
+    public decimal? TargetAmountOverride { get; set; }
+    public DateTime? TargetDateOverride { get; set; }
+    public decimal OneOffContribution { get; set; }
+    public decimal? InterestRateOverride { get; set; }
+    public decimal? ProtectedBaselineOverride { get; set; }
+    public decimal FutureExpenseAmount { get; set; }
+    public DateTime? FutureExpenseDate { get; set; }
+}
+
+public sealed class WhatIfForecastViewModel
+{
+    public WhatIfForecastInput Input { get; set; } = new();
+    public IReadOnlyList<ReservePot> AvailablePots { get; set; } = Array.Empty<ReservePot>();
+    public FinancialForecastResult CurrentPlan { get; set; } = new();
+    public FinancialForecastResult ScenarioPlan { get; set; } = new();
+    public PotForecastResult? CurrentPot { get; set; }
+    public PotForecastResult? ScenarioPot { get; set; }
+    public bool HasScenario { get; set; }
 }

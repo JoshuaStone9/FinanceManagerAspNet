@@ -86,15 +86,15 @@ The main Finance Manager navigation now includes Forecast.
 
 ## 7.3 – Goal Risk Analysis
 
-Planned for Batch 2.
+Implemented in Batch 2.
 
-Expand explanations and recommendations for goals that are On track, At risk, Behind or missing required planning information. Show the exact contribution difference needed to return a goal to On track.
+Each active pot now receives a detailed risk explanation, an exact additional monthly contribution where calculable, a months-early-or-late result and a plain-English recommended action. Forecast status remains separate from monthly funding status and overall pot status.
 
 ## 7.4 – What-if Planner
 
-Planned for Batch 2.
+Implemented in Batch 2.
 
-Allow temporary overrides for contribution amounts, targets, target dates, one-off contributions, interest rates, future expenses, forecast timeframe and protected baseline. Scenario values remain separate from live settings.
+The dedicated What-if Planner supports temporary overrides for a selected pot contribution, target, target date and one-off contribution, plus account interest rate, protected baseline, future expense and forecast timeframe. It compares the current and scenario plans without writing to live settings or history.
 
 ## 7.5 – Scenario Management
 

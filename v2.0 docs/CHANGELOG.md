@@ -16,3 +16,9 @@
 
 ## Next
 - Forecasting & Planning
+
+
+## Phase 7 Batch 2
+- Added detailed goal risk analysis and recommendations.
+- Added a read-only what-if planner with temporary overrides and comparison.
+- Added unit tests for risk and scenario behaviour.

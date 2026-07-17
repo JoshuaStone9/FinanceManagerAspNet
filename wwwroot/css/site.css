@@ -210,3 +210,15 @@
 .forecast-assumptions { margin:0; padding-left:1.25rem; display:grid; gap:.55rem; }
 @media(max-width:1000px){.forecast-control-grid,.forecast-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px){.forecast-control-grid,.forecast-summary-grid,.forecast-pot-grid,.forecast-pot-card dl{grid-template-columns:1fr;}.forecast-control-grid .fm-action-button{width:100%;}.section-heading,.forecast-pot-title{flex-direction:column;align-items:flex-start;}}
+
+
+/* Phase 7.3–7.4 goal risk and what-if planning */
+.forecast-recommendation { margin:.75rem 0 0; padding:.75rem; border-radius:12px; background:var(--card); border:1px solid var(--line); }
+.what-if-form { margin-bottom:1rem; }
+.what-if-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.what-if-actions { display:flex; gap:.75rem; margin-top:1rem; flex-wrap:wrap; }
+.scenario-pot-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.scenario-pot-comparison article { padding:1rem; border:1px solid var(--line); border-radius:14px; background:var(--soft); }
+.scenario-pot-comparison h3 { margin-top:0; }
+.scenario-safety-note { border-left:4px solid var(--accent); }
+@media(max-width:700px){.what-if-grid,.scenario-pot-comparison{grid-template-columns:1fr;}}
