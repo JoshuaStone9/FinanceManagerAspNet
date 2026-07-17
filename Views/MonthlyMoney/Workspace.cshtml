@@ -78,9 +78,9 @@
         <small>Across recorded entries</small>
     </article>
     <article class="fm-metric-card">
-        <span>Carry-over</span>
-        <strong>@(Model.IsCarryOverEligible ? "Included" : "Excluded")</strong>
-        <small>@(Model.IsCarryOverEligible ? "Available during monthly carry over" : "Kept as a one-off monthly cost")</small>
+        <span>Monthly behaviour</span>
+        <strong>@(Model.SupportsPermanentEntries ? "Recurring supported" : "One-off only")</strong>
+        <small>@(Model.SupportsPermanentEntries ? "Choose which entries should repeat next month" : "These costs stay in the selected month")</small>
     </article>
 </section>
 
@@ -422,15 +422,15 @@
     <section class="fm-workspace-footer-card">
         <div>
             <p class="eyebrow">Next month</p>
-            <h2>Review recurring entries before carrying them forward</h2>
-            <p class="muted">You remain in control of every item and amount copied into the next month.</p>
+            <h2>Prepare @Model.NextMonth.ToString("MMMM yyyy")</h2>
+            <p class="muted">Add all missing recurring entries using their latest amounts. Existing entries are left unchanged.</p>
         </div>
         <a class="button primary"
            asp-controller="Dashboard"
-           asp-action="CarryOver"
+           asp-action="PrepareNextMonth"
            asp-route-year="@Model.Year"
            asp-route-month="@Model.Month">
-            Review carry over
+            Prepare next month
         </a>
     </section>
 }

@@ -304,3 +304,7 @@ Recurring status switches now update in place without a full-page reload. The co
 ## Phase 8.4.8.4 — Two-state recurring toggle
 
 Recurring controls now display only two visual states: **One-off** and **Repeats monthly**. The switch track and thumb use fixed positioning for consistent alignment, while AJAX confirmation remains available to screen readers without leaving a third-looking status message beneath the entry.
+
+## Phase 8.4.8.5 — Prepare next month
+
+The former editable Carry over review has been replaced by a compact Prepare next month workflow. It adds only missing recurring entries using their latest recorded amounts, never replaces existing destination-month entries, excludes one-off entries and extra expenses, and carries the completed month's excess or shortfall separately as a financial balance.

@@ -28,3 +28,7 @@ All five monthly workspaces now share a faster keyboard workflow. Enter submits 
 ### 8.4.8 Recurring Monthly Entries and Month Setup — Complete
 
 Recurring entry status, selectable month setup, latest-recorded-amount carry-forward, duplicate prevention and active/paused Money Pot safeguards are now implemented across the monthly workspaces. Extra expenses remain one-off by design. Recurring state is now displayed using a compact, explicit Repeats monthly / One-off switch within each row.
+
+### 8.4.8.5 — Prepare next month — Complete
+
+Replaced the duplicate editable Carry over review with a compact, non-destructive recurring-entry preparation flow. Carry-forward balances remain separate from recurring records.

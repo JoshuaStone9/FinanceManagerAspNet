@@ -215,49 +215,89 @@ public sealed class DashboardController(
     }
 
     [HttpGet]
-    public async Task<IActionResult> CarryOver(int year, int month)
+    public IActionResult CarryOver(int year, int month)
+        => RedirectToAction(nameof(PrepareNextMonth), new { year, month });
+
+    [HttpGet]
+    public async Task<IActionResult> PrepareNextMonth(int year, int month)
     {
         if (!CanEdit()) return LoginRedirect();
-        return View(new CarryOverViewModel { Year = year, Month = month, Items = await repo.GetCarryOverItemsAsync(year, month) });
+        if (month is < 1 or > 12) return BadRequest("Month must be between 1 and 12.");
+
+        var next = new DateTime(year, month, 1).AddMonths(1);
+        var definitions = new[]
+        {
+            (Source: "bills", Title: "Essential bills"),
+            (Source: "everyday_spending", Title: "Everyday spending"),
+            (Source: "investments", Title: "Investments"),
+            (Source: "savings", Title: "Money pots")
+        };
+
+        var sections = new List<PrepareNextMonthSection>();
+        foreach (var definition in definitions)
+        {
+            var items = await repo.GetMissingMonthlyEntryTemplatesAsync(
+                definition.Source,
+                next.Year,
+                next.Month);
+
+            if (items.Count == 0) continue;
+
+            sections.Add(new PrepareNextMonthSection
+            {
+                Source = definition.Source,
+                Title = definition.Title,
+                Items = items
+            });
+        }
+
+        return View(new PrepareNextMonthViewModel
+        {
+            Year = year,
+            Month = month,
+            Sections = sections,
+            MonthResult = await repo.GetMonthResultAsync(year, month)
+        });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ConfirmCarryOver(CarryOverViewModel model)
+    public async Task<IActionResult> ConfirmPrepareNextMonth(int year, int month)
     {
         if (!CanEdit()) return LoginRedirect();
+        if (month is < 1 or > 12) return BadRequest("Month must be between 1 and 12.");
 
-        var confirmedItems = model.Items
-            .Where(x =>
-                x.Include &&
-                x.Amount >= 0 &&
-                !string.IsNullOrWhiteSpace(x.Name) &&
-                !string.IsNullOrWhiteSpace(x.Source))
-            .ToList();
+        var next = new DateTime(year, month, 1).AddMonths(1);
+        var sources = new[] { "bills", "everyday_spending", "investments", "savings" };
+        var added = 0;
 
-        var carryAmount = await repo.CopyConfirmedItemsAsync(
-            model.Year,
-            model.Month,
-            confirmedItems);
-
-        var next = new DateTime(model.Year, model.Month, 1).AddMonths(1);
-
-        var carryText = carryAmount switch
+        foreach (var source in sources)
         {
-            > 0 => $" Excess of {carryAmount:C} was carried forward.",
-            < 0 => $" Shortfall of {Math.Abs(carryAmount):C} was carried forward.",
-            _ => " No excess or shortfall was carried forward."
+            var items = await repo.GetMissingMonthlyEntryTemplatesAsync(source, next.Year, next.Month);
+            added += await repo.SetupMonthFromTemplatesAsync(
+                next.Year,
+                next.Month,
+                source,
+                items.Select(x => new MonthSetupItemInput
+                {
+                    TemplateId = x.Id,
+                    Include = true,
+                    Amount = x.DefaultAmount
+                }));
+        }
+
+        var monthResult = await repo.CarryMonthResultForwardAsync(year, month);
+        var resultText = monthResult switch
+        {
+            > 0 => $" An excess of {monthResult:C} was carried forward.",
+            < 0 => $" A shortfall of {Math.Abs(monthResult):C} was carried forward.",
+            _ => " No excess or shortfall needed carrying forward."
         };
 
-        TempData["CarryMessage"] =
-            $"{confirmedItems.Count} confirmed item" +
-            $"{(confirmedItems.Count == 1 ? "" : "s")} copied to {next:MMMM yyyy}. " +
-            "Extra expenses were not carried over." + carryText;
+        TempData["Success"] = added == 0
+            ? $"{next:MMMM yyyy} was already prepared. Existing entries were left unchanged." + resultText
+            : $"{next:MMMM yyyy} prepared with {added} recurring entr{(added == 1 ? "y" : "ies")}." + resultText;
 
-        return RedirectToAction(nameof(Index), new
-        {
-            year = next.Year,
-            month = next.Month
-        });
+        return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month });
     }
 
     [HttpPost, ValidateAntiForgeryToken]

@@ -54,3 +54,17 @@ This makes recurrence visible at a glance and avoids the ambiguity of a button w
 ## Phase 8.4.8.4 — Toggle visual correction
 
 The recurring control has exactly two visible states: **One-off** and **Repeats monthly**. Inline save feedback is visually hidden after the update so it cannot be mistaken for a third state. The switch thumb is positioned absolutely within a fixed-size track to ensure that off and on positions align correctly.
+
+## Phase 8.4.8.5 — Prepare next month
+
+The old Carry over review duplicated recurring-entry management by presenting editable names, amounts and inclusion checkboxes again. It has been replaced with a compact confirmation screen that:
+
+- Summarises missing recurring entries for the next month.
+- Uses each entry's latest recorded amount.
+- Adds entries without replacing anything already recorded in the destination month.
+- Prevents duplicates through the existing month-setup safeguards.
+- Excludes one-off entries and extra expenses.
+- Carries excess or shortfall separately from recurring records.
+- Leaves amount adjustments to the dedicated monthly workspaces after preparation.
+
+The old `CarryOver` route redirects to `PrepareNextMonth` for compatibility.

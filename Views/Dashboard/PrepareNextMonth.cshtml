@@ -1,0 +1,100 @@
+@model FinanceManagerAspNet.Models.PrepareNextMonthViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = $"Prepare {Model.NextMonth:MMMM yyyy}";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+}
+
+<section class="hero card fm-prepare-next-hero">
+    <div>
+        <p class="eyebrow">Prepare next month</p>
+        <h1>Prepare @Model.NextMonth.ToString("MMMM yyyy")</h1>
+        <p class="muted">
+            Finance Manager found the recurring entries that are not already present in @Model.NextMonth.ToString("MMMM").
+            Their latest recorded amounts will be used, and existing entries will never be replaced.
+        </p>
+    </div>
+    <a class="button"
+       asp-controller="MonthlyMoney"
+       asp-action="EssentialBills"
+       asp-route-year="@Model.Year"
+       asp-route-month="@Model.Month">
+        Back to @Model.CurrentMonth.ToString("MMMM")
+    </a>
+</section>
+
+<section class="fm-prepare-next-summary">
+    <article class="fm-metric-card">
+        <span>Recurring entries</span>
+        <strong>@Model.RecurringEntryCount</strong>
+        <small>Ready to add without duplicates</small>
+    </article>
+    <article class="fm-metric-card">
+        <span>Starting monthly total</span>
+        <strong>@Model.RecurringTotal.ToString("C", gb)</strong>
+        <small>Using the latest recorded amounts</small>
+    </article>
+    <article class="fm-metric-card">
+        <span>@(Model.MonthResult >= 0 ? "Excess" : "Shortfall") to carry</span>
+        <strong>@Math.Abs(Model.MonthResult).ToString("C", gb)</strong>
+        <small>Financial balance carried separately from entries</small>
+    </article>
+</section>
+
+<section class="card fm-prepare-next-card">
+    @if (Model.RecurringEntryCount == 0)
+    {
+        <div class="fm-workspace-empty">
+            <i data-lucide="calendar-check"></i>
+            <strong>@Model.NextMonth.ToString("MMMM yyyy") is already prepared</strong>
+            <span>There are no missing recurring entries. Existing records will remain unchanged.</span>
+        </div>
+    }
+    else
+    {
+        <div class="fm-prepare-next-head">
+            <div>
+                <p class="eyebrow">What will be added</p>
+                <h2>@Model.RecurringEntryCount recurring entr@(Model.RecurringEntryCount == 1 ? "y" : "ies")</h2>
+                <p class="muted">One-off entries and extra expenses are not copied.</p>
+            </div>
+        </div>
+
+        <div class="fm-prepare-next-sections">
+            @foreach (var carrySection in Model.Sections)
+            {
+                <article class="fm-prepare-next-section">
+                    <div class="fm-prepare-next-section-head">
+                        <div>
+                            <strong>@carrySection.Title</strong>
+                            <span>@carrySection.Items.Count item@(carrySection.Items.Count == 1 ? "" : "s")</span>
+                        </div>
+                        <strong>@carrySection.Total.ToString("C", gb)</strong>
+                    </div>
+                    <div class="fm-prepare-next-items">
+                        @foreach (var item in carrySection.Items)
+                        {
+                            <div class="fm-prepare-next-item">
+                                <span>@item.Name</span>
+                                <strong>@item.DefaultAmount.ToString("C", gb)</strong>
+                            </div>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+
+    <form asp-action="ConfirmPrepareNextMonth" method="post" class="fm-prepare-next-actions">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="year" value="@Model.Year" />
+        <input type="hidden" name="month" value="@Model.Month" />
+        <div>
+            <strong>Ready to continue?</strong>
+            <span>You can adjust any amount from its monthly workspace after preparation.</span>
+        </div>
+        <button class="button primary" type="submit">
+            @(Model.RecurringEntryCount == 0 ? "Continue to next month" : $"Prepare {Model.NextMonth:MMMM}")
+        </button>
+    </form>
+</section>

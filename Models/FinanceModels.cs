@@ -853,6 +853,27 @@ public sealed class MonthSetupInput
     public List<MonthSetupItemInput> Items { get; set; } = [];
 }
 
+
+public sealed class PrepareNextMonthSection
+{
+    public string Source { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public IReadOnlyList<MonthlyEntryTemplate> Items { get; init; } = [];
+    public decimal Total => Items.Sum(x => x.DefaultAmount);
+}
+
+public sealed class PrepareNextMonthViewModel
+{
+    public int Year { get; init; }
+    public int Month { get; init; }
+    public DateTime CurrentMonth => new(Year, Month, 1);
+    public DateTime NextMonth => CurrentMonth.AddMonths(1);
+    public IReadOnlyList<PrepareNextMonthSection> Sections { get; init; } = [];
+    public int RecurringEntryCount => Sections.Sum(x => x.Items.Count);
+    public decimal RecurringTotal => Sections.Sum(x => x.Total);
+    public decimal MonthResult { get; init; }
+}
+
 public sealed class CarryOverItemInput
 {
     public bool Include { get; set; } = true;

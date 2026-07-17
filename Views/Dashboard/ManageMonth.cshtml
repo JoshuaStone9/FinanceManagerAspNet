@@ -110,7 +110,7 @@
 
 <section class="grid two"><article class="card"><p class="eyebrow">Virtual pots allocated</p><h2>@reserveAllocated.ToString("C", gb)</h2></article><article class="card"><p class="eyebrow">Reserve unassigned</p><h2 class="@(reserveUnallocated < 0 ? "bad" : "good")">@reserveUnallocated.ToString("C", gb)</h2><p><a asp-controller="SavingPots" asp-action="Index">Manage reserve and virtual pots</a></p></article></section>
 @if (canEdit && Model.RemainingFund > 0) { <section class="card"><p class="eyebrow">Finish the plan</p><h2>Allocate the remaining @Model.RemainingFund.ToString("C", gb)</h2><form asp-action="AllocateRemainingToReserve" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Amount<input name="amount" type="number" step="0.01" min="0" max="@Model.RemainingFund" value="@Model.RemainingFund"/></label><button class="primary">Add to unallocated reserve</button></form></section> }
-@if (canEdit) { <section class="card"><p class="eyebrow">Next month</p><h2>Carry over and confirm</h2><p class="muted">Review every recurring entry before it is copied. Extra expenses remain excluded.</p><a class="button primary" asp-action="CarryOver" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Review carry over all</a></section> }
+@if (canEdit) { <section class="card"><p class="eyebrow">Next month</p><h2>Prepare next month</h2><p class="muted">Add missing recurring entries using their latest amounts without replacing anything already recorded.</p><a class="button primary" asp-action="PrepareNextMonth" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Prepare next month</a></section> }
 
 @section Scripts {
 <script>

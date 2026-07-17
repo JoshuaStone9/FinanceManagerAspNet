@@ -1016,6 +1016,14 @@ WHEN NOT MATCHED THEN INSERT([year],[month],amount,source_year,source_month) VAL
             ("@year", year), ("@month", month), ("@amount", amount), ("@sourceYear", sourceYear), ("@sourceMonth", sourceMonth));
     }
 
+    public async Task<decimal> CarryMonthResultForwardAsync(int year, int month)
+    {
+        var next = new DateTime(year, month, 1).AddMonths(1);
+        var monthResult = await GetMonthResultAsync(year, month);
+        await SaveCarryForwardAsync(next.Year, next.Month, monthResult, year, month);
+        return monthResult;
+    }
+
     public async Task<decimal> CopyConfirmedItemsAsync(int year, int month, IEnumerable<CarryOverItemInput> items)
     {
         var to = new DateTime(year, month, 1).AddMonths(1);

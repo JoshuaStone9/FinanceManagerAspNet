@@ -855,3 +855,18 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-recurring-feedback{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .fm-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 
+
+/* Phase 8.4.8.5: prepare next month */
+.fm-prepare-next-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.fm-prepare-next-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.fm-prepare-next-card{display:grid;gap:20px}
+.fm-prepare-next-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.fm-prepare-next-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.fm-prepare-next-section{border:1px solid var(--line);border-radius:16px;background:rgba(15,23,42,.32);overflow:hidden}
+.fm-prepare-next-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;border-bottom:1px solid var(--line)}
+.fm-prepare-next-section-head>div{display:grid;gap:3px}.fm-prepare-next-section-head span{color:var(--muted);font-size:.82rem}
+.fm-prepare-next-items{display:grid}.fm-prepare-next-item{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 16px;border-bottom:1px solid rgba(148,163,184,.1)}
+.fm-prepare-next-item:last-child{border-bottom:0}.fm-prepare-next-item span{color:var(--muted)}
+.fm-prepare-next-actions{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-top:18px;border-top:1px solid var(--line)}
+.fm-prepare-next-actions>div{display:grid;gap:4px}.fm-prepare-next-actions span{color:var(--muted);font-size:.9rem}
+@media(max-width:900px){.fm-prepare-next-summary,.fm-prepare-next-sections{grid-template-columns:1fr}.fm-prepare-next-hero,.fm-prepare-next-actions{align-items:stretch;flex-direction:column}}
