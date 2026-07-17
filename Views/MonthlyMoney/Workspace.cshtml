@@ -91,7 +91,7 @@
             <div class="fm-workspace-rows">
                 @foreach (var row in Model.Rows.OrderBy(x => x.Date).ThenBy(x => x.DisplayName))
                 {
-                    <article class="fm-workspace-row">
+                    <article class="fm-workspace-row" id="entry-@row.Id">
                         <div class="fm-workspace-row-icon"><i data-lucide="@Model.Icon"></i></div>
                         <div class="fm-workspace-row-copy">
                             <strong>@row.DisplayName</strong>
@@ -107,9 +107,44 @@
                                 <small>@row.Notes</small>
                             }
                         </div>
-                        <div class="fm-workspace-row-amount">@row.Amount.ToString("C", gb)</div>
                         @if (canEdit)
                         {
+                            <div class="fm-workspace-row-amount">
+                                <button class="fm-inline-amount-trigger"
+                                        type="button"
+                                        aria-expanded="false"
+                                        aria-controls="amount-editor-@row.Id"
+                                        title="Update this month's amount">
+                                    <span>@row.Amount.ToString("C", gb)</span>
+                                    <i data-lucide="pencil"></i>
+                                </button>
+
+                                <form id="amount-editor-@row.Id"
+                                      class="fm-inline-amount-form"
+                                      asp-controller="MonthlyMoney"
+                                      asp-action="UpdateAmount"
+                                      method="post"
+                                      hidden>
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="source" value="@row.Source" />
+                                    <input type="hidden" name="id" value="@row.Id" />
+                                    <input type="hidden" name="year" value="@Model.Year" />
+                                    <input type="hidden" name="month" value="@Model.Month" />
+                                    <span aria-hidden="true">£</span>
+                                    <input class="fm-inline-amount-input"
+                                           name="amount"
+                                           type="number"
+                                           min="0"
+                                           step="0.01"
+                                           inputmode="decimal"
+                                           value="@row.Amount.ToString("0.00", CultureInfo.InvariantCulture)"
+                                           aria-label="Amount for @row.DisplayName"
+                                           required />
+                                    <button class="button primary" type="submit">Save</button>
+                                    <button class="button fm-inline-amount-cancel" type="button">Cancel</button>
+                                </form>
+                            </div>
+
                             <div class="fm-workspace-row-actions">
                                 <a class="button"
                                    asp-controller="Dashboard"
@@ -133,6 +168,10 @@
                                     <button class="button danger-inline" type="submit">Delete</button>
                                 </form>
                             </div>
+                        }
+                        else
+                        {
+                            <div class="fm-workspace-row-amount">@row.Amount.ToString("C", gb)</div>
                         }
                     </article>
                 }
@@ -291,5 +330,46 @@
                 form.querySelector('.payment-amount')?.focus();
             });
         });
+
+        document.querySelectorAll('.fm-workspace-row').forEach(row => {
+            const trigger = row.querySelector('.fm-inline-amount-trigger');
+            const editor = row.querySelector('.fm-inline-amount-form');
+            const input = row.querySelector('.fm-inline-amount-input');
+            const cancel = row.querySelector('.fm-inline-amount-cancel');
+
+            if (!trigger || !editor || !input || !cancel) {
+                return;
+            }
+
+            const openEditor = () => {
+                trigger.hidden = true;
+                editor.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+                input.focus();
+                input.select();
+            };
+
+            const closeEditor = () => {
+                editor.hidden = true;
+                trigger.hidden = false;
+                trigger.setAttribute('aria-expanded', 'false');
+                trigger.focus();
+            };
+
+            trigger.addEventListener('click', openEditor);
+            cancel.addEventListener('click', closeEditor);
+
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeEditor();
+                }
+            });
+        });
+
+        if (window.location.hash) {
+            const updatedRow = document.querySelector(window.location.hash);
+            updatedRow?.classList.add('fm-workspace-row-updated');
+        }
     </script>
 }

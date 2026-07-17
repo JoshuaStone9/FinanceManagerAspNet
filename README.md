@@ -259,3 +259,8 @@ The sidebar now includes direct monthly-money navigation for Essential Bills, Ev
 ## Phase 8.4.1–8.4.4 — Monthly money workspaces
 
 Essential Bills, Everyday Spending, Extra Expenses and Investments now open as dedicated monthly workspaces rather than filtered sections of the dashboard management page. The workspaces share a consistent responsive layout, month navigation, existing-entry prefilling, entry history, edit/delete actions and category-specific fields. Dashboard links and sidebar navigation preserve the selected month. Extra expenses remain explicitly excluded from carry-over, while investments remain separate from asset holdings and valuations.
+
+
+## Phase 8.4.4.1 — Inline amount editing
+
+Recorded monthly entries now support click-to-edit amounts in Essential Bills, Everyday Spending, Extra Expenses and Investments. Enter saves, Escape cancels, and the update changes only the selected monthly record before returning to the same row.

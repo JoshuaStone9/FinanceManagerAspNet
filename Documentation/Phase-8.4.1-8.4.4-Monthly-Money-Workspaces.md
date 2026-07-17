@@ -54,6 +54,23 @@ Dashboard cards and sidebar entries route to the dedicated workspaces. Year and 
 - Assets and monthly investment contributions remain separate concepts.
 - Extra expenses remain excluded from Carry over all.
 
+## Phase 8.4.4.1 — Inline amount editing
+
+Monthly workspace amounts can be updated directly from each recorded-entry row.
+
+- Select the displayed amount to open a compact inline editor.
+- The current amount is selected automatically.
+- Press Enter to save.
+- Press Escape or select Cancel to close without saving.
+- Only the selected monthly record is updated.
+- Full Edit remains available for the name, date, category, type, duration and notes.
+- After saving, the workspace returns to the same month and entry.
+- Totals and averages are recalculated from the updated database value.
+- The feature is available across Essential Bills, Everyday Spending, Extra Expenses and Investments.
+- Logged-out users remain read-only.
+
+The update action reloads the existing payment before saving and preserves every field except `Amount`.
+
 ## Deferred work
 
 Phase 8.4.5 will implement the Household Reserve Existing Pot / New Pot allocation picker. Shared component extraction and the complete keyboard-first workflow remain Phase 8.4.6–8.4.7.

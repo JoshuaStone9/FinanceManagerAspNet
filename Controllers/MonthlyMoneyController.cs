@@ -87,6 +87,57 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             year: year,
             month: month);
 
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateAmount(
+        string source,
+        int id,
+        decimal amount,
+        int year,
+        int month)
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return Unauthorized();
+
+        if (month is < 1 or > 12)
+            return BadRequest("Month must be between 1 and 12.");
+
+        if (amount < 0)
+            return BadRequest("Amount cannot be negative.");
+
+        var existing = await repo.GetPaymentAsync(source, id);
+        if (existing is null)
+            return NotFound();
+
+        await repo.UpdatePaymentAsync(
+            source,
+            id,
+            existing.Name,
+            amount,
+            existing.Date,
+            existing.Category,
+            existing.Type,
+            existing.Length,
+            existing.Notes);
+
+        TempData["Success"] = $"{existing.DisplayName} amount updated.";
+
+        var actionName = GetWorkspaceAction(source);
+        var destination = Url.Action(actionName, new { year, month });
+        return Redirect($"{destination}#entry-{id}");
+    }
+
+    private static string GetWorkspaceAction(string source)
+        => source switch
+        {
+            "bills" => nameof(EssentialBills),
+            "everyday_spending" => nameof(EverydaySpending),
+            "extra_expenses" => nameof(ExtraExpenses),
+            "investments" => nameof(Investments),
+            _ => throw new ArgumentOutOfRangeException(nameof(source), "Unknown monthly money workspace.")
+        };
+
     private async Task<IActionResult> BuildWorkspaceAsync(
         string source,
         string actionName,
