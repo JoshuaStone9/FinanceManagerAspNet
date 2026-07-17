@@ -1,3 +1,11 @@
+## Phase 8.4.1 Batch 1 — Allocation pot-link data foundation
+
+- Added nullable reserve-pot links and pot-name snapshots to dashboard reserve allocations.
+- Added safe, idempotent backfill for unique exact historical name matches.
+- Added foreign-key and index protection without deleting unmatched history.
+- Extended payment reads with linked-pot metadata and display-name fallback.
+- Added repository queries needed by the upcoming allocation picker service and UI.
+
 ## Phase 7.5–7.6 – Scenario Management and Dashboard Integration
 
 - Added persistent saved forecast scenarios.

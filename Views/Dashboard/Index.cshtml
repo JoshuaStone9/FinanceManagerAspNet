@@ -3,287 +3,197 @@
 @using System.Globalization
 @using System.Text.Json
 @{
-    ViewData["Title"] = "Monthly Budget";
+    ViewData["Title"] = "Dashboard";
     var gb = CultureInfo.GetCultureInfo("en-GB");
     var canEdit = User.Identity?.IsAuthenticated == true;
     var reserveAllocated = (decimal)(ViewBag.ReserveAllocated ?? 0m);
     var reserveUnallocated = (decimal)(ViewBag.ReserveUnallocated ?? 0m);
+    var journey = Model.Experience.Journey;
+    var largestExtra = Model.ExtraExpenses.OrderByDescending(x => x.Amount).FirstOrDefault();
     var budgetSections = new[]
     {
         (Title: "Essential bills", Source: "bills", Anchor: "bills", Rows: Model.Bills, Help: "Mortgage, council tax, utilities, insurance and fixed bills.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingBills),
         (Title: "Everyday spending", Source: "everyday_spending", Anchor: "everyday", Rows: Model.Expenses, Help: "Food, fuel and general monthly allowances. These can be carried over.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingEveryday),
         (Title: "Extra expenses", Source: "extra_expenses", Anchor: "extras", Rows: Model.ExtraExpenses, Help: "One-off costs for this month only. These are never included in Carry over all.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingExtras),
         (Title: "Investments", Source: "investments", Anchor: "investments", Rows: Model.Investments, Help: "Long-term investments kept separate from the household reserve.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingInvestments),
-        (Title: "Household reserve allocations", Source: "savings", Anchor: "savings", Rows: Model.Savings, Help: "Each allocation also increases the matching virtual pot and household reserve total.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingSavings)
+        (Title: "Household reserve allocations", Source: "savings", Anchor: "savings", Rows: Model.Savings, Help: "Each allocation increases the matching virtual pot and household reserve total.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingSavings)
     };
 }
 
-<header class="fm-dashboard-welcome">
+<header class="fm-dashboard-hero">
     <div>
         <p class="eyebrow">Finance Manager command centre</p>
         <h1>@(DateTime.Now.Hour < 12 ? "Good morning" : DateTime.Now.Hour < 18 ? "Good afternoon" : "Good evening")</h1>
-        <p class="muted">Review this month's position, reserve health, upcoming actions and 12-month outlook.</p>
+        <p>See where this month's money has gone, what remains and what needs attention next.</p>
+        <time datetime="@DateTime.Today.ToString("yyyy-MM-dd")">@DateTime.Today.ToString("dddd, d MMMM yyyy")</time>
     </div>
     <nav class="fm-dashboard-month" aria-label="Change dashboard month">
-        <a class="fm-month-button" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month" title="Previous month">
-            <i data-lucide="chevron-left"></i>
-        </a>
+        <a class="fm-month-button" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month"><i data-lucide="chevron-left"></i></a>
         <span class="fm-month-label" aria-live="polite">@Model.MonthStart.ToString("MMMM yyyy")</span>
-        <a class="fm-month-button" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month" title="Next month">
-            <i data-lucide="chevron-right"></i>
-        </a>
+        <a class="fm-month-button" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month"><i data-lucide="chevron-right"></i></a>
     </nav>
 </header>
 
-@if (TempData["CarryMessage"] != null) { <section class="card"><strong>@TempData["CarryMessage"]</strong></section> }
-@if (TempData["Success"] != null) { <section class="card"><strong>@TempData["Success"]</strong></section> }
+@if (TempData["CarryMessage"] != null) { <div class="fm-dashboard-notice">@TempData["CarryMessage"]</div> }
+@if (TempData["Success"] != null) { <div class="fm-dashboard-notice">@TempData["Success"]</div> }
 
-<div class="fm-dashboard-section-title"><div><h2>Overview</h2><p>Your most important financial signals for the selected month.</p></div></div>
-<section class="card intelligence-card" id="action-centre">
-    <div class="section-heading">
-        <div>
-            <p class="eyebrow">Financial Action Centre</p>
-            <h2>What needs attention</h2>
-            <p class="muted">Live funding, reminder, recovery and target information from the Household Reserve.</p>
-        </div>
-        <div class="actions">
-            <a class="button" asp-controller="Reminders" asp-action="Index">View reminders</a>
-            <a class="button primary" asp-controller="SavingPots" asp-action="Index" asp-fragment="recommendations">View recommendations</a>
-        </div>
-    </div>
-    <div class="action-centre-grid">
-        <a class="action-centre-item @(Model.Intelligence.DueReminderCount > 0 ? "attention-bad" : "attention-good")" asp-controller="Reminders" asp-action="Index">
-            <span class="action-count">@Model.Intelligence.DueReminderCount</span>
-            <span>Funding reminders due</span>
-        </a>
-        <a class="action-centre-item @(Model.Intelligence.OverdueOrMissedCount > 0 ? "attention-warn" : "attention-good")" asp-controller="SavingPots" asp-action="Index">
-            <span class="action-count">@Model.Intelligence.OverdueOrMissedCount</span>
-            <span>Overdue or missed pots</span>
-        </a>
-        <a class="action-centre-item @(Model.Intelligence.RecommendedAllocationTotal > 0 ? "attention-good" : "")" asp-controller="SavingPots" asp-action="Index" asp-fragment="recommendations">
-            <span class="action-count">@Model.Intelligence.RecommendedAllocationTotal.ToString("C", gb)</span>
-            <span>Recommended recovery</span>
-        </a>
-        <a class="action-centre-item @(Model.Intelligence.ApproachingTargetCount > 0 ? "attention-warn" : "attention-good")" href="#upcoming-targets">
-            <span class="action-count">@Model.Intelligence.ApproachingTargetCount</span>
-            <span>Targets due within 30 days</span>
-        </a>
+<section class="fm-dashboard-section" aria-labelledby="overview-title">
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Financial overview</p><h2 id="overview-title">Your month at a glance</h2></div><span>@Model.Experience.RecordedItemCount recorded items</span></div>
+    <div class="fm-metric-grid">
+        <article class="fm-metric-card"><span>Available income</span><strong>@Model.EffectiveIncome.ToString("C", gb)</strong><small>@Model.MonthlyIncome.ToString("C", gb) income · @Model.CarryForwardAmount.ToString("C", gb) carry forward</small></article>
+        <article class="fm-metric-card"><span>Core spending</span><strong>@((Model.BillsTotal + Model.ExpensesTotal + Model.ExtraExpensesTotal).ToString("C", gb))</strong><small>Bills, everyday and extra expenses</small></article>
+        <article class="fm-metric-card"><span>Allocated to the future</span><strong>@Model.Experience.AllocatedToFuture.ToString("C", gb)</strong><small>Investments and Household Reserve</small></article>
+        <article class="fm-metric-card @(Model.IsOverBudget ? "is-danger" : "is-positive")"><span>Remaining</span><strong>@Model.RemainingFund.ToString("C", gb)</strong><small>@(Model.IsOverBudget ? "The month is currently over budget" : "Available after all recorded allocations")</small></article>
     </div>
 </section>
 
-<div class="fm-dashboard-section-title fm-dashboard-section"><div><h2>Planning outlook</h2><p>See how the current plan may develop over the next 12 months.</p></div></div>
-<section class="card forecast-dashboard-summary" id="forecast-outlook">
-    <div class="section-heading">
-        <div><p class="eyebrow">Phase 7.6 · 12-month outlook</p><h2>Forecast summary</h2><p class="muted">Based on @Model.ForecastSummary.ScenarioLabel. A preferred scenario remains planning-only and does not change live data.</p></div>
-        <div class="what-if-actions"><a class="button" asp-controller="Forecast" asp-action="Index" asp-route-months="12">Open forecast</a><a class="button" asp-controller="Forecast" asp-action="Scenarios">Manage scenarios</a></div>
+<section class="fm-dashboard-section" aria-labelledby="journey-title">
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Money journey</p><h2 id="journey-title">How this month's money flows</h2></div><a href="#manage-month">Manage this month</a></div>
+    <div class="fm-money-journey" role="list">
+        <div class="fm-journey-step" role="listitem"><i data-lucide="wallet-cards"></i><span>Income + carry forward</span><strong>@journey.EffectiveIncome.ToString("C", gb)</strong></div>
+        <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
+        <div class="fm-journey-step" role="listitem"><i data-lucide="receipt"></i><span>Essential bills</span><strong>@((-journey.EssentialBills).ToString("C", gb))</strong></div>
+        <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
+        <div class="fm-journey-step" role="listitem"><i data-lucide="shopping-basket"></i><span>Everyday spending</span><strong>@((-journey.EverydaySpending).ToString("C", gb))</strong></div>
+        <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
+        <div class="fm-journey-step" role="listitem"><i data-lucide="circle-plus"></i><span>Extra expenses</span><strong>@((-journey.ExtraExpenses).ToString("C", gb))</strong></div>
+        <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
+        <div class="fm-journey-step is-highlight" role="listitem"><i data-lucide="circle-dollar-sign"></i><span>Available before future allocations</span><strong>@journey.AvailableBeforeFutureAllocations.ToString("C", gb)</strong></div>
+        <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
+        <div class="fm-journey-step" role="listitem"><i data-lucide="landmark"></i><span>Investments + reserve</span><strong>@((-(journey.Investments + journey.HouseholdReserveAllocations)).ToString("C", gb))</strong></div>
+        <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
+        <div class="fm-journey-step @(journey.IsOverBudget ? "is-danger" : "is-positive")" role="listitem"><i data-lucide="flag"></i><span>Final remaining</span><strong>@journey.Remaining.ToString("C", gb)</strong></div>
     </div>
-    <div class="grid cards-4">
-        <article class="forecast-metric"><span>Projected reserve</span><strong>@Model.ForecastSummary.ProjectedReserveBalance.ToString("C", gb)</strong></article>
-        <article class="forecast-metric"><span>Projected interest</span><strong class="good">@Model.ForecastSummary.ProjectedInterest.ToString("C", gb)</strong></article>
-        <article class="forecast-metric"><span>Goals at risk</span><strong class="@(Model.ForecastSummary.GoalsAtRisk > 0 ? "bad" : "good")">@Model.ForecastSummary.GoalsAtRisk</strong></article>
-        <article class="forecast-metric"><span>Goals expected to complete</span><strong class="good">@Model.ForecastSummary.GoalsExpectedToComplete</strong></article>
+</section>
+
+<section class="fm-dashboard-section" aria-labelledby="month-title">
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">This month</p><h2 id="month-title">Spending and reserve summaries</h2></div></div>
+    <div class="fm-summary-grid">
+        @foreach (var summary in Model.Experience.MonthlySections)
+        {
+            <article class="fm-summary-card">
+                <div class="fm-summary-icon"><i data-lucide="@summary.Icon"></i></div>
+                <div><h3>@summary.Title</h3><strong>@summary.Amount.ToString("C", gb)</strong><p>@summary.ItemCount item@(summary.ItemCount == 1 ? "" : "s") · @summary.Description</p>
+                    @if (summary.SecondaryAmount.HasValue) { <small>@summary.SecondaryLabel: @summary.SecondaryAmount.Value.ToString("C", gb)</small> }
+                </div>
+                <a href="#@summary.Anchor">View details <i data-lucide="arrow-right"></i></a>
+            </article>
+        }
+    </div>
+    @if (largestExtra is not null)
+    {
+        <p class="fm-dashboard-context"><strong>Largest extra expense:</strong> @largestExtra.Name — @largestExtra.Amount.ToString("C", gb)</p>
+    }
+</section>
+
+<section class="fm-dashboard-section" aria-labelledby="planning-title">
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Planning</p><h2 id="planning-title">Reserve health and 12-month outlook</h2></div></div>
+    <div class="fm-planning-grid">
+        <article class="fm-feature-card">
+            <div class="fm-card-heading"><div><span>Household Reserve</span><h3>@Model.TotalGoalBalance.ToString("C", gb)</h3></div><i data-lucide="landmark"></i></div>
+            <div class="fm-inline-metrics"><div><strong>@Model.Intelligence.ActivePotCount</strong><span>Active pots</span></div><div><strong>@Model.Intelligence.FundedThisMonth.ToString("C", gb)</strong><span>Funded this month</span></div><div><strong>@reserveUnallocated.ToString("C", gb)</strong><span>Unassigned</span></div></div>
+            <a class="button" asp-controller="SavingPots" asp-action="Index">Open Household Reserve</a>
+        </article>
+        <article class="fm-feature-card">
+            <div class="fm-card-heading"><div><span>12-month forecast</span><h3>@Model.ForecastSummary.ProjectedReserveBalance.ToString("C", gb)</h3><small>Based on @Model.ForecastSummary.ScenarioLabel</small></div><i data-lucide="chart-no-axes-combined"></i></div>
+            <div class="fm-inline-metrics"><div><strong>@Model.ForecastSummary.ProjectedInterest.ToString("C", gb)</strong><span>Interest</span></div><div><strong class="@(Model.ForecastSummary.GoalsAtRisk > 0 ? "bad" : "good")">@Model.ForecastSummary.GoalsAtRisk</strong><span>Goals at risk</span></div><div><strong>@Model.ForecastSummary.GoalsExpectedToComplete</strong><span>Completing</span></div></div>
+            <a class="button" asp-controller="Forecast" asp-action="Index" asp-route-months="12">View forecast</a>
+        </article>
     </div>
 </section>
 
-<section class="grid cards-4">
-    <article class="card"><p class="eyebrow">Active pots</p><h2>@Model.Intelligence.ActivePotCount</h2><p class="muted">Currently included in funding health.</p></article>
-    <article class="card"><p class="eyebrow">Monthly planned</p><h2>@Model.Intelligence.MonthlyPlanned.ToString("C", gb)</h2><p class="muted">Excludes paused and irregular pots.</p></article>
-    <article class="card"><p class="eyebrow">Funded this month</p><h2 class="good">@Model.Intelligence.FundedThisMonth.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Still to fund</p><h2 class="@(Model.Intelligence.RemainingThisMonth > 0 ? "warn" : "good")">@Model.Intelligence.RemainingThisMonth.ToString("C", gb)</h2></article>
+<section class="fm-dashboard-section" aria-labelledby="attention-title">
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Attention and activity</p><h2 id="attention-title">What happens next</h2></div></div>
+    <div class="fm-attention-grid">
+        <article class="fm-list-card">
+            <div class="fm-card-heading"><div><span>Upcoming actions</span><h3>@Model.Experience.UpcomingActions.Count item@(Model.Experience.UpcomingActions.Count == 1 ? "" : "s")</h3></div><i data-lucide="list-checks"></i></div>
+            @if (Model.Experience.UpcomingActions.Count == 0) { <div class="fm-empty-state"><i data-lucide="circle-check-big"></i><strong>Nothing needs attention</strong><span>Your current reminders and targets are clear.</span></div> }
+            else { <div class="fm-action-list">@foreach (var action in Model.Experience.UpcomingActions) { <a class="severity-@action.Severity" href="@action.Url"><span><strong>@action.Title</strong><small>@action.Detail</small></span><i data-lucide="chevron-right"></i></a> }</div> }
+        </article>
+        <article class="fm-list-card">
+            <div class="fm-card-heading"><div><span>Recent activity</span><h3>Latest monthly entries</h3></div><i data-lucide="history"></i></div>
+            @if (Model.Experience.RecentActivity.Count == 0) { <div class="fm-empty-state"><i data-lucide="inbox"></i><strong>No activity yet</strong><span>Add the first entry for @Model.MonthStart.ToString("MMMM").</span></div> }
+            else { <div class="fm-activity-list">@foreach (var item in Model.Experience.RecentActivity) { <div><i data-lucide="@item.Icon"></i><span><strong>@item.Title</strong><small>@item.Detail · @item.OccurredAt.ToString("dd MMM")</small></span>@if (item.Amount.HasValue) { <b>@item.Amount.Value.ToString("C", gb)</b> }</div> }</div> }
+        </article>
+    </div>
 </section>
 
-<section class="grid two">
-    <article class="card">
-        <p class="eyebrow">Funding health</p>
-        <h2>Pot status overview</h2>
-        <div class="health-grid">
-            <div><strong class="good">@Model.Intelligence.HealthyCount</strong><span>Healthy</span></div>
-            <div><strong class="bad">@Model.Intelligence.OverdueOrMissedCount</strong><span>Overdue / missed</span></div>
-            <div><strong class="warn">@Model.Intelligence.PartiallyFundedCount</strong><span>Partially funded</span></div>
-            <div><strong>@Model.Intelligence.PausedCount</strong><span>Paused</span></div>
-            <div><strong class="good">@Model.Intelligence.CompletedCount</strong><span>Completed</span></div>
-        </div>
-    </article>
-    <article class="card">
-        <p class="eyebrow">Recommended recovery</p>
-        <h2>@Model.Intelligence.RecommendedAllocationTotal.ToString("C", gb) suggested</h2>
-        <p class="muted">Available unassigned reserve: @Model.Intelligence.AvailableReserve.ToString("C", gb)</p>
-        @if (Model.Intelligence.Recommendations.Count == 0)
-        {
-            <p class="good"><strong>No recovery allocation is currently required.</strong></p>
-        }
-        else
-        {
-            <div class="compact-list">
-                @foreach (var recommendation in Model.Intelligence.Recommendations.Take(4))
-                {
-                    <div><span>@recommendation.PotName</span><strong>@recommendation.RecommendedAmount.ToString("C", gb)</strong></div>
-                }
-            </div>
-            <p class="muted">Reserve remaining afterwards: @Model.Intelligence.RemainingReserveAfterRecommendations.ToString("C", gb)</p>
-            <a class="button primary" asp-controller="SavingPots" asp-action="Index" asp-fragment="recommendations">Open recommendations</a>
-        }
-    </article>
+<section class="fm-dashboard-section" aria-labelledby="quick-title">
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Quick actions</p><h2 id="quick-title">Go straight to the task</h2></div></div>
+    <div class="fm-quick-actions">
+        <a href="#income"><i data-lucide="badge-pound-sterling"></i><span><strong>Update income</strong><small>Set this month's household income</small></span></a>
+        <a href="#bills"><i data-lucide="receipt"></i><span><strong>Add a bill</strong><small>Record a fixed commitment</small></span></a>
+        <a href="#extras"><i data-lucide="circle-plus"></i><span><strong>Add an extra expense</strong><small>Capture a one-off cost</small></span></a>
+        <a href="#savings"><i data-lucide="landmark"></i><span><strong>Add reserve allocation</strong><small>Allocate money to a reserve pot</small></span></a>
+        <a asp-controller="Forecast" asp-action="Index"><i data-lucide="chart-no-axes-combined"></i><span><strong>Create a forecast</strong><small>Explore the future plan</small></span></a>
+    </div>
 </section>
 
-<section class="grid two">
-    <article class="card">
-        <p class="eyebrow">Reminder preview</p>
-        <h2>Due reminders</h2>
-        @if (Model.Intelligence.DueReminders.Count == 0)
-        {
-            <p class="good"><strong>Nothing is due today.</strong></p>
-        }
-        else
-        {
-            <div class="compact-list">
-                @foreach (var reminder in Model.Intelligence.DueReminders)
-                {
-                    <div>
-                        <span><strong>@reminder.Title</strong><br/><small class="muted">@(reminder.PotName ?? "General") · @reminder.EffectiveDueDate.ToString("dd MMM yyyy")</small></span>
-                    </div>
-                }
-            </div>
-            <a class="button" asp-controller="Reminders" asp-action="Index">View all reminders</a>
-        }
-    </article>
-    <article class="card" id="upcoming-targets">
-        <p class="eyebrow">Upcoming targets</p>
-        <h2>Next target dates</h2>
-        @if (Model.Intelligence.UpcomingTargets.Count == 0)
-        {
-            <p class="muted">No incomplete target dates are currently scheduled.</p>
-        }
-        else
-        {
-            <div class="compact-list">
-                @foreach (var target in Model.Intelligence.UpcomingTargets)
-                {
-                    <div>
-                        <span><strong>@target.PotName</strong><br/><small class="muted">@target.DueDate.ToString("dd MMM yyyy") · @target.RemainingAmount.ToString("C", gb) remaining</small></span>
-                        <strong class="@target.UrgencyCssClass">@target.DaysRemaining days</strong>
-                    </div>
-                }
-            </div>
-        }
-    </article>
-</section>
-
-<div class="fm-dashboard-section-title fm-dashboard-section"><div><h2>Monthly position</h2><p>Income, allocations, remaining money and reserve position.</p></div></div>
-<section class="grid cards-4">
-    <article class="card">
-        <p class="eyebrow">Available funds</p>
-        <h2>@Model.EffectiveIncome.ToString("C", gb)</h2>
-        <p class="muted">Income @Model.MonthlyIncome.ToString("C", gb)</p>
-        <p class="@(Model.CarryForwardAmount < 0 ? "bad" : "good")">
-            Carry forward @(Model.CarryForwardAmount >= 0 ? "+" : "-")@Math.Abs(Model.CarryForwardAmount).ToString("C", gb)
-        </p>
-        <p class="muted">@(Model.HasCarryForwardOverride ? "Manual override" : "Calculated automatically")</p>
-        @if (canEdit) { <p><a href="#carry-forward">Edit carry forward</a></p> }
-    </article>
-    <article class="card"><p class="eyebrow">Allocated</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2><p>Includes one-off extra expenses.</p></article>
-    <article class="card"><p class="eyebrow">Remaining</p><h2 class="@(Model.IsOverBudget ? "bad" : "good")">@Model.RemainingFund.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Household reserve</p><h2>@Model.TotalGoalBalance.ToString("C", gb)</h2><p>@ViewBag.ReserveProvider · @((decimal)ViewBag.ReserveInterestRate)%</p></article>
-</section>
+<div id="manage-month" class="fm-dashboard-section-head fm-manage-heading"><div><p class="eyebrow">Manage this month</p><h2>Detailed entries and adjustments</h2><p>Review and edit the records behind the command centre.</p></div></div>
 
 @if (canEdit)
 {
-<section class="card" id="carry-forward">
-    <p class="eyebrow">Carry forward</p>
-    <h2>Edit this month's starting adjustment</h2>
-    <p class="muted">Calculated from the previous month: @Model.CarryForwardCalculated.ToString("C", gb). Enter a positive amount for excess or a negative amount for shortfall.</p>
-    <form asp-action="SaveCarryForwardOverride" method="post" class="account-form">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="year" value="@Model.Year"/>
-        <input type="hidden" name="month" value="@Model.Month"/>
-        <label>Carry forward amount<input name="amount" type="number" step="0.01" value="@Model.CarryForwardAmount"/></label>
-        <label>Reason (optional)<input name="reason" maxlength="500" value="@Model.CarryForwardOverrideReason" placeholder="e.g. Corrected after moving money"/></label>
-        <button class="primary">Save override</button>
-    </form>
-    @if (Model.HasCarryForwardOverride)
-    {
-        <form asp-action="RecalculateCarryForward" method="post" style="margin-top:12px" data-confirm="Remove the manual override and use the calculated amount from the previous month?">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="year" value="@Model.Year"/>
-            <input type="hidden" name="month" value="@Model.Month"/>
-            <button class="button">Recalculate from previous month</button>
-        </form>
-    }
-</section>
-
-<section class="card" id="income"><p class="eyebrow">Start the month</p><h2>Enter household income</h2>
-<form asp-action="SaveIncome" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income<input name="amount" type="number" step="0.01" min="0" value="@Model.MonthlyIncome"/></label><input type="hidden" name="sickDays" value="@Model.SickDays"/><button class="primary">Save income</button></form>
-</section>
+<section class="card" id="carry-forward"><p class="eyebrow">Carry forward</p><h2>Edit this month's starting adjustment</h2><p class="muted">Calculated from the previous month: @Model.CarryForwardCalculated.ToString("C", gb).</p><form asp-action="SaveCarryForwardOverride" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Carry forward amount<input name="amount" type="number" step="0.01" value="@Model.CarryForwardAmount"/></label><label>Reason (optional)<input name="reason" maxlength="500" value="@Model.CarryForwardOverrideReason"/></label><button class="primary">Save override</button></form>@if (Model.HasCarryForwardOverride) { <form asp-action="RecalculateCarryForward" method="post" style="margin-top:12px" data-confirm="Remove the manual override?">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><button class="button">Use calculated amount</button></form> }</section>
+<section class="card" id="income"><p class="eyebrow">Income</p><h2>Household income</h2><form asp-action="SaveIncome" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income<input name="amount" type="number" step="0.01" min="0" value="@Model.MonthlyIncome"/></label><input type="hidden" name="sickDays" value="@Model.SickDays"/><button class="primary">Save income</button></form></section>
 }
-
-<section class="grid cards-4">
-    <article class="card"><p class="eyebrow">Bills</p><h2>@Model.BillsTotal.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Everyday</p><h2>@Model.ExpensesTotal.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Extra expenses</p><h2>@Model.ExtraExpensesTotal.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Reserve allocations</p><h2>@Model.SavingsTotal.ToString("C", gb)</h2></article>
-</section>
 
 @foreach (var budgetBlock in budgetSections)
 {
-<section class="card" id="@budgetBlock.Anchor">
+<section class="card fm-manage-card" id="@budgetBlock.Anchor">
     <div class="section-head"><div><p class="eyebrow">@budgetBlock.Title</p><h2>@budgetBlock.Rows.Sum(x => x.Amount).ToString("C", gb)</h2><p class="muted">@budgetBlock.Help</p></div></div>
-    @if (budgetBlock.Rows.Count == 0) { <p class="muted">Nothing entered for this month yet.</p> }
-    else
-    {
-        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Amount</th><th>Date</th><th></th></tr></thead><tbody>
-        @foreach (var row in budgetBlock.Rows)
-        {
-            <tr><td><strong>@row.Name</strong><br/><span class="muted">@row.Notes</span></td><td>@row.Amount.ToString("C", gb)</td><td>@row.Date.ToString("dd MMM")</td><td>
-            @if (canEdit)
-            {
-                <a class="button" asp-action="EditPayment" asp-route-source="@row.Source" asp-route-id="@row.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a>
-                <form asp-action="DeletePayment" method="post" style="display:inline" data-confirm="Delete this item?">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><input type="hidden" name="source" value="@row.Source"/><input type="hidden" name="id" value="@row.Id"/><input type="hidden" name="returnAnchor" value="@budgetBlock.Anchor"/><button class="button danger-inline">Delete</button></form>
-            }</td></tr>
-        }
-        </tbody></table></div>
-    }
+    @if (budgetBlock.Rows.Count == 0) { <div class="fm-empty-inline">Nothing entered for this month yet.</div> }
+    else { <div class="table-wrap"><table><thead><tr><th>Name</th><th>Amount</th><th>Date</th><th></th></tr></thead><tbody>@foreach (var row in budgetBlock.Rows) { <tr><td><strong>@row.DisplayName</strong><br/><span class="muted">@row.Notes</span></td><td>@row.Amount.ToString("C", gb)</td><td>@row.Date.ToString("dd MMM")</td><td>@if (canEdit) { <a class="button" asp-action="EditPayment" asp-route-source="@row.Source" asp-route-id="@row.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a><form asp-action="DeletePayment" method="post" style="display:inline" data-confirm="Delete this item?">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><input type="hidden" name="source" value="@row.Source"/><input type="hidden" name="id" value="@row.Id"/><input type="hidden" name="returnAnchor" value="@budgetBlock.Anchor"/><button class="button danger-inline">Delete</button></form> }</td></tr> }</tbody></table></div> }
     @if (canEdit)
     {
         var optionsJson = JsonSerializer.Serialize(budgetBlock.Existing);
         <form asp-action="AddPayment" method="post" class="account-form remembered-payment-form" style="margin-top:16px" data-options='@optionsJson'>
-            @Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><input type="hidden" name="source" value="@budgetBlock.Source"/><input type="hidden" name="returnAnchor" value="@budgetBlock.Anchor"/>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="month" value="@Model.Month" />
+            <input type="hidden" name="source" value="@budgetBlock.Source" />
+            <input type="hidden" name="returnAnchor" value="@budgetBlock.Anchor" />
+
             <div class="full-row existing-picker">
-                <label>Pick from existing
+                <label for="existing-@budgetBlock.Anchor">Pick from existing</label>
                 @if (budgetBlock.Existing.Count > 25)
                 {
-                    <input class="existing-choice" list="existing-@budgetBlock.Anchor" placeholder="Search previous entries..." autocomplete="off"/>
-                    <datalist id="existing-@budgetBlock.Anchor">@foreach (var option in budgetBlock.Existing) { <option value="@option.Name"></option> }</datalist>
+                    <input id="existing-@budgetBlock.Anchor"
+                           class="existing-choice"
+                           list="existing-options-@budgetBlock.Anchor"
+                           placeholder="Search previous entries..."
+                           autocomplete="off" />
+                    <datalist id="existing-options-@budgetBlock.Anchor">
+                        @foreach (var option in budgetBlock.Existing)
+                        {
+                            <option value="@option.Name"></option>
+                        }
+                    </datalist>
                 }
                 else
                 {
-                    <select class="existing-choice"><option value="">Choose a previous entry...</option>@foreach (var option in budgetBlock.Existing) { <option value="@option.Name">@option.Name</option> }</select>
+                    <select id="existing-@budgetBlock.Anchor" class="existing-choice">
+                        <option value="">Choose a previous entry...</option>
+                        @foreach (var option in budgetBlock.Existing)
+                        {
+                            <option value="@option.Name">@option.Name</option>
+                        }
+                    </select>
                 }
-                </label>
             </div>
-            <label>Name<input class="payment-name" name="name" required placeholder="Enter a name"/></label>
-            <label>Amount<input class="payment-amount" name="amount" type="number" min="0" step="0.01" required/></label>
-            <label>Date<input name="date" type="date" value="@Model.MonthStart.ToString("yyyy-MM-dd")"/></label>
-            <label>Notes<input class="payment-notes" name="notes" placeholder="Optional"/></label>
+
+            <label>Name<input class="payment-name" name="name" required /></label>
+            <label>Amount<input class="payment-amount" name="amount" type="number" min="0" step="0.01" required /></label>
+            <label>Date<input name="date" type="date" value="@Model.MonthStart.ToString("yyyy-MM-dd")" /></label>
+            <label>Notes<input class="payment-notes" name="notes" /></label>
             <button class="primary">Add</button>
         </form>
     }
 </section>
 }
 
-<section class="grid two">
-    <article class="card"><p class="eyebrow">Virtual pots allocated</p><h2>@reserveAllocated.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Reserve unassigned</p><h2 class="@(reserveUnallocated < 0 ? "bad" : "good")">@reserveUnallocated.ToString("C", gb)</h2><p><a asp-controller="SavingPots" asp-action="Index">Manage reserve and virtual pots</a></p></article>
-</section>
-
-@if (canEdit && Model.RemainingFund > 0)
-{
-<section class="card"><p class="eyebrow">Finish the plan</p><h2>Allocate the remaining @Model.RemainingFund.ToString("C", gb)</h2><form asp-action="AllocateRemainingToReserve" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Amount<input name="amount" type="number" step="0.01" min="0" max="@Model.RemainingFund" value="@Model.RemainingFund"/></label><button class="primary">Add to unallocated reserve</button></form></section>
-}
-
-@if (canEdit)
-{
-<section class="card"><p class="eyebrow">Next month</p><h2>Carry over and confirm</h2><p class="muted">Review every bill, everyday allowance, investment and reserve allocation before it is copied. Extra expenses are always excluded.</p><a class="button primary" asp-action="CarryOver" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Review carry over all</a></section>
-}
+<section class="grid two"><article class="card"><p class="eyebrow">Virtual pots allocated</p><h2>@reserveAllocated.ToString("C", gb)</h2></article><article class="card"><p class="eyebrow">Reserve unassigned</p><h2 class="@(reserveUnallocated < 0 ? "bad" : "good")">@reserveUnallocated.ToString("C", gb)</h2><p><a asp-controller="SavingPots" asp-action="Index">Manage reserve and virtual pots</a></p></article></section>
+@if (canEdit && Model.RemainingFund > 0) { <section class="card"><p class="eyebrow">Finish the plan</p><h2>Allocate the remaining @Model.RemainingFund.ToString("C", gb)</h2><form asp-action="AllocateRemainingToReserve" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Amount<input name="amount" type="number" step="0.01" min="0" max="@Model.RemainingFund" value="@Model.RemainingFund"/></label><button class="primary">Add to unallocated reserve</button></form></section> }
+@if (canEdit) { <section class="card"><p class="eyebrow">Next month</p><h2>Carry over and confirm</h2><p class="muted">Review every recurring entry before it is copied. Extra expenses remain excluded.</p><a class="button primary" asp-action="CarryOver" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Review carry over all</a></section> }
 
 @section Scripts {
 <script>

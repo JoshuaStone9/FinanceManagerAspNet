@@ -8,6 +8,7 @@ public sealed class DashboardController(
     FinanceRepository repo,
     IConfiguration config,
     IDashboardSummaryService dashboardSummaryService,
+    IDashboardExperienceService dashboardExperienceService,
     IReserveAccountSelectionService reserveAccountSelectionService,
     IFinancialForecastService financialForecastService,
     IWhatIfForecastService whatIfForecastService,
@@ -83,6 +84,8 @@ public sealed class DashboardController(
             ScenarioLabel = preferredScenario?.Name ?? "Live plan",
             PreferredScenarioId = preferredScenario?.Id
         };
+
+        vm.Experience = dashboardExperienceService.Build(vm);
 
         ViewBag.ExistingBills = await repo.GetExistingPaymentOptionsAsync("bills");
         ViewBag.ExistingEveryday = await repo.GetExistingPaymentOptionsAsync("everyday_spending");

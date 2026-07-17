@@ -122,6 +122,38 @@ IF COL_LENGTH('dbo.reserve_pots','carry_excess_forward') IS NULL ALTER TABLE dbo
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_from') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_from date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_until') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_until date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_pause_reason') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_pause_reason nvarchar(300) NULL;
+
+-- Phase 8.4.1 Batch 1: link dashboard household-reserve allocations to reserve pots by ID.
+IF COL_LENGTH('dbo.savings','reserve_pot_id') IS NULL ALTER TABLE dbo.savings ADD reserve_pot_id int NULL;
+IF COL_LENGTH('dbo.savings','pot_name_snapshot') IS NULL ALTER TABLE dbo.savings ADD pot_name_snapshot nvarchar(140) NULL;
+
+UPDATE dbo.savings
+SET pot_name_snapshot = LEFT(LTRIM(RTRIM([name])), 140)
+WHERE pot_name_snapshot IS NULL;
+
+;WITH normalised_pots AS
+(
+    SELECT LOWER(LTRIM(RTRIM([name]))) AS normalised_name,
+           MIN(reserve_pot_id) AS reserve_pot_id,
+           COUNT(*) AS match_count
+    FROM dbo.reserve_pots
+    GROUP BY LOWER(LTRIM(RTRIM([name])))
+)
+UPDATE s
+SET reserve_pot_id = p.reserve_pot_id
+FROM dbo.savings s
+INNER JOIN normalised_pots p
+    ON p.normalised_name = LOWER(LTRIM(RTRIM(s.[name])))
+WHERE s.reserve_pot_id IS NULL
+  AND p.match_count = 1;
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_savings_reserve_pots')
+ALTER TABLE dbo.savings WITH CHECK
+ADD CONSTRAINT FK_savings_reserve_pots FOREIGN KEY(reserve_pot_id)
+REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE SET NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_savings_reserve_pot_id' AND object_id=OBJECT_ID('dbo.savings'))
+CREATE INDEX IX_savings_reserve_pot_id ON dbo.savings(reserve_pot_id);
 IF COL_LENGTH('dbo.reserve_pots','funding_plan_start_date') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_plan_start_date date NULL;
 
 UPDATE p
@@ -375,6 +407,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INS
 
     public async Task<List<PaymentRow>> GetRowsAsync(string source, int month, int year)
     {
+        await EnsureModernTablesAsync();
         var map = source switch
         {
             "bills" => (Table: "dbo.bills", Id: "billid", Date: "[date]", Category: "NULL", Type: "type", Length: "length", Notes: "description"),
@@ -384,13 +417,36 @@ IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INS
             "savings" => (Table: "dbo.savings", Id: "savings_id", Date: "[date]", Category: "NULL", Type: "NULL", Length: "length", Notes: "notes"),
             _ => throw new ArgumentOutOfRangeException(nameof(source))
         };
-        string sql = $@"SELECT {map.Id} AS id, [name], amount, {map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], {map.Length} AS [length], {map.Notes} AS notes
-FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER BY {map.Date} DESC";
+        var reservePotId = source == "savings" ? "p.reserve_pot_id" : "NULL";
+        var potNameSnapshot = source == "savings" ? "p.pot_name_snapshot" : "NULL";
+        var currentReservePotName = source == "savings" ? "rp.[name]" : "NULL";
+        var tableExpression = source == "savings"
+            ? $"{map.Table} p LEFT JOIN dbo.reserve_pots rp ON rp.reserve_pot_id = p.reserve_pot_id"
+            : $"{map.Table} p";
+
+        string sql = $@"SELECT p.{map.Id} AS id, p.[name], p.amount, p.{map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], p.{map.Length} AS [length], p.{map.Notes} AS notes,
+{reservePotId} AS reserve_pot_id, {potNameSnapshot} AS pot_name_snapshot, {currentReservePotName} AS current_reserve_pot_name
+FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@year ORDER BY p.{map.Date} DESC";
         var rows = new List<PaymentRow>();
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
         await using var cmd = new SqlCommand(sql, con); cmd.Parameters.AddWithValue("@month", month); cmd.Parameters.AddWithValue("@year", year);
         await using var r = await cmd.ExecuteReaderAsync();
-        while (await r.ReadAsync()) rows.Add(new PaymentRow(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDateTime(3), r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), source));
+        while (await r.ReadAsync())
+        {
+            rows.Add(new PaymentRow(
+                r.GetInt32(0),
+                r.GetString(1),
+                r.GetDecimal(2),
+                r.GetDateTime(3),
+                r.IsDBNull(4) ? null : r.GetString(4),
+                r.IsDBNull(5) ? null : r.GetString(5),
+                r.IsDBNull(6) ? null : r.GetString(6),
+                r.IsDBNull(7) ? null : r.GetString(7),
+                source,
+                r.IsDBNull(8) ? null : r.GetInt32(8),
+                r.IsDBNull(9) ? null : r.GetString(9),
+                r.IsDBNull(10) ? null : r.GetString(10)));
+        }
         return rows;
     }
 
@@ -588,6 +644,7 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
 
     public async Task AddPaymentAsync(string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
     {
+        await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name is required.", nameof(name));
 
         switch (source)
@@ -609,8 +666,8 @@ FROM {map.Table} WHERE MONTH({map.Date})=@month AND YEAR({map.Date})=@year ORDER
                     ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
                 break;
             case "savings":
-                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [length], notes) VALUES(@name,@amount,@date,@length,@notes)",
-                    ("@name", name), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [length], notes, pot_name_snapshot) VALUES(@name,@amount,@date,@length,@notes,@snapshot)",
+                    ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
@@ -1060,6 +1117,7 @@ OUTER APPLY (
 
     public async Task<PaymentRow?> GetPaymentAsync(string source, int id)
     {
+        await EnsureModernTablesAsync();
         var map = source switch
         {
             "bills" => (Table: "dbo.bills", Id: "billid", Date: "[date]", Category: "NULL", Type: "type", Length: "length", Notes: "description", IdParam: "@id"),
@@ -1070,16 +1128,39 @@ OUTER APPLY (
             _ => throw new ArgumentOutOfRangeException(nameof(source))
         };
 
-        var sql = $"SELECT {map.Id} AS id, [name], amount, {map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], {map.Length} AS [length], {map.Notes} AS notes FROM {map.Table} WHERE {map.Id}=@id";
+        var reservePotId = source == "savings" ? "p.reserve_pot_id" : "NULL";
+        var potNameSnapshot = source == "savings" ? "p.pot_name_snapshot" : "NULL";
+        var currentReservePotName = source == "savings" ? "rp.[name]" : "NULL";
+        var tableExpression = source == "savings"
+            ? $"{map.Table} p LEFT JOIN dbo.reserve_pots rp ON rp.reserve_pot_id = p.reserve_pot_id"
+            : $"{map.Table} p";
+
+        var sql = $"SELECT p.{map.Id} AS id, p.[name], p.amount, p.{map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], p.{map.Length} AS [length], p.{map.Notes} AS notes, {reservePotId}, {potNameSnapshot}, {currentReservePotName} FROM {tableExpression} WHERE p.{map.Id}=@id";
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
         await using var cmd = new SqlCommand(sql, con); cmd.Parameters.AddWithValue("@id", id);
         await using var r = await cmd.ExecuteReaderAsync();
-        if (await r.ReadAsync()) return new PaymentRow(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDateTime(3), r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), source);
+        if (await r.ReadAsync())
+        {
+            return new PaymentRow(
+                r.GetInt32(0),
+                r.GetString(1),
+                r.GetDecimal(2),
+                r.GetDateTime(3),
+                r.IsDBNull(4) ? null : r.GetString(4),
+                r.IsDBNull(5) ? null : r.GetString(5),
+                r.IsDBNull(6) ? null : r.GetString(6),
+                r.IsDBNull(7) ? null : r.GetString(7),
+                source,
+                r.IsDBNull(8) ? null : r.GetInt32(8),
+                r.IsDBNull(9) ? null : r.GetString(9),
+                r.IsDBNull(10) ? null : r.GetString(10));
+        }
         return null;
     }
 
     public async Task UpdatePaymentAsync(string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
     {
+        await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name is required.", nameof(name));
 
         switch (source)
@@ -1097,7 +1178,7 @@ OUTER APPLY (
                 await ExecuteAsync("UPDATE dbo.investments SET [name]=@name, amount=@amount, [date]=@date, category=@category, [length]=@length, notes=@notes WHERE investments_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
                 break;
             case "savings":
-                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [length]=@length, notes=@notes WHERE savings_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [length]=@length, notes=@notes, pot_name_snapshot=COALESCE(pot_name_snapshot,@snapshot) WHERE savings_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
@@ -1565,6 +1646,43 @@ VALUES(@potId, @amount, @date, @note)",
 WHEN MATCHED THEN UPDATE SET balance=@balance, interest_rate=@rate, provider=@provider, updated_at=SYSUTCDATETIME()
 WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider) VALUES(1,@balance,@rate,@provider);",
             ("@balance", Math.Max(0,balance)), ("@rate", Math.Max(0,interestRate)), ("@provider", string.IsNullOrWhiteSpace(provider) ? "Money market fund" : provider.Trim()));
+    }
+
+    public async Task<ReservePot?> GetReservePotByIdAsync(int reservePotId)
+    {
+        if (reservePotId <= 0) return null;
+        var pots = await GetReservePotsAsync();
+        return pots.FirstOrDefault(x => x.Id == reservePotId);
+    }
+
+    public async Task<IReadOnlyList<ReservePotPickerItem>> GetSelectableReservePotsAsync()
+    {
+        await EnsureModernTablesAsync();
+        var items = new List<ReservePotPickerItem>();
+
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,target_amount,is_active FROM dbo.reserve_pots WHERE is_active=1 ORDER BY priority,[name]", con);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            items.Add(new ReservePotPickerItem(
+                reader.GetInt32(0),
+                reader.GetString(1),
+                reader.GetDecimal(2),
+                reader.IsDBNull(3) ? null : reader.GetDecimal(3),
+                reader.GetBoolean(4)));
+        }
+
+        return items;
+    }
+
+    public async Task<ReservePot?> FindReservePotByNormalisedNameAsync(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var normalisedName = name.Trim();
+        var pots = await GetReservePotsAsync();
+        return pots.FirstOrDefault(x => string.Equals(x.Name.Trim(), normalisedName, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<List<ReservePot>> GetReservePotsAsync()

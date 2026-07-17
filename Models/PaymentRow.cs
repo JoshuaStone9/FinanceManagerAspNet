@@ -1,4 +1,4 @@
-﻿namespace FinanceManagerAspNet.Models;
+namespace FinanceManagerAspNet.Models;
 
 public record PaymentRow(
     int Id,
@@ -9,8 +9,12 @@ public record PaymentRow(
     string? Type,
     string? Length,
     string? Notes,
-    string Source)
+    string Source,
+    int? ReservePotId = null,
+    string? PotNameSnapshot = null,
+    string? CurrentReservePotName = null)
 {
+    public string DisplayName => CurrentReservePotName ?? PotNameSnapshot ?? Name;
     public int? LengthMonths =>
         int.TryParse(Length, out var months) ? months : null;
 

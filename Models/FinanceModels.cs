@@ -72,6 +72,7 @@ public sealed class DashboardViewModel
     public List<LastModifiedInfo> LastModified { get; set; } = [];
     public DashboardIntelligenceSummary Intelligence { get; set; } = new();
     public DashboardForecastSummary ForecastSummary { get; set; } = new();
+    public DashboardExperience Experience { get; set; } = new();
 }
 
 public sealed class DashboardIntelligenceSummary
@@ -494,6 +495,13 @@ public sealed record HouseholdReserve(
     decimal InterestRate,
     string Provider,
     DateTime UpdatedAt);
+
+public sealed record ReservePotPickerItem(
+    int Id,
+    string Name,
+    decimal AllocatedAmount,
+    decimal? TargetAmount,
+    bool IsActive);
 
 public sealed record ReservePot(
     int Id,

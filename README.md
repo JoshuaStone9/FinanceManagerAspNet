@@ -242,3 +242,10 @@ The project follows several development standards:
 ---
 
 Finance Manager V2 continues to evolve into a complete personal financial planning platform, providing budgeting, reserve management, funding automation, historical reporting and long-term financial forecasting from a single application.
+
+## Phase 8.3 dashboard experience
+The dashboard now includes a monthly money journey, category summaries, planning outlook, upcoming actions, recent activity, quick actions and responsive command-centre styling. See `Documentation/Phase-8.3-Dashboard-Experience.md`.
+
+## Phase 8.3.7 — Razor rendering corrections
+
+Corrected dashboard Razor expressions that were being emitted as literal text rather than evaluated values. Arithmetic and negative currency expressions are now enclosed as complete Razor expressions before formatting. The remembered-payment picker was also restructured so its conditional searchable input/select markup is parsed as Razor rather than displayed on screen.
