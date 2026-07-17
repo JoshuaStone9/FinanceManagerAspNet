@@ -1,18 +1,27 @@
 @model FinanceManagerAspNet.Models.HouseholdReserveViewModel
 @using System.Globalization
-@{ ViewData["Title"] = "Household Reserve"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentMonth = DateTime.Today.ToString("MMMM yyyy"); var applyAllOperationKey = Guid.NewGuid().ToString("N"); }
-<section class="hero card"><div><p class="eyebrow">One physical fund, clear virtual allocations</p><h1>Household Reserve</h1><p class="muted">Dashboard reserve allocations automatically increase the matching pot and now update its monthly funding history.</p></div><div><a class="fm-action-button fm-action-secondary" asp-controller="Events" asp-action="Index">View events</a></div></section>
+@{ ViewData["Title"] = "Money Pots"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentMonth = DateTime.Today.ToString("MMMM yyyy"); var applyAllOperationKey = Guid.NewGuid().ToString("N"); }
+<section class="hero card money-pots-hero">
+<div>
+<p class="eyebrow">Your savings, organised clearly</p>
+<h1>Money Pots</h1>
+<p class="money-pots-total">@Model.TotalAllocated.ToString("C", gb) saved across @Model.ActivePotCount active pot@(Model.ActivePotCount == 1 ? "" : "s")</p>
+<p class="muted">Manage savings goals, monitor progress and keep every pound working towards the future.</p>
+</div>
+<div class="button-row"><a class="fm-action-button fm-action-primary" href="#new-allocation">Create money pot</a><a class="fm-action-button fm-action-secondary" asp-controller="Events" asp-action="Index">View activity</a></div>
+</section>
 <section class="grid cards-4">
-<article class="card"><p class="eyebrow">Total reserve balance</p><h2>@Model.AccountSummary.TotalBalance.ToString("C", gb)</h2><p class="muted">Across selected reserve accounts.</p></article>
-<article class="card"><p class="eyebrow">Protected baseline</p><h2>@Model.AccountSummary.Baseline.ToString("C", gb)</h2><p class="@(Model.AccountSummary.BaselineShortfall > 0 ? "bad" : "good")">@(Model.AccountSummary.BaselineShortfall > 0 ? $"{Model.AccountSummary.BaselineShortfall.ToString("C", gb)} still needed" : "Baseline covered")</p></article>
-<article class="card"><p class="eyebrow">Surplus above baseline</p><h2>@Model.AccountSummary.SurplusAboveBaseline.ToString("C", gb)</h2><p class="muted">Available before pot allocations.</p></article>
-<article class="card"><p class="eyebrow">Allocated to pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
-<article class="card"><p class="eyebrow">Remaining to allocate</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2><p class="muted">Surplus minus current pot allocations.</p></article>
+<article class="card"><p class="eyebrow">Total money available</p><h2>@Model.AccountSummary.TotalBalance.ToString("C", gb)</h2><p class="muted">Across the accounts backing your money pots.</p></article>
+<article class="card"><p class="eyebrow">Protected emergency baseline</p><h2>@Model.AccountSummary.Baseline.ToString("C", gb)</h2><p class="@(Model.AccountSummary.BaselineShortfall > 0 ? "bad" : "good")">@(Model.AccountSummary.BaselineShortfall > 0 ? $"{Model.AccountSummary.BaselineShortfall.ToString("C", gb)} still needed" : "Baseline covered")</p></article>
+<article class="card"><p class="eyebrow">Available for pots</p><h2>@Model.AccountSummary.SurplusAboveBaseline.ToString("C", gb)</h2><p class="muted">Available after protecting your baseline.</p></article>
+<article class="card"><p class="eyebrow">Saved in money pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
+<article class="card"><p class="eyebrow">Remaining to goals</p><h2>@Model.RemainingToTargets.ToString("C", gb)</h2><p class="muted">Across active pots with a target.</p></article>
+<article class="card"><p class="eyebrow">Unallocated money</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2><p class="muted">Available to assign to a new or existing pot.</p></article>
 </section>
 
 <section class="card" id="reserve-accounts">
-<div class="section-head"><div><p class="eyebrow">Reserve accounts</p><h2>Accounts protecting the £12,000 baseline</h2></div>
-@if (!Model.ShowAccountSelector && canEdit){<a class="secondary button" asp-action="Index" asp-route-reselect="true" asp-fragment="reserve-accounts">Reselect reserve accounts</a>}
+<div class="section-head"><div><p class="eyebrow">Backing accounts</p><h2>Accounts holding your money pots</h2></div>
+@if (!Model.ShowAccountSelector && canEdit){<a class="secondary button" asp-action="Index" asp-route-reselect="true" asp-fragment="reserve-accounts">Reselect backing accounts</a>}
 </div>
 @if (Model.ShowAccountSelector)
 {
@@ -22,7 +31,7 @@
 {
 <label class="reserve-account-option"><input type="checkbox" name="selectedAccountIds" value="@account.Id" checked="@account.IsSelected"/><span><strong>@account.Name</strong><small>@account.Balance.ToString("C", gb) · @account.InterestRate.ToString("0.##")% AER</small></span></label>
 }
-</div><button class="primary">Save reserve accounts</button></form>
+</div><button class="primary">Save backing accounts</button></form>
 }
 else
 {
@@ -32,7 +41,7 @@ else
 
 <section class="card" id="interest-forecast">
 <div class="section-head">
-<div><p class="eyebrow">Reserve interest forecast</p><h2>Project the full selected reserve balance</h2><p class="muted">Uses each selected account's own AER. This forecast is informational and does not change live balances.</p></div>
+<div><p class="eyebrow">Interest forecast</p><h2>Project the value of your money pots</h2><p class="muted">Uses each selected account's own AER. This forecast is informational and does not change live balances.</p></div>
 </div>
 <form asp-action="Index" method="get" class="account-form">
 <label>Forecast date
@@ -76,7 +85,7 @@ else
 }
 else
 {
-<p class="muted">Select reserve accounts before calculating an interest forecast.</p>
+<p class="muted">Select backing accounts before calculating an interest forecast.</p>
 }
 </section>
 
@@ -100,7 +109,7 @@ else
 @if (Model.RecoveryRecommendations.Count > 0)
 {
 <section class="card" id="recommendations">
-<div class="section-head"><div><p class="eyebrow">Recommended recovery allocation</p><h2>Use available excess to catch up</h2><p class="muted">Recommendations use unallocated reserve money, priority and outstanding recovery. Money is only reassigned after you confirm it.</p></div>
+<div class="section-head"><div><p class="eyebrow">Recommended recovery allocation</p><h2>Use available excess to catch up</h2><p class="muted">Recommendations use unallocated money, priority and outstanding recovery. Money is only reassigned after you confirm it.</p></div>
 @if (canEdit)
 {
 <form asp-action="ApplyAllRecommendations" method="post" data-confirm="Apply every current recovery recommendation in priority order?">@Html.AntiForgeryToken()<input type="hidden" name="operationKey" value="@applyAllOperationKey"/><button class="primary">Apply all recommendations</button></form>
@@ -110,7 +119,7 @@ else
 @foreach (var item in Model.RecoveryRecommendations)
 {
     var itemOperationKey = Guid.NewGuid().ToString("N");
-    var confirmText = $"Apply {item.RecommendedAmount.ToString("C", gb)} of unallocated reserve money to {item.PotName}?";
+    var confirmText = $"Apply {item.RecommendedAmount.ToString("C", gb)} of unallocated money to {item.PotName}?";
 <article><p class="eyebrow">Priority @item.Priority · @item.PotName</p><strong>@item.RecommendedAmount.ToString("C", gb)</strong><p class="muted">Of @item.OutstandingRecovery.ToString("C", gb) outstanding@(item.IsNegativeBalanceRecommendation ? " · negative balance recovery prioritised" : "")</p>
 @if (item.RemainingAfterRecommendation > 0){<p class="bad">@item.RemainingAfterRecommendation.ToString("C", gb) would remain</p>}else{<p class="good">Recovery cleared</p>}
 <div class="button-row"><a class="secondary button" href="#pot-@item.PotId">Review pot</a>
@@ -125,13 +134,18 @@ else
 
 @if (canEdit)
 {
-<details class="card" id="reserve-account"><summary><strong>Legacy physical reserve settings</strong></summary><p class="muted">Kept for compatibility with older calculations.</p><form asp-action="SaveReserve" method="post" class="account-form">@Html.AntiForgeryToken()<label>Balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance"/></label><label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate"/></label><label>Provider<input name="provider" value="@Model.Reserve.Provider"/></label><button class="primary">Save reserve</button></form></details>
+<details class="card" id="reserve-account"><summary><strong>Legacy account settings</strong></summary><p class="muted">Kept for compatibility with older calculations.</p><form asp-action="SaveReserve" method="post" class="account-form">@Html.AntiForgeryToken()<label>Balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance"/></label><label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate"/></label><label>Provider<input name="provider" value="@Model.Reserve.Provider"/></label><button class="primary">Save account settings</button></form></details>
 }
 
 <div id="allocations"></div>
 @if (Model.Pots.Count == 0)
 {
-<section class="card"><h2>No virtual allocations yet</h2><p class="muted">Add a pot below, or create a Household reserve allocation on the Dashboard.</p></section>
+<section class="card money-pots-empty">
+<i data-lucide="piggy-bank"></i>
+<h2>No money pots yet</h2>
+<p class="muted">Create your first pot for an emergency fund, house deposit, wedding, holiday or any other goal.</p>
+@if (canEdit){<a class="fm-action-button fm-action-primary" href="#new-allocation">Create first money pot</a>}
+</section>
 }
 else
 {
@@ -140,7 +154,7 @@ else
     var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id) ?? new FinanceManagerAspNet.Models.ReservePotFundingSummary { PotId = pot.Id };
 <details class="card pot-disclosure" id="pot-@pot.Id">
 <summary class="pot-title-row"><span><strong>@pot.Name</strong><small>@pot.AllocatedAmount.ToString("C", gb)@(pot.TargetAmount.HasValue ? $" of {pot.TargetAmount.Value.ToString("C", gb)}" : "")</small></span><span class="@summary.StatusCssClass">@summary.CurrentStatus</span></summary>
-<div class="pot-expanded"><div class="section-head"><div><p class="eyebrow">Virtual allocation</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div></div>
+<div class="pot-expanded"><div class="section-head"><div><p class="eyebrow">Money pot</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div></div>
 @if (pot.IsOverdrawn)
 {
 <div class="alert error negative-pot-warning">
@@ -238,10 +252,10 @@ else
 <label>Priority<input name="priority" type="number" min="1" value="@pot.Priority"/></label>
 <label class="checkbox-inline"><input name="isActive" type="checkbox" value="true" checked="@pot.IsActive"/> Active allocation</label>
 <p class="muted">Untick only when this pot is stopped or archived.</p>
-<button class="primary">Save allocation</button>
+<button class="primary">Save money pot</button>
 </form>
 <details class="edit-panel"><summary>Recalculate funding history</summary><form asp-action="RebuildHistory" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><label>Start from<select name="startMode"><option value="FirstContribution">Current imported baseline</option><option value="January2026">1 January 2026</option><option value="Custom">Custom date</option></select></label><label>Custom date<input name="customStartDate" type="date" value="@pot.FundingPlanStartDate.ToString("yyyy-MM-dd")"/></label><button class="secondary">Rebuild history</button></form></details>
-<form asp-action="DeletePot" method="post" data-confirm="Delete this virtual allocation?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete</button></form>
+<form asp-action="DeletePot" method="post" data-confirm="Delete this money pot?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete</button></form>
 }
 <details class="edit-panel" open><summary>Funding timeline</summary>
 <div class="funding-timeline">
@@ -274,7 +288,7 @@ else
 @if (canEdit)
 {
 <section class="card" id="new-allocation">
-<p class="eyebrow">New allocation</p><h2>Add virtual pot</h2>
+<p class="eyebrow">New money pot</p><h2>Create a money pot</h2>
 <form asp-action="SavePot" method="post" class="account-form">
 @Html.AntiForgeryToken()
 <input type="hidden" name="id" value="0"/>
@@ -296,7 +310,7 @@ else
 <label>Optional due date<input name="dueDate" type="date"/></label>
 <label>Priority<input name="priority" type="number" min="1" value="10"/></label>
 <input type="hidden" name="isActive" value="true"/>
-<button class="primary">Add allocation</button>
+<button class="primary">Create money pot</button>
 </form>
 </section>
 }

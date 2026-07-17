@@ -73,7 +73,7 @@ The update action reloads the existing payment before saving and preserves every
 
 ## Deferred work
 
-Phase 8.4.5 will implement the Household Reserve Existing Pot / New Pot allocation picker. Shared component extraction and the complete keyboard-first workflow remain Phase 8.4.6–8.4.7.
+Phase 8.4.5 will implement the Money Pots Existing Pot / New Pot allocation picker. Shared component extraction and the complete keyboard-first workflow remain Phase 8.4.6–8.4.7.
 
 ## Phase 8.4.4.2 — Intelligent default entry dates
 

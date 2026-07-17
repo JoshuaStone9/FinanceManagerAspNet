@@ -733,6 +733,8 @@ public sealed class HouseholdReserveViewModel
     public List<FinanceReminderRow> DueReminders { get; set; } = [];
     public Dictionary<int, ReservePotFundingSummary> FundingSummaries { get; set; } = [];
     public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => Math.Max(0m, p.AllocatedAmount));
+    public int ActivePotCount => Pots.Count(p => p.IsActive);
+    public decimal RemainingToTargets => Pots.Where(p => p.IsActive && p.TargetAmount.HasValue).Sum(p => Math.Max(0m, p.TargetAmount!.Value - Math.Max(0m, p.AllocatedAmount)));
     public decimal UnallocatedBalance => AccountSummary.SurplusAboveBaseline - TotalAllocated;
     public decimal RemainingToAllocate => Math.Max(0m, UnallocatedBalance);
     public decimal TotalDefaultMonthlyContributions => Pots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);

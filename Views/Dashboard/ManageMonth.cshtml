@@ -18,8 +18,8 @@
         (Title: "Essential bills", Source: "bills", Anchor: "bills", Rows: Model.Bills, Help: "Mortgage, council tax, utilities, insurance and fixed bills.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingBills),
         (Title: "Everyday spending", Source: "everyday_spending", Anchor: "everyday", Rows: Model.Expenses, Help: "Food, fuel and general monthly allowances. These can be carried over.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingEveryday),
         (Title: "Extra expenses", Source: "extra_expenses", Anchor: "extras", Rows: Model.ExtraExpenses, Help: "One-off costs for this month only. These are never included in Carry over all.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingExtras),
-        (Title: "Investments", Source: "investments", Anchor: "investments", Rows: Model.Investments, Help: "Long-term investments kept separate from the household reserve.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingInvestments),
-        (Title: "Household reserve allocations", Source: "savings", Anchor: "savings", Rows: Model.Savings, Help: "Each allocation increases the matching virtual pot and household reserve total.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingSavings)
+        (Title: "Investments", Source: "investments", Anchor: "investments", Rows: Model.Investments, Help: "Long-term investments kept separate from your money pots.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingInvestments),
+        (Title: "Money pot allocations", Source: "savings", Anchor: "savings", Rows: Model.Savings, Help: "Each allocation increases the matching money pot and total savings balance.", Existing: (List<ExistingPaymentOption>)ViewBag.ExistingSavings)
     };
     var visibleSections = string.IsNullOrWhiteSpace(selectedSource)
         ? budgetSections

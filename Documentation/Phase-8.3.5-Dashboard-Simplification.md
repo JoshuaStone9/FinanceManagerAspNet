@@ -14,8 +14,8 @@ The dashboard retains:
 
 - Financial overview
 - Monthly money journey
-- Essential Bills, Everyday Spending, Extra Expenses and Household Reserve summaries
-- Household Reserve health
+- Essential Bills, Everyday Spending, Extra Expenses and Money Pots summaries
+- Money Pots health
 - 12-month forecast
 - Upcoming actions
 - Recent activity
@@ -51,7 +51,7 @@ The Finance Manager sidebar now provides direct links to:
 - Extra Expenses
 - Investments
 
-Household Reserve remains a dedicated Saving Pots workspace. Assets remain separate from monthly investment contributions.
+Money Pots remains a dedicated Saving Pots workspace. Assets remain separate from monthly investment contributions.
 
 ## Activity language
 

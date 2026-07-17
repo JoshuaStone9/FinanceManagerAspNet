@@ -31,7 +31,7 @@
     <div class="fm-metric-grid">
         <article class="fm-metric-card"><span>Available income</span><strong>@Model.EffectiveIncome.ToString("C", gb)</strong><small>@Model.MonthlyIncome.ToString("C", gb) income · @Model.CarryForwardAmount.ToString("C", gb) carry forward</small></article>
         <article class="fm-metric-card"><span>Core spending</span><strong>@((Model.BillsTotal + Model.ExpensesTotal + Model.ExtraExpensesTotal).ToString("C", gb))</strong><small>Bills, everyday and extra expenses</small></article>
-        <article class="fm-metric-card"><span>Allocated to the future</span><strong>@Model.Experience.AllocatedToFuture.ToString("C", gb)</strong><small>Investments and Household Reserve</small></article>
+        <article class="fm-metric-card"><span>Allocated to the future</span><strong>@Model.Experience.AllocatedToFuture.ToString("C", gb)</strong><small>Investments and Money Pots</small></article>
         <article class="fm-metric-card @(Model.IsOverBudget ? "is-danger" : "is-positive")"><span>Remaining</span><strong>@Model.RemainingFund.ToString("C", gb)</strong><small>@(Model.IsOverBudget ? "The month is currently over budget" : "Available after all recorded allocations")</small></article>
     </div>
 </section>
@@ -94,9 +94,9 @@
     <div class="fm-dashboard-section-head"><div><p class="eyebrow">Planning</p><h2 id="planning-title">Reserve health and 12-month outlook</h2></div></div>
     <div class="fm-planning-grid">
         <article class="fm-feature-card">
-            <div class="fm-card-heading"><div><span>Household Reserve</span><h3>@Model.TotalGoalBalance.ToString("C", gb)</h3></div><i data-lucide="landmark"></i></div>
+            <div class="fm-card-heading"><div><span>Money Pots</span><h3>@Model.TotalGoalBalance.ToString("C", gb)</h3></div><i data-lucide="landmark"></i></div>
             <div class="fm-inline-metrics"><div><strong>@Model.Intelligence.ActivePotCount</strong><span>Active pots</span></div><div><strong>@Model.Intelligence.FundedThisMonth.ToString("C", gb)</strong><span>Funded this month</span></div><div><strong>@reserveUnallocated.ToString("C", gb)</strong><span>Unassigned</span></div></div>
-            <a class="button" asp-controller="SavingPots" asp-action="Index">Open Household Reserve</a>
+            <a class="button" asp-controller="SavingPots" asp-action="Index">Open Money Pots</a>
         </article>
         <article class="fm-feature-card">
             <div class="fm-card-heading"><div><span>12-month forecast</span><h3>@Model.ForecastSummary.ProjectedReserveBalance.ToString("C", gb)</h3><small>Based on @Model.ForecastSummary.ScenarioLabel</small></div><i data-lucide="chart-no-axes-combined"></i></div>

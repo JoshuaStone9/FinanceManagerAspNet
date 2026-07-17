@@ -8,8 +8,8 @@ Turn the dashboard into the Finance Manager command centre. The dashboard answer
 
 ## Delivered
 - Shared dashboard metric, summary, planning, list, activity, empty-state and quick-action patterns.
-- A monthly money journey from income and carry forward through spending, investments and Household Reserve allocations to the final remaining amount.
-- Dedicated summaries for Essential Bills, Everyday Spending, Extra Expenses and Household Reserve.
+- A monthly money journey from income and carry forward through spending, investments and Money Pots allocations to the final remaining amount.
+- Dedicated summaries for Essential Bills, Everyday Spending, Extra Expenses and Money Pots.
 - Existing Phase 7.6 forecast data surfaced in the planning section.
 - Upcoming actions built from real reminders, overdue funding state and upcoming pot target dates.
 - Recent activity built from the selected month's real payment/allocation records.
@@ -23,10 +23,10 @@ The dashboard does not introduce a fixed monthly savings target.
 1. Effective income = monthly income + carry forward.
 2. Core spending = essential bills + everyday spending + extra expenses.
 3. Available before future allocations = effective income - core spending.
-4. Allocated to the future = investments + Household Reserve allocations.
+4. Allocated to the future = investments + Money Pots allocations.
 5. Final remaining = effective income - all recorded monthly allocations.
 
-Extra expenses remain separate and are not included in carry-over. Household Reserve allocations remain distinct from investments. All figures use the existing selected-month data loaded by DashboardController.
+Extra expenses remain separate and are not included in carry-over. Money Pots allocations remain distinct from investments. All figures use the existing selected-month data loaded by DashboardController.
 
 ## Architecture
 `DashboardExperienceService` converts the existing DashboardViewModel data into presentation-focused models. Razor displays these models and contains no alternative financial formula.
@@ -50,4 +50,4 @@ Sections present explicit empty states when there are no upcoming actions or rec
 - Quick actions reduce from five columns to three and then one.
 
 ## Deferred work
-Phase 8.4 form modernisation remains separate. The Household Reserve allocation picker data foundation remains present, but the existing dashboard allocation form is intentionally unchanged until 8.4 resumes.
+Phase 8.4 form modernisation remains separate. The Money Pots allocation picker data foundation remains present, but the existing dashboard allocation form is intentionally unchanged until 8.4 resumes.

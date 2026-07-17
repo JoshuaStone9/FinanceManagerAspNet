@@ -52,7 +52,7 @@ Finance Manager V2 has been designed around several core principles:
 * Upcoming targets
 * Funding statistics
 
-## Household Reserve
+## Money Pots
 
 * Reserve balance management
 * Multiple savings pots
@@ -252,7 +252,7 @@ Corrected dashboard Razor expressions that were being emitted as literal text ra
 
 ## Phase 8.3.5 — Dashboard simplification and navigation
 
-The Finance Manager dashboard is now a read-only command centre. Detailed monthly forms, tables and editing controls have moved to a separate monthly-management view. Dashboard summary cards preserve the selected year and month when opening the relevant management area, while Household Reserve and Forecast continue to open their existing dedicated workspaces.
+The Finance Manager dashboard is now a read-only command centre. Detailed monthly forms, tables and editing controls have moved to a separate monthly-management view. Dashboard summary cards preserve the selected year and month when opening the relevant management area, while Money Pots and Forecast continue to open their existing dedicated workspaces.
 
 The sidebar now includes direct monthly-money navigation for Essential Bills, Everyday Spending, Extra Expenses and Investments. Recent activity uses natural record-first wording, and the dashboard ends after Planning and Attention/Activity.
 
@@ -271,3 +271,8 @@ New monthly bills, everyday spending entries, extra expenses and investment
 contributions now default to today's day number within the selected month.
 The date remains editable and is capped to the final valid day for shorter
 months.
+
+
+## Phase 8.4.5 — Money Pots
+
+The former Household Reserve workspace is now presented as **Money Pots** throughout the user interface. The refreshed page uses clearer banking-style language, a stronger savings summary, active-pot and target information, cleaner collapsed pot cards, improved empty-state guidance and more approachable actions such as **Create money pot**. Internal model, repository and database names remain unchanged to avoid unnecessary migrations and code churn.

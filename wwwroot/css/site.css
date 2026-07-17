@@ -813,3 +813,13 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-inline-amount-form .button{padding:8px 10px}
 .fm-workspace-row-updated{border-color:rgba(139,92,246,.7)}
 @media(max-width:760px){.fm-inline-amount-form{justify-content:flex-start;flex-wrap:wrap}.fm-inline-amount-trigger{justify-content:flex-start}}
+
+/* Phase 8.4.5: Money Pots */
+.money-pots-hero{align-items:center}
+.money-pots-total{margin:.35rem 0 .25rem;font-size:clamp(1.05rem,2vw,1.35rem);font-weight:850;color:var(--ink)}
+.money-pots-empty{text-align:center;padding:46px 24px}
+.money-pots-empty>svg{width:48px;height:48px;margin-bottom:12px;color:var(--brand)}
+.money-pots-empty .fm-action-button{margin-top:14px}
+.pot-title-row{padding:4px 0}
+.pot-title-row>span:first-child strong{font-size:1.05rem}
+@media(max-width:760px){.money-pots-hero .button-row{width:100%}.money-pots-hero .fm-action-button{flex:1;text-align:center}}
