@@ -255,3 +255,7 @@ Corrected dashboard Razor expressions that were being emitted as literal text ra
 The Finance Manager dashboard is now a read-only command centre. Detailed monthly forms, tables and editing controls have moved to a separate monthly-management view. Dashboard summary cards preserve the selected year and month when opening the relevant management area, while Household Reserve and Forecast continue to open their existing dedicated workspaces.
 
 The sidebar now includes direct monthly-money navigation for Essential Bills, Everyday Spending, Extra Expenses and Investments. Recent activity uses natural record-first wording, and the dashboard ends after Planning and Attention/Activity.
+
+## Phase 8.4.1–8.4.4 — Monthly money workspaces
+
+Essential Bills, Everyday Spending, Extra Expenses and Investments now open as dedicated monthly workspaces rather than filtered sections of the dashboard management page. The workspaces share a consistent responsive layout, month navigation, existing-entry prefilling, entry history, edit/delete actions and category-specific fields. Dashboard links and sidebar navigation preserve the selected month. Extra expenses remain explicitly excluded from carry-over, while investments remain separate from asset holdings and valuations.

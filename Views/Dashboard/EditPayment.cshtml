@@ -1,15 +1,19 @@
 @model FinanceManagerAspNet.Models.PaymentRow
 @using System.Globalization
 @{
-    ViewData["Title"] = "Edit Payment"; var gb = CultureInfo.GetCultureInfo("en-GB");
+    ViewData["Title"] = "Edit Payment";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var year = (int?)ViewBag.Year ?? Model.Date.Year;
+    var month = (int?)ViewBag.Month ?? Model.Date.Month;
+    var returnAction = ViewBag.ReturnAction as string;
 }
 
 <section class="card">
     <h1>Edit @Model.Source.Replace("_", " ")</h1>
 
     <form asp-action="EditPayment" method="post" class="account-form">
-        <input type="hidden" name="year" value="@Model.Date.Year" />
-        <input type="hidden" name="month" value="@Model.Date.Month" />
+        <input type="hidden" name="year" value="@year" />
+        <input type="hidden" name="month" value="@month" />
         <input type="hidden" name="source" value="@Model.Source" />
         <input type="hidden" name="id" value="@Model.Id" />
 
@@ -29,6 +33,10 @@
             </div>
         }
 
-        <button class="primary">Save</button>
+        <button class="primary" type="submit">Save</button>
+        @if (!string.IsNullOrWhiteSpace(returnAction))
+        {
+            <a class="button" asp-controller="MonthlyMoney" asp-action="@returnAction" asp-route-year="@year" asp-route-month="@month">Cancel</a>
+        }
     </form>
 </section>

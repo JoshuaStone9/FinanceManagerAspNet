@@ -152,7 +152,16 @@ public sealed class DashboardController(
         if (!CanEdit()) return LoginRedirect();
         var item = await repo.GetPaymentAsync(source, id);
         if (item is null) return NotFound();
-        ViewBag.Year = year; ViewBag.Month = month;
+        ViewBag.Year = year;
+        ViewBag.Month = month;
+        ViewBag.ReturnAction = source switch
+        {
+            "bills" => "EssentialBills",
+            "everyday_spending" => "EverydaySpending",
+            "extra_expenses" => "ExtraExpenses",
+            "investments" => "Investments",
+            _ => null
+        };
         return View(item);
     }
 
@@ -230,7 +239,21 @@ public sealed class DashboardController(
     }
 
     private IActionResult RedirectToDashboard(int year, int month, string anchor)
-        => Redirect($"{Url.Action(nameof(Index), new { year, month, manage = true, source = anchor })}#{anchor}");
+    {
+        var workspaceAction = anchor switch
+        {
+            "bills" => "EssentialBills",
+            "everyday_spending" or "everyday" => "EverydaySpending",
+            "extra_expenses" or "extras" => "ExtraExpenses",
+            "investments" => "Investments",
+            _ => null
+        };
+
+        if (workspaceAction is not null)
+            return RedirectToAction(workspaceAction, "MonthlyMoney", new { year, month });
+
+        return Redirect($"{Url.Action(nameof(Index), new { year, month, manage = true, source = anchor })}#{anchor}");
+    }
     private bool CanEdit() => User.Identity?.IsAuthenticated == true;
     private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
 }

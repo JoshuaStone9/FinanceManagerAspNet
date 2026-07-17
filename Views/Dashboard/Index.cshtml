@@ -37,7 +37,7 @@
 </section>
 
 <section class="fm-dashboard-section" aria-labelledby="journey-title">
-    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Money journey</p><h2 id="journey-title">How this month's money flows</h2></div><a asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month" asp-route-manage="true">Manage this month</a></div>
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Money journey</p><h2 id="journey-title">How this month's money flows</h2></div><a asp-controller="MonthlyMoney" asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Manage monthly money</a></div>
     <div class="fm-money-journey" role="list">
         <div class="fm-journey-step" role="listitem"><i data-lucide="wallet-cards"></i><span>Income + carry forward</span><strong>@journey.EffectiveIncome.ToString("C", gb)</strong></div>
         <i class="fm-journey-arrow" data-lucide="arrow-right"></i>
@@ -71,13 +71,15 @@
                 }
                 else
                 {
-                    var source = summary.Key switch
+                    var workspaceAction = summary.Key switch
                     {
-                        "everyday" => "everyday_spending",
-                        "extras" => "extra_expenses",
-                        _ => summary.Key
+                        "bills" => "EssentialBills",
+                        "everyday" => "EverydaySpending",
+                        "extras" => "ExtraExpenses",
+                        "investments" => "Investments",
+                        _ => "EssentialBills"
                     };
-                    <a asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month" asp-route-manage="true" asp-route-source="@source">View details <i data-lucide="arrow-right"></i></a>
+                    <a asp-controller="MonthlyMoney" asp-action="@workspaceAction" asp-route-year="@Model.Year" asp-route-month="@Model.Month">View details <i data-lucide="arrow-right"></i></a>
                 }
             </article>
         }

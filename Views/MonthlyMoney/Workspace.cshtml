@@ -1,0 +1,295 @@
+@model FinanceManagerAspNet.Models.MonthlyMoneyWorkspaceViewModel
+@using System.Globalization
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = $"{Model.Title} - {Model.MonthStart:MMMM yyyy}";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+    var optionsJson = JsonSerializer.Serialize(Model.ExistingOptions);
+}
+
+<header class="fm-workspace-hero">
+    <div class="fm-workspace-heading">
+        <div class="fm-workspace-icon"><i data-lucide="@Model.Icon"></i></div>
+        <div>
+            <p class="eyebrow">@Model.Eyebrow</p>
+            <h1>@Model.Title</h1>
+            <p>@Model.Description</p>
+        </div>
+    </div>
+
+    <nav class="fm-dashboard-month" aria-label="Change @Model.Title month">
+        <a class="fm-month-button"
+           asp-action="@Model.ActionName"
+           asp-route-year="@Model.PreviousMonth.Year"
+           asp-route-month="@Model.PreviousMonth.Month"
+           aria-label="Previous month">
+            <i data-lucide="chevron-left"></i>
+        </a>
+        <span class="fm-month-label" aria-live="polite">@Model.MonthStart.ToString("MMMM yyyy")</span>
+        <a class="fm-month-button"
+           asp-action="@Model.ActionName"
+           asp-route-year="@Model.NextMonth.Year"
+           asp-route-month="@Model.NextMonth.Month"
+           aria-label="Next month">
+            <i data-lucide="chevron-right"></i>
+        </a>
+    </nav>
+</header>
+
+<nav class="fm-workspace-tabs" aria-label="Monthly money workspaces">
+    <a class="@(Model.ActionName == "EssentialBills" ? "active" : "")" asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Essential bills</a>
+    <a class="@(Model.ActionName == "EverydaySpending" ? "active" : "")" asp-action="EverydaySpending" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Everyday spending</a>
+    <a class="@(Model.ActionName == "ExtraExpenses" ? "active" : "")" asp-action="ExtraExpenses" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Extra expenses</a>
+    <a class="@(Model.ActionName == "Investments" ? "active" : "")" asp-action="Investments" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Investments</a>
+</nav>
+
+<section class="fm-workspace-metrics" aria-label="@Model.Title summary">
+    <article class="fm-metric-card">
+        <span>Total this month</span>
+        <strong>@Model.Total.ToString("C", gb)</strong>
+        <small>@Model.MonthStart.ToString("MMMM yyyy")</small>
+    </article>
+    <article class="fm-metric-card">
+        <span>Recorded entries</span>
+        <strong>@Model.Rows.Count</strong>
+        <small>Item@(Model.Rows.Count == 1 ? "" : "s") in this workspace</small>
+    </article>
+    <article class="fm-metric-card">
+        <span>Average entry</span>
+        <strong>@Model.Average.ToString("C", gb)</strong>
+        <small>Across recorded entries</small>
+    </article>
+    <article class="fm-metric-card">
+        <span>Carry-over</span>
+        <strong>@(Model.IsCarryOverEligible ? "Included" : "Excluded")</strong>
+        <small>@(Model.IsCarryOverEligible ? "Available during monthly carry over" : "Kept as a one-off monthly cost")</small>
+    </article>
+</section>
+
+<div class="fm-workspace-grid">
+    <section class="fm-workspace-list" aria-labelledby="entries-title">
+        <div class="fm-workspace-section-head">
+            <div>
+                <p class="eyebrow">Selected month</p>
+                <h2 id="entries-title">Recorded entries</h2>
+            </div>
+            <a class="button" asp-controller="Dashboard" asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Back to dashboard</a>
+        </div>
+
+        @if (Model.Rows.Count == 0)
+        {
+            <div class="fm-workspace-empty">
+                <i data-lucide="inbox"></i>
+                <strong>@Model.EmptyTitle</strong>
+                <span>@Model.EmptyDescription</span>
+            </div>
+        }
+        else
+        {
+            <div class="fm-workspace-rows">
+                @foreach (var row in Model.Rows.OrderBy(x => x.Date).ThenBy(x => x.DisplayName))
+                {
+                    <article class="fm-workspace-row">
+                        <div class="fm-workspace-row-icon"><i data-lucide="@Model.Icon"></i></div>
+                        <div class="fm-workspace-row-copy">
+                            <strong>@row.DisplayName</strong>
+                            <span>
+                                @row.Date.ToString("dd MMM yyyy")
+                                @if (!string.IsNullOrWhiteSpace(row.Category))
+                                {
+                                    <text> · @row.Category</text>
+                                }
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(row.Notes))
+                            {
+                                <small>@row.Notes</small>
+                            }
+                        </div>
+                        <div class="fm-workspace-row-amount">@row.Amount.ToString("C", gb)</div>
+                        @if (canEdit)
+                        {
+                            <div class="fm-workspace-row-actions">
+                                <a class="button"
+                                   asp-controller="Dashboard"
+                                   asp-action="EditPayment"
+                                   asp-route-source="@row.Source"
+                                   asp-route-id="@row.Id"
+                                   asp-route-year="@Model.Year"
+                                   asp-route-month="@Model.Month">
+                                    Edit
+                                </a>
+                                <form asp-controller="Dashboard"
+                                      asp-action="DeletePayment"
+                                      method="post"
+                                      data-confirm="Delete this item?">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="year" value="@Model.Year" />
+                                    <input type="hidden" name="month" value="@Model.Month" />
+                                    <input type="hidden" name="source" value="@row.Source" />
+                                    <input type="hidden" name="id" value="@row.Id" />
+                                    <input type="hidden" name="returnAnchor" value="@Model.Source" />
+                                    <button class="button danger-inline" type="submit">Delete</button>
+                                </form>
+                            </div>
+                        }
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    <aside class="fm-workspace-entry-card" aria-labelledby="add-entry-title">
+        <p class="eyebrow">Quick entry</p>
+        <h2 id="add-entry-title">@Model.AddTitle</h2>
+        <p class="muted">Choose a previous entry to prefill the form, or create a new one.</p>
+
+        @if (canEdit)
+        {
+            <form asp-controller="Dashboard"
+                  asp-action="AddPayment"
+                  method="post"
+                  class="fm-workspace-form remembered-payment-form"
+                  data-options="@optionsJson">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="year" value="@Model.Year" />
+                <input type="hidden" name="month" value="@Model.Month" />
+                <input type="hidden" name="source" value="@Model.Source" />
+                <input type="hidden" name="returnAnchor" value="@Model.Source" />
+
+                <label>
+                    @Model.ExistingLabel
+                    @if (Model.ExistingOptions.Count > 25)
+                    {
+                        <input class="existing-choice"
+                               list="workspace-existing-options"
+                               placeholder="Search previous entries..."
+                               autocomplete="off" />
+                        <datalist id="workspace-existing-options">
+                            @foreach (var option in Model.ExistingOptions)
+                            {
+                                <option value="@option.Name"></option>
+                            }
+                        </datalist>
+                    }
+                    else
+                    {
+                        <select class="existing-choice">
+                            <option value="">Choose an existing entry...</option>
+                            @foreach (var option in Model.ExistingOptions)
+                            {
+                                <option value="@option.Name">@option.Name</option>
+                            }
+                        </select>
+                    }
+                </label>
+
+                <label>
+                    @Model.NameLabel
+                    <input class="payment-name" name="name" required autocomplete="off" />
+                </label>
+
+                <label>
+                    Amount
+                    <input class="payment-amount" name="amount" type="number" min="0" step="0.01" required inputmode="decimal" />
+                </label>
+
+                <label>
+                    Date
+                    <input name="date" type="date" value="@Model.MonthStart.ToString("yyyy-MM-dd")" required />
+                </label>
+
+                @if (Model.SupportsCategory)
+                {
+                    <label>
+                        Category
+                        <input class="payment-category" name="category" autocomplete="off" />
+                    </label>
+                }
+
+                @if (Model.SupportsType)
+                {
+                    <label>
+                        Type
+                        <input class="payment-type" name="type" autocomplete="off" />
+                    </label>
+                }
+
+                @if (Model.SupportsLength)
+                {
+                    <label>
+                        Length in months
+                        <input class="payment-length" name="length" type="number" min="1" step="1" />
+                    </label>
+                }
+
+                <label>
+                    @Model.NotesLabel
+                    <textarea class="payment-notes" name="notes" rows="3"></textarea>
+                </label>
+
+                <button class="primary" type="submit">Save entry</button>
+            </form>
+        }
+        else
+        {
+            <div class="fm-workspace-empty compact">
+                <i data-lucide="lock-keyhole"></i>
+                <strong>Read-only mode</strong>
+                <span>Log in to add or edit monthly entries.</span>
+            </div>
+        }
+    </aside>
+</div>
+
+@if (canEdit && Model.IsCarryOverEligible)
+{
+    <section class="fm-workspace-footer-card">
+        <div>
+            <p class="eyebrow">Next month</p>
+            <h2>Review recurring entries before carrying them forward</h2>
+            <p class="muted">You remain in control of every item and amount copied into the next month.</p>
+        </div>
+        <a class="button primary"
+           asp-controller="Dashboard"
+           asp-action="CarryOver"
+           asp-route-year="@Model.Year"
+           asp-route-month="@Model.Month">
+            Review carry over
+        </a>
+    </section>
+}
+
+@section Scripts
+{
+    <script>
+        document.querySelectorAll('.remembered-payment-form').forEach(form => {
+            const options = JSON.parse(form.dataset.options || '[]');
+            const picker = form.querySelector('.existing-choice');
+
+            picker?.addEventListener('change', () => {
+                const chosenName = picker.value.trim().toLowerCase();
+                const found = options.find(option => option.Name.toLowerCase() === chosenName);
+
+                if (!found) {
+                    return;
+                }
+
+                const setValue = (selector, value) => {
+                    const field = form.querySelector(selector);
+                    if (field) field.value = value ?? '';
+                };
+
+                setValue('.payment-name', found.Name);
+                setValue('.payment-amount', found.Amount);
+                setValue('.payment-category', found.Category);
+                setValue('.payment-type', found.Type);
+                setValue('.payment-length', found.Length);
+                setValue('.payment-notes', found.Notes);
+
+                form.querySelector('.payment-amount')?.focus();
+            });
+        });
+    </script>
+}
