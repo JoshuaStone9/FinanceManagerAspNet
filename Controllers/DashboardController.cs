@@ -4,7 +4,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class DashboardController(FinanceRepository repo, IConfiguration config, IDashboardSummaryService dashboardSummaryService) : Controller
+public sealed class DashboardController(
+    FinanceRepository repo,
+    IConfiguration config,
+    IDashboardSummaryService dashboardSummaryService,
+    IReserveAccountSelectionService reserveAccountSelectionService,
+    IFinancialForecastService financialForecastService,
+    IWhatIfForecastService whatIfForecastService,
+    IForecastScenarioService forecastScenarioService) : Controller
 {
     public async Task<IActionResult> Index(int? year, int? month)
     {
@@ -45,6 +52,38 @@ public sealed class DashboardController(FinanceRepository repo, IConfiguration c
         ViewBag.ReserveAllocated = reserveAllocated;
         ViewBag.ReserveUnallocated = reserve.Balance - reserveAllocated;
         vm.Intelligence = await dashboardSummaryService.BuildAsync(reserve, reservePots);
+
+        var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
+        var preferredScenario = await forecastScenarioService.GetPreferredAsync();
+        FinancialForecastResult twelveMonthForecast;
+        if (preferredScenario is not null)
+        {
+            var preferredInput = preferredScenario.ToInput();
+            preferredInput.Months = 12;
+            twelveMonthForecast = whatIfForecastService.Build(preferredInput, accountSummary, reservePots).ScenarioPlan;
+        }
+        else
+        {
+            twelveMonthForecast = financialForecastService.Build(new FinancialForecastRequest
+            {
+                StartDate = DateTime.Today,
+                EndDate = DateTime.Today.AddMonths(12),
+                ProtectedReserveBaseline = accountSummary.Baseline,
+                Accounts = accountSummary.SelectedAccounts,
+                Pots = reservePots
+            });
+        }
+
+        vm.ForecastSummary = new DashboardForecastSummary
+        {
+            ProjectedReserveBalance = twelveMonthForecast.ProjectedReserveBalance,
+            ProjectedInterest = twelveMonthForecast.ProjectedInterest,
+            GoalsAtRisk = twelveMonthForecast.AtRiskPotCount,
+            GoalsExpectedToComplete = twelveMonthForecast.CompletedPotCount,
+            ScenarioLabel = preferredScenario?.Name ?? "Live plan",
+            PreferredScenarioId = preferredScenario?.Id
+        };
+
         ViewBag.ExistingBills = await repo.GetExistingPaymentOptionsAsync("bills");
         ViewBag.ExistingEveryday = await repo.GetExistingPaymentOptionsAsync("everyday_spending");
         ViewBag.ExistingExtras = await repo.GetExistingPaymentOptionsAsync("extra_expenses");

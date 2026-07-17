@@ -1,3 +1,11 @@
+## Phase 7.5–7.6 – Scenario Management and Dashboard Integration
+
+- Added persistent saved forecast scenarios.
+- Added rename, duplicate, delete, preferred-scenario and comparison workflows.
+- Kept preferred scenarios isolated from live finance data.
+- Added a compact 12-month forecast summary to the main dashboard.
+- Added automatic database bootstrap for `forecast_scenarios`.
+
 
 ## Phase 7.1–7.2 – Forecast Foundation and Dashboard
 

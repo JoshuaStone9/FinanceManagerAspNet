@@ -71,6 +71,7 @@ public sealed class DashboardViewModel
     public List<AccountBalance> Accounts { get; set; } = [];
     public List<LastModifiedInfo> LastModified { get; set; } = [];
     public DashboardIntelligenceSummary Intelligence { get; set; } = new();
+    public DashboardForecastSummary ForecastSummary { get; set; } = new();
 }
 
 public sealed class DashboardIntelligenceSummary

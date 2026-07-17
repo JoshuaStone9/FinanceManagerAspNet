@@ -1,0 +1,47 @@
+@model ForecastScenarioListViewModel
+@{
+    ViewData["Title"] = "Saved Forecast Scenarios";
+    var selectedId = ViewBag.SelectedId as int?;
+}
+<div class="page-header forecast-page-header">
+    <div><p class="eyebrow">Phase 7.5 · Scenario management</p><h1>Saved scenarios</h1><p class="muted">Keep planning alternatives without changing live balances, pots or contribution history.</p></div>
+    <div class="what-if-actions"><a asp-action="WhatIf" class="fm-action-button fm-action-primary">Create scenario</a><a asp-action="Index" class="fm-action-button fm-action-secondary">Forecast dashboard</a></div>
+</div>
+@if (Model.Scenarios.Count == 0)
+{
+    <section class="card"><h2>No saved scenarios yet</h2><p class="muted">Build a what-if plan and save it here for later comparison.</p></section>
+}
+else
+{
+    <section class="card">
+        <form asp-action="CompareScenarios" method="get" class="account-form">
+            <label>First scenario<select name="leftId" required>@foreach (var scenario in Model.Scenarios){<option value="@scenario.Id">@scenario.Name</option>}</select></label>
+            <label>Second scenario<select name="rightId" required>@foreach (var scenario in Model.Scenarios.Skip(1).Concat(Model.Scenarios.Take(1))){<option value="@scenario.Id">@scenario.Name</option>}</select></label>
+            <button class="fm-action-button fm-action-primary">Compare scenarios</button>
+        </form>
+    </section>
+    <section class="grid two">
+    @foreach (var scenario in Model.Scenarios)
+    {
+        <article class="card @(selectedId == scenario.Id ? "scenario-selected" : "")">
+            <div class="section-heading"><div><p class="eyebrow">@(scenario.IsPreferred ? "Preferred scenario" : $"Updated {scenario.UpdatedAt:dd MMM yyyy}")</p><h2>@scenario.Name</h2></div>@if(scenario.IsPreferred){<span class="status-pill good">Preferred</span>}</div>
+            <div class="compact-list">
+                <div><span>Timeframe</span><strong>@scenario.Months months</strong></div>
+                <div><span>Pot</span><strong>@(scenario.PotId.HasValue && Model.PotNames.ContainsKey(scenario.PotId.Value) ? Model.PotNames[scenario.PotId.Value] : "All / none")</strong></div>
+                <div><span>Monthly override</span><strong>@(scenario.MonthlyContributionOverride?.ToString("C") ?? "No change")</strong></div>
+                <div><span>One-off contribution</span><strong>@scenario.OneOffContribution.ToString("C")</strong></div>
+                <div><span>Future expense</span><strong>@scenario.FutureExpenseAmount.ToString("C")</strong></div>
+            </div>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form asp-action="RenameScenario" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@scenario.Id"/><label>Rename<input name="name" value="@scenario.Name" maxlength="160" required/></label><button>Rename</button></form>
+                <div class="what-if-actions">
+                    @if (!scenario.IsPreferred){<form asp-action="SetPreferredScenario" method="post">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@scenario.Id"/><button class="fm-action-button fm-action-primary">Make preferred</button></form>}
+                    <form asp-action="DuplicateScenario" method="post">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@scenario.Id"/><button class="fm-action-button fm-action-secondary">Duplicate</button></form>
+                    <form asp-action="DeleteScenario" method="post" data-confirm="Delete this saved scenario?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@scenario.Id"/><button class="button danger-inline">Delete</button></form>
+                </div>
+            }
+        </article>
+    }
+    </section>
+}

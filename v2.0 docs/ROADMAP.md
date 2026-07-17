@@ -9,13 +9,13 @@
 - ✅ Phase 6 – Household Reserve & Pot Management Enhancements
 
 ## In progress
-- 🚧 Phase 7 – Forecasting & Planning (7.1–7.4 implemented)
+- 🚧 Phase 7 – Forecasting & Planning (7.1–7.6 implemented)
   - ✅ 7.1 Forecast Foundation
   - ✅ 7.2 Forecast Dashboard
   - ⏳ 7.3 Goal Risk Analysis
   - ⏳ 7.4 What-if Planner
-  - ⏳ 7.5 Scenario Management
-  - ⏳ 7.6 Dashboard Integration
+  - ✅ 7.5 Scenario Management
+  - ✅ 7.6 Dashboard Integration
   - ⏳ 7.7 Monthly Cash-flow Forecast
   - ⏳ 7.8 Forecast Recommendations
 

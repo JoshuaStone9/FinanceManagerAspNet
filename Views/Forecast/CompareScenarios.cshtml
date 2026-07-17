@@ -1,0 +1,15 @@
+@model ForecastScenarioComparisonViewModel
+@{
+    ViewData["Title"] = "Compare Forecast Scenarios";
+    var left = Model.Left.ScenarioPlan;
+    var right = Model.Right.ScenarioPlan;
+}
+<div class="page-header forecast-page-header"><div><p class="eyebrow">Phase 7.5 · Saved comparison</p><h1>@Model.LeftScenario.Name vs @Model.RightScenario.Name</h1><p class="muted">Both plans are isolated from live finance data.</p></div><a asp-action="Scenarios" class="fm-action-button fm-action-secondary">Back to scenarios</a></div>
+<section class="card forecast-section"><div class="table-wrap"><table><thead><tr><th>Result</th><th>@Model.LeftScenario.Name</th><th>@Model.RightScenario.Name</th><th>Difference</th></tr></thead><tbody>
+<tr><td>Projected reserve</td><td>@left.ProjectedReserveBalance.ToString("C")</td><td>@right.ProjectedReserveBalance.ToString("C")</td><td>@((right.ProjectedReserveBalance-left.ProjectedReserveBalance).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+<tr><td>Projected interest</td><td>@left.ProjectedInterest.ToString("C")</td><td>@right.ProjectedInterest.ToString("C")</td><td>@((right.ProjectedInterest-left.ProjectedInterest).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+<tr><td>Unallocated surplus</td><td>@left.ProjectedUnallocatedSurplus.ToString("C")</td><td>@right.ProjectedUnallocatedSurplus.ToString("C")</td><td>@((right.ProjectedUnallocatedSurplus-left.ProjectedUnallocatedSurplus).ToString("+£#,##0.00;-£#,##0.00;£0.00"))</td></tr>
+<tr><td>Goals at risk</td><td>@left.AtRiskPotCount</td><td>@right.AtRiskPotCount</td><td>@(right.AtRiskPotCount-left.AtRiskPotCount)</td></tr>
+<tr><td>Goals completed</td><td>@left.CompletedPotCount</td><td>@right.CompletedPotCount</td><td>@(right.CompletedPotCount-left.CompletedPotCount)</td></tr>
+</tbody></table></div></section>
+<section class="grid two"><article class="card"><h2>@Model.LeftScenario.Name</h2>@foreach(var pot in left.Pots.OrderBy(x=>x.PotName)){<p><strong>@pot.PotName</strong> <span class="status-pill @pot.StatusCssClass">@pot.StatusLabel</span><br/><span class="muted">@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "No completion date")</span></p>}</article><article class="card"><h2>@Model.RightScenario.Name</h2>@foreach(var pot in right.Pots.OrderBy(x=>x.PotName)){<p><strong>@pot.PotName</strong> <span class="status-pill @pot.StatusCssClass">@pot.StatusLabel</span><br/><span class="muted">@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "No completion date")</span></p>}</article></section>

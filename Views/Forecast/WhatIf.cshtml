@@ -87,6 +87,30 @@
         </section>
     }
 
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <section class="card forecast-section">
+            <p class="eyebrow">Phase 7.5 · Scenario management</p>
+            <h2>Save this scenario</h2>
+            <form asp-action="SaveScenario" method="post" class="account-form">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Months" value="@Model.Input.Months" />
+                <input type="hidden" name="PotId" value="@Model.Input.PotId" />
+                <input type="hidden" name="MonthlyContributionOverride" value="@Model.Input.MonthlyContributionOverride" />
+                <input type="hidden" name="TargetAmountOverride" value="@Model.Input.TargetAmountOverride" />
+                <input type="hidden" name="TargetDateOverride" value="@(Model.Input.TargetDateOverride?.ToString("yyyy-MM-dd"))" />
+                <input type="hidden" name="OneOffContribution" value="@Model.Input.OneOffContribution" />
+                <input type="hidden" name="InterestRateOverride" value="@Model.Input.InterestRateOverride" />
+                <input type="hidden" name="ProtectedBaselineOverride" value="@Model.Input.ProtectedBaselineOverride" />
+                <input type="hidden" name="FutureExpenseAmount" value="@Model.Input.FutureExpenseAmount" />
+                <input type="hidden" name="FutureExpenseDate" value="@(Model.Input.FutureExpenseDate?.ToString("yyyy-MM-dd"))" />
+                <label>Scenario name<input name="name" maxlength="160" required placeholder="e.g. Faster house deposit" /></label>
+                <button class="fm-action-button fm-action-primary">Save scenario</button>
+                <a asp-action="Scenarios" class="fm-action-button fm-action-secondary">Manage scenarios</a>
+            </form>
+        </section>
+    }
+
     <section class="card forecast-section scenario-safety-note">
         <strong>No live data was changed.</strong>
         <p class="muted">This comparison exists only for the current request. It does not update pot settings, reserve accounts, balances or historical records.</p>

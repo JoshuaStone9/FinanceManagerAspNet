@@ -127,3 +127,62 @@ public sealed class WhatIfForecastViewModel
     public PotForecastResult? ScenarioPot { get; set; }
     public bool HasScenario { get; set; }
 }
+
+
+public sealed class SavedForecastScenario
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsPreferred { get; set; }
+    public int Months { get; set; } = 12;
+    public int? PotId { get; set; }
+    public decimal? MonthlyContributionOverride { get; set; }
+    public decimal? TargetAmountOverride { get; set; }
+    public DateTime? TargetDateOverride { get; set; }
+    public decimal OneOffContribution { get; set; }
+    public decimal? InterestRateOverride { get; set; }
+    public decimal? ProtectedBaselineOverride { get; set; }
+    public decimal FutureExpenseAmount { get; set; }
+    public DateTime? FutureExpenseDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+
+    public WhatIfForecastInput ToInput() => new()
+    {
+        Months = Months,
+        PotId = PotId,
+        MonthlyContributionOverride = MonthlyContributionOverride,
+        TargetAmountOverride = TargetAmountOverride,
+        TargetDateOverride = TargetDateOverride,
+        OneOffContribution = OneOffContribution,
+        InterestRateOverride = InterestRateOverride,
+        ProtectedBaselineOverride = ProtectedBaselineOverride,
+        FutureExpenseAmount = FutureExpenseAmount,
+        FutureExpenseDate = FutureExpenseDate
+    };
+}
+
+public sealed class ForecastScenarioListViewModel
+{
+    public IReadOnlyList<SavedForecastScenario> Scenarios { get; init; } = Array.Empty<SavedForecastScenario>();
+    public IReadOnlyDictionary<int, string> PotNames { get; init; } = new Dictionary<int, string>();
+}
+
+public sealed class ForecastScenarioComparisonViewModel
+{
+    public SavedForecastScenario LeftScenario { get; init; } = new();
+    public SavedForecastScenario RightScenario { get; init; } = new();
+    public WhatIfForecastViewModel Left { get; init; } = new();
+    public WhatIfForecastViewModel Right { get; init; } = new();
+    public IReadOnlyList<SavedForecastScenario> AvailableScenarios { get; init; } = Array.Empty<SavedForecastScenario>();
+}
+
+public sealed class DashboardForecastSummary
+{
+    public decimal ProjectedReserveBalance { get; init; }
+    public decimal ProjectedInterest { get; init; }
+    public int GoalsAtRisk { get; init; }
+    public int GoalsExpectedToComplete { get; init; }
+    public string ScenarioLabel { get; init; } = "Live plan";
+    public int? PreferredScenarioId { get; init; }
+}

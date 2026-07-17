@@ -222,3 +222,9 @@
 .scenario-pot-comparison h3 { margin-top:0; }
 .scenario-safety-note { border-left:4px solid var(--accent); }
 @media(max-width:700px){.what-if-grid,.scenario-pot-comparison{grid-template-columns:1fr;}}
+
+/* Phase 7.5-7.6 scenario management and dashboard integration */
+.scenario-selected { outline: 2px solid var(--accent, #7c3aed); }
+.forecast-dashboard-summary .forecast-metric { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.forecast-dashboard-summary .forecast-metric span { display:block; color:var(--muted); margin-bottom:.35rem; }
+.forecast-dashboard-summary .forecast-metric strong { font-size:1.45rem; }

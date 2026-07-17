@@ -98,15 +98,15 @@ The dedicated What-if Planner supports temporary overrides for a selected pot co
 
 ## 7.5 – Scenario Management
 
-Planned for Batch 3.
+Implemented in Batch 3.
 
-Save, rename, duplicate, delete and compare planning scenarios. Allow a preferred scenario without turning it into live data.
+Planning scenarios can be saved, renamed, duplicated, deleted, compared and marked as preferred. Preferred scenarios remain isolated from live balances, pot settings and contribution history.
 
 ## 7.6 – Dashboard Integration
 
-Planned for Batch 3.
+Implemented in Batch 3.
 
-Add a compact 12-month forecast summary to the main dashboard, including projected reserve, projected interest, goals at risk and goals expected to complete.
+The main dashboard now includes a compact 12-month forecast summary showing projected reserve, projected interest, goals at risk and goals expected to complete. It uses the preferred saved scenario when one exists, otherwise it uses the live plan.
 
 ## 7.7 – Monthly Cash-flow Forecast
 

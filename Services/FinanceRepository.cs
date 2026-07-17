@@ -347,6 +347,28 @@ IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM
 IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_asset_holdings_symbol' AND object_id=OBJECT_ID('dbo.asset_holdings')) CREATE INDEX IX_asset_holdings_symbol ON dbo.asset_holdings(symbol);
 
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Lucy''s ISA') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Lucy''s ISA',4000,3.8,0,1);
+IF OBJECT_ID('dbo.forecast_scenarios','U') IS NULL
+CREATE TABLE dbo.forecast_scenarios(
+    forecast_scenario_id int IDENTITY(1,1) PRIMARY KEY,
+    [name] nvarchar(160) NOT NULL,
+    is_preferred bit NOT NULL DEFAULT 0,
+    months int NOT NULL DEFAULT 12,
+    pot_id int NULL,
+    monthly_contribution_override decimal(18,2) NULL,
+    target_amount_override decimal(18,2) NULL,
+    target_date_override date NULL,
+    one_off_contribution decimal(18,2) NOT NULL DEFAULT 0,
+    interest_rate_override decimal(9,4) NULL,
+    protected_baseline_override decimal(18,2) NULL,
+    future_expense_amount decimal(18,2) NOT NULL DEFAULT 0,
+    future_expense_date date NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+IF OBJECT_ID('dbo.forecast_scenarios','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_forecast_scenarios_preferred' AND object_id=OBJECT_ID('dbo.forecast_scenarios'))
+CREATE INDEX IX_forecast_scenarios_preferred ON dbo.forecast_scenarios(is_preferred, updated_at DESC);
+
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Monzo Pots',1370,2.75,0,1);";
         await ExecuteAsync(sql);
     }

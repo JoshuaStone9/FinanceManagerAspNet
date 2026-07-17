@@ -59,6 +59,19 @@
     </div>
 </section>
 
+<section class="card forecast-dashboard-summary" id="forecast-outlook">
+    <div class="section-heading">
+        <div><p class="eyebrow">Phase 7.6 · 12-month outlook</p><h2>Forecast summary</h2><p class="muted">Based on @Model.ForecastSummary.ScenarioLabel. A preferred scenario remains planning-only and does not change live data.</p></div>
+        <div class="what-if-actions"><a class="button" asp-controller="Forecast" asp-action="Index" asp-route-months="12">Open forecast</a><a class="button" asp-controller="Forecast" asp-action="Scenarios">Manage scenarios</a></div>
+    </div>
+    <div class="grid cards-4">
+        <article class="forecast-metric"><span>Projected reserve</span><strong>@Model.ForecastSummary.ProjectedReserveBalance.ToString("C", gb)</strong></article>
+        <article class="forecast-metric"><span>Projected interest</span><strong class="good">@Model.ForecastSummary.ProjectedInterest.ToString("C", gb)</strong></article>
+        <article class="forecast-metric"><span>Goals at risk</span><strong class="@(Model.ForecastSummary.GoalsAtRisk > 0 ? "bad" : "good")">@Model.ForecastSummary.GoalsAtRisk</strong></article>
+        <article class="forecast-metric"><span>Goals expected to complete</span><strong class="good">@Model.ForecastSummary.GoalsExpectedToComplete</strong></article>
+    </div>
+</section>
+
 <section class="grid cards-4">
     <article class="card"><p class="eyebrow">Active pots</p><h2>@Model.Intelligence.ActivePotCount</h2><p class="muted">Currently included in funding health.</p></article>
     <article class="card"><p class="eyebrow">Monthly planned</p><h2>@Model.Intelligence.MonthlyPlanned.ToString("C", gb)</h2><p class="muted">Excludes paused and irregular pots.</p></article>
