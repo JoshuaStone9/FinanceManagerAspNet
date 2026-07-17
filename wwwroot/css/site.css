@@ -182,3 +182,31 @@
         width: 100%;
     }
 }
+
+/* Phase 7.1-7.2 forecast foundation and dashboard */
+.forecast-controls { margin-bottom: 1rem; }
+.forecast-control-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; align-items:end; }
+.forecast-checkbox { display:flex; gap:.65rem; align-items:center; min-height:42px; }
+.forecast-checkbox input { width:auto; }
+.forecast-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; margin:1rem 0; }
+.forecast-summary-grid .card { display:flex; flex-direction:column; gap:.35rem; }
+.forecast-summary-grid span { color:var(--muted); font-size:.85rem; }
+.forecast-summary-grid strong { font-size:1.45rem; }
+.forecast-section { margin-top:1rem; }
+.section-heading { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; margin-bottom:1rem; }
+.forecast-pot-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.forecast-pot-card { border:1px solid var(--line); border-radius:16px; padding:1rem; background:var(--soft); }
+.forecast-pot-title { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+.forecast-pot-title h3 { margin:0; }
+.forecast-pot-card dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; margin:1rem 0; }
+.forecast-pot-card dl div { display:flex; flex-direction:column; gap:.2rem; }
+.forecast-pot-card dt { color:var(--muted); font-size:.8rem; }
+.forecast-pot-card dd { margin:0; font-weight:800; }
+.status-pill { display:inline-flex; padding:.35rem .65rem; border-radius:999px; font-weight:800; font-size:.78rem; }
+.status-pill.good { background:rgba(14,159,110,.15); color:#39d98a; }
+.status-pill.warn { background:rgba(245,158,11,.16); color:#f8bd54; }
+.status-pill.bad { background:rgba(239,68,68,.16); color:#ff7777; }
+.status-pill.muted { background:var(--card); color:var(--muted); }
+.forecast-assumptions { margin:0; padding-left:1.25rem; display:grid; gap:.55rem; }
+@media(max-width:1000px){.forecast-control-grid,.forecast-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:700px){.forecast-control-grid,.forecast-summary-grid,.forecast-pot-grid,.forecast-pot-card dl{grid-template-columns:1fr;}.forecast-control-grid .fm-action-button{width:100%;}.section-heading,.forecast-pot-title{flex-direction:column;align-items:flex-start;}}

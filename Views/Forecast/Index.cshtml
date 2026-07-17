@@ -1,0 +1,119 @@
+@model ForecastPageViewModel
+@{
+    ViewData["Title"] = "Forecast";
+    var forecast = Model.Forecast;
+}
+
+<div class="page-header forecast-page-header">
+    <div>
+        <p class="eyebrow">Phase 7 · Forecasting &amp; Planning</p>
+        <h1>Financial Forecast</h1>
+        <p class="muted">Explore the likely future position of your household reserve and savings pots without changing live data.</p>
+    </div>
+</div>
+
+<form method="get" class="card forecast-controls">
+    <div class="forecast-control-grid">
+        <label>
+            Timeframe
+            <select name="months">
+                <option value="3" selected="@(Model.Months == 3 ? "selected" : null)">3 months</option>
+                <option value="6" selected="@(Model.Months == 6 ? "selected" : null)">6 months</option>
+                <option value="12" selected="@(Model.Months == 12 ? "selected" : null)">12 months</option>
+                <option value="24" selected="@(Model.Months == 24 ? "selected" : null)">24 months</option>
+            </select>
+        </label>
+        <label>
+            Custom end date
+            <input type="date" name="customEndDate" value="@(Model.CustomEndDate?.ToString("yyyy-MM-dd"))" />
+        </label>
+        <label class="forecast-checkbox">
+            <input type="checkbox" name="includeAccountContributions" value="true" checked="@Model.IncludeAccountContributions" />
+            <input type="hidden" name="includeAccountContributions" value="false" />
+            Include future account contributions
+        </label>
+        <button type="submit" class="fm-action-button fm-action-primary">Update forecast</button>
+    </div>
+</form>
+
+<div class="forecast-summary-grid">
+    <section class="card"><span>Current reserve</span><strong>@forecast.OpeningReserveBalance.ToString("C")</strong></section>
+    <section class="card"><span>Projected reserve</span><strong>@forecast.ProjectedReserveBalance.ToString("C")</strong></section>
+    <section class="card"><span>Projected interest</span><strong>@forecast.ProjectedInterest.ToString("C")</strong></section>
+    <section class="card"><span>Future contributions</span><strong>@forecast.ProjectedAccountContributions.ToString("C")</strong></section>
+    <section class="card"><span>Projected pot allocations</span><strong>@forecast.ProjectedAllocatedToPots.ToString("C")</strong></section>
+    <section class="card"><span>Unallocated surplus</span><strong>@forecast.ProjectedUnallocatedSurplus.ToString("C")</strong></section>
+    <section class="card"><span>Goals completed</span><strong>@forecast.CompletedPotCount</strong></section>
+    <section class="card"><span>Goals needing attention</span><strong>@forecast.AtRiskPotCount</strong></section>
+</div>
+
+<section class="card forecast-section">
+    <div class="section-heading">
+        <div><p class="eyebrow">Month by month</p><h2>Reserve projection</h2></div>
+        <span class="muted">To @forecast.EndDate.ToString("dd MMMM yyyy")</span>
+    </div>
+    @if (forecast.Months.Count == 0)
+    {
+        <p class="muted">Choose a future end date to see monthly projections.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Month</th><th>Opening</th><th>Contributions</th><th>Interest</th><th>Closing</th><th>Allocated to pots</th><th>Available surplus</th></tr></thead>
+                <tbody>
+                @foreach (var row in forecast.Months)
+                {
+                    <tr>
+                        <td>@row.MonthLabel</td>
+                        <td>@row.OpeningReserveBalance.ToString("C")</td>
+                        <td>@row.Contributions.ToString("C")</td>
+                        <td>@row.Interest.ToString("C")</td>
+                        <td><strong>@row.ClosingReserveBalance.ToString("C")</strong></td>
+                        <td>@row.ProjectedAllocatedToPots.ToString("C")</td>
+                        <td>@row.AvailableSurplus.ToString("C")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="card forecast-section">
+    <div class="section-heading"><div><p class="eyebrow">Goal outlook</p><h2>Pot forecasts</h2></div></div>
+    @if (forecast.Pots.Count == 0)
+    {
+        <p class="muted">No active reserve pots are available to forecast.</p>
+    }
+    else
+    {
+        <div class="forecast-pot-grid">
+        @foreach (var pot in forecast.Pots)
+        {
+            <article class="forecast-pot-card">
+                <div class="forecast-pot-title"><h3>@pot.PotName</h3><span class="status-pill @pot.StatusCssClass">@pot.StatusLabel</span></div>
+                <dl>
+                    <div><dt>Current balance</dt><dd>@pot.CurrentBalance.ToString("C")</dd></div>
+                    <div><dt>Target</dt><dd>@(pot.TargetAmount?.ToString("C") ?? "Not set")</dd></div>
+                    <div><dt>Projected balance</dt><dd>@pot.ProjectedBalance.ToString("C")</dd></div>
+                    <div><dt>Projected completion</dt><dd>@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not available")</dd></div>
+                    <div><dt>Intended contribution</dt><dd>@pot.IntendedMonthlyContribution.ToString("C") / month</dd></div>
+                    <div><dt>Required contribution</dt><dd>@(pot.RequiredMonthlyContribution.HasValue ? $"{pot.RequiredMonthlyContribution.Value:C} / month" : "Not available")</dd></div>
+                </dl>
+                <p class="muted">@pot.Explanation</p>
+            </article>
+        }
+        </div>
+    }
+</section>
+
+<section class="card forecast-section">
+    <div class="section-heading"><div><p class="eyebrow">Transparency</p><h2>Forecast assumptions</h2></div></div>
+    <ul class="forecast-assumptions">
+    @foreach (var assumption in forecast.Assumptions)
+    {
+        <li>@assumption</li>
+    }
+    </ul>
+</section>

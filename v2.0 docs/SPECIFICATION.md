@@ -36,5 +36,18 @@ Recovery recommendations and application workflow.
 ### Monthly Funding Review
 Monthly summaries, funding outcomes, events and reminders.
 
+### Forecasting & Planning
+A read-only forecast engine and dedicated dashboard project selected reserve-account balances, account contributions, monthly interest, protected reserve surplus and pot completion outcomes. Forecast status is separate from monthly funding status and overall pot status. Later Phase 7 batches add detailed goal risk analysis, what-if planning, saved scenarios, cash-flow forecasting, dashboard integration and advisory forecast recommendations.
+
+## Forecasting Business Rules
+- Forecasts begin from current selected reserve-account and active pot balances.
+- Account interest is calculated separately using each account's rate.
+- The protected household reserve baseline remains unavailable for allocation.
+- Pot contributions are virtual reserve allocations and do not reduce the reserve total.
+- Forecast statuses are Completed, On track, At risk, Behind, No contribution planned, No target, No due date and Overdrawn.
+- Forecast calculations never write to live financial tables.
+- What-if and saved scenario values remain isolated until a separate confirmed workflow applies a change.
+- Assumptions must be displayed beside forecast results.
+
 ## Future Modules
 See ROADMAP.md.
