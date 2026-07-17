@@ -18,15 +18,23 @@
     };
 }
 
-<section class="hero card">
-    <a class="arrow" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month">‹</a>
-    <div><p class="eyebrow">Monthly household budget</p><h1>@Model.MonthStart.ToString("MMMM yyyy")</h1><p class="muted">Your balance only turns negative after allocations exceed the income entered.</p></div>
-    <a class="arrow" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month">›</a>
-</section>
+<header class="fm-dashboard-welcome">
+    <div>
+        <p class="eyebrow">Finance Manager command centre</p>
+        <h1>@(DateTime.Now.Hour < 12 ? "Good morning" : DateTime.Now.Hour < 18 ? "Good afternoon" : "Good evening")</h1>
+        <p class="muted">Review this month's position, reserve health, upcoming actions and 12-month outlook.</p>
+    </div>
+    <nav class="fm-dashboard-month" aria-label="Change dashboard month">
+        <a class="arrow" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month">‹</a>
+        <strong>@Model.MonthStart.ToString("MMMM yyyy")</strong>
+        <a class="arrow" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month">›</a>
+    </nav>
+</header>
 
 @if (TempData["CarryMessage"] != null) { <section class="card"><strong>@TempData["CarryMessage"]</strong></section> }
 @if (TempData["Success"] != null) { <section class="card"><strong>@TempData["Success"]</strong></section> }
 
+<div class="fm-dashboard-section-title"><div><h2>Overview</h2><p>Your most important financial signals for the selected month.</p></div></div>
 <section class="card intelligence-card" id="action-centre">
     <div class="section-heading">
         <div>
@@ -59,6 +67,7 @@
     </div>
 </section>
 
+<div class="fm-dashboard-section-title fm-dashboard-section"><div><h2>Planning outlook</h2><p>See how the current plan may develop over the next 12 months.</p></div></div>
 <section class="card forecast-dashboard-summary" id="forecast-outlook">
     <div class="section-heading">
         <div><p class="eyebrow">Phase 7.6 · 12-month outlook</p><h2>Forecast summary</h2><p class="muted">Based on @Model.ForecastSummary.ScenarioLabel. A preferred scenario remains planning-only and does not change live data.</p></div>
@@ -156,6 +165,7 @@
     </article>
 </section>
 
+<div class="fm-dashboard-section-title fm-dashboard-section"><div><h2>Monthly position</h2><p>Income, allocations, remaining money and reserve position.</p></div></div>
 <section class="grid cards-4">
     <article class="card">
         <p class="eyebrow">Available funds</p>

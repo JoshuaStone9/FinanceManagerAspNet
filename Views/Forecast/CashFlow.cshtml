@@ -1,0 +1,44 @@
+@model CashFlowForecastPageViewModel
+@{
+    ViewData["Title"] = "Cash-flow Forecast";
+    var gb = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+}
+<div class="page-header forecast-page-header">
+    <div><p class="eyebrow">Phase 7.7–7.8</p><h1>Monthly cash-flow forecast</h1><p class="muted">A read-only projection using this month's income and recurring entries. No future records are created.</p></div>
+    <a asp-action="Index" class="fm-action-button fm-action-secondary">Reserve forecast</a>
+</div>
+<form method="get" class="card forecast-controls">
+    <div class="forecast-control-grid">
+        <label>Timeframe<select name="months"><option value="6" selected="@(Model.Months == 6 ? "selected" : null)">6 months</option><option value="12" selected="@(Model.Months == 12 ? "selected" : null)">12 months</option><option value="24" selected="@(Model.Months == 24 ? "selected" : null)">24 months</option><option value="36" selected="@(Model.Months == 36 ? "selected" : null)">36 months</option></select></label>
+        <button class="fm-action-button fm-action-primary">Update forecast</button>
+    </div>
+</form>
+<div class="forecast-summary-grid">
+    <section class="card"><span>Total income</span><strong>@Model.Forecast.TotalIncome.ToString("C", gb)</strong></section>
+    <section class="card"><span>Total outgoings</span><strong>@Model.Forecast.TotalOutgoings.ToString("C", gb)</strong></section>
+    <section class="card"><span>Projected interest</span><strong>@Model.Forecast.TotalInterest.ToString("C", gb)</strong></section>
+    <section class="card"><span>Shortfall months</span><strong class="@(Model.Forecast.ShortfallMonthCount > 0 ? "bad" : "good")">@Model.Forecast.ShortfallMonthCount</strong></section>
+</div>
+<section class="card forecast-section" id="recommendations">
+    <div class="section-heading"><div><p class="eyebrow">Phase 7.8</p><h2>Forecast intelligence</h2></div></div>
+    <div class="forecast-intelligence-list">
+    @foreach (var item in Model.Recommendations)
+    {
+        <article class="forecast-intelligence-item @item.SeverityCssClass">
+            <div><strong>@item.Title</strong><p class="muted">@item.Description</p></div>
+            @if (item.PotId.HasValue) { <a asp-controller="SavingPots" asp-action="Index" asp-fragment="pot-@item.PotId" class="button">View pot</a> }
+            else if (item.Month.HasValue) { <a href="#month-@item.Month.Value.ToString("yyyy-MM")" class="button">View month</a> }
+        </article>
+    }
+    </div>
+</section>
+<section class="card forecast-section">
+    <div class="section-heading"><div><p class="eyebrow">Phase 7.7</p><h2>Month-by-month projection</h2></div><span class="muted">Current month uses recorded and planned figures; later months are forecast only.</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Month</th><th>Income</th><th>Bills</th><th>Everyday</th><th>Investments</th><th>Reserve</th><th>Expenses</th><th>Interest</th><th>Remaining</th><th>Status</th></tr></thead><tbody>
+    @foreach (var row in Model.Forecast.Months)
+    {
+        <tr id="month-@row.Month.ToString("yyyy-MM")"><td><strong>@row.MonthLabel</strong>@if(row.IsCurrentMonth){<small class="muted"> Current</small>}</td><td>@row.Income.ToString("C", gb)</td><td>@row.Bills.ToString("C", gb)</td><td>@row.EverydaySpending.ToString("C", gb)</td><td>@row.Investments.ToString("C", gb)</td><td>@row.HouseholdReserveContributions.ToString("C", gb)</td><td>@row.PlannedExpenses.ToString("C", gb)</td><td class="good">@row.InterestEarned.ToString("C", gb)</td><td class="@(row.RemainingCash < 0 ? "bad" : "good")"><strong>@row.RemainingCash.ToString("C", gb)</strong></td><td><span class="status-pill @row.StatusCssClass">@row.StatusLabel</span></td></tr>
+    }
+    </tbody></table></div>
+</section>
+<section class="card forecast-section"><p class="eyebrow">Assumptions</p><ul class="forecast-assumptions"><li>Items in the selected month continue monthly until their optional length expires.</li><li>Extra expenses are treated as one-off costs in their recorded month.</li><li>Positive or negative remaining cash carries into the following month.</li><li>Reserve interest is estimated monthly after that month's reserve contribution.</li><li>The forecast is advisory and does not insert or update future monthly records.</li></ul></section>

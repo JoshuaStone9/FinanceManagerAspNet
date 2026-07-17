@@ -30,3 +30,11 @@
 - Added detailed goal risk analysis and recommendations.
 - Added a read-only what-if planner with temporary overrides and comparison.
 - Added unit tests for risk and scenario behaviour.
+
+## Phase 8 Batch 1 — 8.1 to 8.3
+- Replaced the Finance Manager topbar with a responsive, collapsible sidebar shell.
+- Grouped navigation into Dashboard, Finance, Money and Personal sections.
+- Added active-page highlighting, mobile drawer behaviour and persisted collapse state.
+- Added the Finance Manager logo and favicon to the application shell.
+- Refreshed the dashboard header and content hierarchy while preserving existing data and actions.
+- Added Phase 8 roadmap, design-system, navigation, component and sidebar documentation.

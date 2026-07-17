@@ -10,10 +10,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>@ViewData["Title"] - @(isVault ? "Personal Vault" : "Finance Manager")</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   @if (isVault)
   {
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/personalvault.css" asp-append-version="true" />
   }
   else
@@ -120,47 +121,85 @@
 }
 else
 {
-  <header class="topbar">
-    <a class="brand" asp-controller="Auth" asp-action="Start">Finance Manager</a>
-    <nav>
-      <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
-      <a asp-controller="Statistics" asp-action="Index">Statistics</a>
-      <a asp-controller="Assets" asp-action="Index">Assets</a>
-      <a asp-controller="SavingPots" asp-action="Index">Household Reserve</a>
-      <a asp-controller="Events" asp-action="Index">Events</a>
-      <a asp-controller="Reminders" asp-action="Index">Reminders</a>
-      <a asp-controller="MonthlyFundingReview" asp-action="Index">Monthly Review</a>
-      <a asp-controller="Forecast" asp-action="Index">Forecast</a>
-      <a asp-controller="Items" asp-action="Index">Personal Vault</a>
-      <button class="theme-toggle-inline" id="themeToggle" type="button">Toggle theme</button>
-      @if (isLoggedIn)
+  <div class="fm-app-shell" id="fmAppShell">
+    <aside class="fm-sidebar" id="fmSidebar" aria-label="Primary navigation">
+      <div class="fm-sidebar-brand">
+        <a asp-controller="Dashboard" asp-action="Index" class="fm-brand-link" aria-label="Finance Manager dashboard">
+          <img src="~/images/finance-manager-logo.png" alt="" class="fm-brand-logo" />
+          <span class="fm-brand-copy"><strong>Finance Manager</strong><small>Personal finance command centre</small></span>
+        </a>
+        <button class="fm-sidebar-collapse" id="fmSidebarCollapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">
+          <i data-lucide="panel-left-close"></i>
+        </button>
+      </div>
+
+      <nav class="fm-sidebar-nav">
+        <a class="fm-nav-item @(controller == "Dashboard" ? "active" : "")" asp-controller="Dashboard" asp-action="Index">
+          <i data-lucide="house"></i><span>Dashboard</span>
+        </a>
+
+        <div class="fm-nav-group">
+          <p class="fm-nav-heading">Finance</p>
+          <a class="fm-nav-item @(controller == "Statistics" ? "active" : "")" asp-controller="Statistics" asp-action="Index"><i data-lucide="chart-no-axes-combined"></i><span>Statistics</span></a>
+          <a class="fm-nav-item @(controller == "MonthlyFundingReview" ? "active" : "")" asp-controller="MonthlyFundingReview" asp-action="Index"><i data-lucide="clipboard-check"></i><span>Monthly Review</span></a>
+          <a class="fm-nav-item @(controller == "Forecast" ? "active" : "")" asp-controller="Forecast" asp-action="Index"><i data-lucide="trending-up"></i><span>Forecast</span></a>
+        </div>
+
+        <div class="fm-nav-group">
+          <p class="fm-nav-heading">Money</p>
+          <a class="fm-nav-item @(controller == "Assets" ? "active" : "")" asp-controller="Assets" asp-action="Index"><i data-lucide="landmark"></i><span>Assets</span></a>
+          <a class="fm-nav-item @(controller == "SavingPots" ? "active" : "")" asp-controller="SavingPots" asp-action="Index"><i data-lucide="piggy-bank"></i><span>Household Reserve</span></a>
+          <a class="fm-nav-item @(controller == "Events" ? "active" : "")" asp-controller="Events" asp-action="Index"><i data-lucide="calendar-days"></i><span>Events</span></a>
+          <a class="fm-nav-item @(controller == "Reminders" ? "active" : "")" asp-controller="Reminders" asp-action="Index"><i data-lucide="bell"></i><span>Reminders</span></a>
+        </div>
+
+        <div class="fm-nav-group">
+          <p class="fm-nav-heading">Personal</p>
+          <a class="fm-nav-item" asp-controller="Items" asp-action="Index"><i data-lucide="lock-keyhole"></i><span>Vault</span></a>
+        </div>
+      </nav>
+
+      <div class="fm-sidebar-footer">
+        <button class="fm-nav-item fm-nav-button" id="themeToggle" type="button"><i data-lucide="sun-moon"></i><span>Theme</span></button>
+        <a class="fm-nav-item disabled" href="#" aria-disabled="true" title="Settings arrives later in Phase 8"><i data-lucide="settings"></i><span>Settings</span><small>Soon</small></a>
+        @if (isLoggedIn)
+        {
+          <form asp-controller="Auth" asp-action="Logout" method="post">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="fm-nav-item fm-nav-button"><i data-lucide="log-out"></i><span>Logout</span></button>
+          </form>
+        }
+        else
+        {
+          <a class="fm-nav-item" asp-controller="Auth" asp-action="Login"><i data-lucide="log-in"></i><span>Login</span></a>
+        }
+      </div>
+    </aside>
+
+    <div class="fm-main-column">
+      <header class="fm-mobile-header">
+        <button class="fm-icon-button" id="fmMobileMenu" type="button" aria-label="Open navigation"><i data-lucide="menu"></i></button>
+        <a asp-controller="Dashboard" asp-action="Index" class="fm-mobile-brand">Finance Manager</a>
+        <button class="fm-icon-button" id="themeToggleInline" type="button" aria-label="Toggle theme"><i data-lucide="sun-moon"></i></button>
+      </header>
+      <div class="fm-sidebar-backdrop" id="fmSidebarBackdrop"></div>
+      @if (!isLoggedIn)
       {
-        <form asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">
-          @Html.AntiForgeryToken()
-          <button type="submit" class="nav-button">Logout</button>
-        </form>
+        <div class="readonly-banner">Read-only mode — login to unlock editing.</div>
       }
-      else
-      {
-        <a asp-controller="Auth" asp-action="Login">Login</a>
-      }
-    </nav>
-  </header>
-  @if (!isLoggedIn)
-  {
-    <div class="readonly-banner">Read-only mode — login to unlock editing.</div>
-  }
-  <main class="shell">
-    @if (TempData["Success"] != null)
-    {
-      <div class="card" style="border-left:4px solid #07833d"><strong>@TempData["Success"]</strong></div>
-    }
-    @if (TempData["Error"] != null)
-    {
-      <div class="card" style="border-left:4px solid #c73535"><strong>@TempData["Error"]</strong></div>
-    }
-    @RenderBody()
-  </main>
+      <main class="fm-page-container">
+        @if (TempData["Success"] != null)
+        {
+          <div class="fm-alert fm-alert-success"><i data-lucide="check-circle-2"></i><strong>@TempData["Success"]</strong></div>
+        }
+        @if (TempData["Error"] != null)
+        {
+          <div class="fm-alert fm-alert-error"><i data-lucide="alert-circle"></i><strong>@TempData["Error"]</strong></div>
+        }
+        @RenderBody()
+      </main>
+    </div>
+  </div>
 }
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <script src="~/js/site.js" asp-append-version="true"></script>

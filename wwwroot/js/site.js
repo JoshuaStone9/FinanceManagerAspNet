@@ -135,3 +135,34 @@ window.addEventListener('load', () => {
         }
     } catch { /* storage may be unavailable */ }
 });
+
+// Phase 8.1: Finance Manager application shell
+(() => {
+    const shell = document.getElementById('fmAppShell');
+    const sidebar = document.getElementById('fmSidebar');
+    const backdrop = document.getElementById('fmSidebarBackdrop');
+    const collapseButton = document.getElementById('fmSidebarCollapse');
+    const mobileButton = document.getElementById('fmMobileMenu');
+    const storageKey = 'fm-sidebar-collapsed';
+
+    if (shell && localStorage.getItem(storageKey) === 'true') {
+        shell.classList.add('sidebar-collapsed');
+    }
+
+    collapseButton?.addEventListener('click', () => {
+        shell?.classList.toggle('sidebar-collapsed');
+        localStorage.setItem(storageKey, String(shell?.classList.contains('sidebar-collapsed')));
+    });
+
+    const closeMobileNavigation = () => {
+        sidebar?.classList.remove('open');
+        backdrop?.classList.remove('show');
+    };
+
+    mobileButton?.addEventListener('click', () => {
+        sidebar?.classList.toggle('open');
+        backdrop?.classList.toggle('show');
+    });
+    backdrop?.addEventListener('click', closeMobileNavigation);
+    sidebar?.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMobileNavigation));
+})();
