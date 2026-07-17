@@ -47,6 +47,7 @@
     <a class="@(Model.ActionName == "EverydaySpending" ? "active" : "")" asp-action="EverydaySpending" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Everyday spending</a>
     <a class="@(Model.ActionName == "ExtraExpenses" ? "active" : "")" asp-action="ExtraExpenses" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Extra expenses</a>
     <a class="@(Model.ActionName == "Investments" ? "active" : "")" asp-action="Investments" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Investments</a>
+    <a class="@(Model.ActionName == "MoneyPots" ? "active" : "")" asp-action="MoneyPots" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Money pots</a>
 </nav>
 
 <section class="fm-workspace-metrics" aria-label="@Model.Title summary">
@@ -56,12 +57,12 @@
         <small>@Model.MonthStart.ToString("MMMM yyyy")</small>
     </article>
     <article class="fm-metric-card">
-        <span>Recorded entries</span>
+        <span>@(Model.IsMoneyPots ? "Contributions" : "Recorded entries")</span>
         <strong>@Model.Rows.Count</strong>
-        <small>Item@(Model.Rows.Count == 1 ? "" : "s") in this workspace</small>
+        <small>@(Model.IsMoneyPots ? "Contribution records this month" : $"Item{(Model.Rows.Count == 1 ? "" : "s")} in this workspace")</small>
     </article>
     <article class="fm-metric-card">
-        <span>Average entry</span>
+        <span>@(Model.IsMoneyPots ? "Average contribution" : "Average entry")</span>
         <strong>@Model.Average.ToString("C", gb)</strong>
         <small>Across recorded entries</small>
     </article>
@@ -201,37 +202,54 @@
                 <input type="hidden" name="source" value="@Model.Source" />
                 <input type="hidden" name="returnAnchor" value="@Model.Source" />
 
-                <label>
-                    @Model.ExistingLabel
-                    @if (Model.ExistingOptions.Count > 25)
-                    {
-                        <input class="existing-choice"
-                               list="workspace-existing-options"
-                               placeholder="Search previous entries..."
-                               autocomplete="off" />
-                        <datalist id="workspace-existing-options">
-                            @foreach (var option in Model.ExistingOptions)
+                @if (Model.IsMoneyPots)
+                {
+                    <label>
+                        @Model.ExistingLabel
+                        <select class="payment-name" name="name" required>
+                            <option value="">Choose an active money pot...</option>
+                            @foreach (var pot in Model.PotOptions)
                             {
-                                <option value="@option.Name"></option>
-                            }
-                        </datalist>
-                    }
-                    else
-                    {
-                        <select class="existing-choice">
-                            <option value="">Choose an existing entry...</option>
-                            @foreach (var option in Model.ExistingOptions)
-                            {
-                                <option value="@option.Name">@option.Name</option>
+                                <option value="@pot.Name">@pot.Name · @pot.AllocatedAmount.ToString("C", gb)</option>
                             }
                         </select>
-                    }
-                </label>
+                    </label>
+                    <p class="muted fm-workspace-form-hint">Create and configure pots from the main <a asp-controller="SavingPots" asp-action="Index">Money Pots page</a>.</p>
+                }
+                else
+                {
+                    <label>
+                        @Model.ExistingLabel
+                        @if (Model.ExistingOptions.Count > 25)
+                        {
+                            <input class="existing-choice"
+                                   list="workspace-existing-options"
+                                   placeholder="Search previous entries..."
+                                   autocomplete="off" />
+                            <datalist id="workspace-existing-options">
+                                @foreach (var option in Model.ExistingOptions)
+                                {
+                                    <option value="@option.Name"></option>
+                                }
+                            </datalist>
+                        }
+                        else
+                        {
+                            <select class="existing-choice">
+                                <option value="">Choose an existing entry...</option>
+                                @foreach (var option in Model.ExistingOptions)
+                                {
+                                    <option value="@option.Name">@option.Name</option>
+                                }
+                            </select>
+                        }
+                    </label>
 
-                <label>
-                    @Model.NameLabel
-                    <input class="payment-name" name="name" required autocomplete="off" />
-                </label>
+                    <label>
+                        @Model.NameLabel
+                        <input class="payment-name" name="name" required autocomplete="off" />
+                    </label>
+                }
 
                 <label>
                     Amount
@@ -272,7 +290,7 @@
                     <textarea class="payment-notes" name="notes" rows="3"></textarea>
                 </label>
 
-                <button class="primary" type="submit">Save entry</button>
+                <button class="primary" type="submit">@(Model.IsMoneyPots ? "Add contribution" : "Save entry")</button>
             </form>
         }
         else

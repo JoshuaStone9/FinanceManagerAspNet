@@ -15,3 +15,8 @@
 
 ## Phase 8.3 delivered scope
 8.3.2 shared dashboard cards and layout, 8.3.3 monthly money journey, 8.3.4 category summaries, 8.3.5 upcoming actions and recent activity, and 8.3.6 responsive/accessibility polish were implemented together in one batch.
+
+
+### 8.4.6 Money Pots Monthly Funding Workspace — Complete
+
+Restores monthly pot contribution entry as a dedicated workspace with active-pot selection and synchronized balances.

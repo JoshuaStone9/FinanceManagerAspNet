@@ -20,6 +20,8 @@ public sealed class MonthlyMoneyWorkspaceViewModel
     public bool SupportsType { get; init; }
     public bool SupportsLength { get; init; }
     public bool IsCarryOverEligible { get; init; }
+    public bool IsMoneyPots { get; init; }
+    public IReadOnlyList<ReservePot> PotOptions { get; init; } = [];
     public IReadOnlyList<PaymentRow> Rows { get; init; } = [];
     public IReadOnlyList<ExistingPaymentOption> ExistingOptions { get; init; } = [];
 

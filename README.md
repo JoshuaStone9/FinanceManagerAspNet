@@ -276,3 +276,8 @@ months.
 ## Phase 8.4.5 — Money Pots
 
 The former Household Reserve workspace is now presented as **Money Pots** throughout the user interface. The refreshed page uses clearer banking-style language, a stronger savings summary, active-pot and target information, cleaner collapsed pot cards, improved empty-state guidance and more approachable actions such as **Create money pot**. Internal model, repository and database names remain unchanged to avoid unnecessary migrations and code churn.
+
+
+## Phase 8.4.6 — Money Pots monthly funding
+
+Monthly Money now includes a dedicated Money Pots workspace for recording contributions to active pots. Contributions update existing pot balances and can be added, edited, deleted or adjusted inline without returning the management form to the dashboard.

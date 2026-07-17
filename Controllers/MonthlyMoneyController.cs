@@ -87,6 +87,24 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             year: year,
             month: month);
 
+    public Task<IActionResult> MoneyPots(int? year, int? month)
+        => BuildWorkspaceAsync(
+            "savings",
+            "MoneyPots",
+            "Money pots",
+            "Monthly pot funding",
+            "Record contributions to your existing money pots while keeping pot goals and settings on the main Money Pots page.",
+            "piggy-bank",
+            "No money pot contributions recorded",
+            "Choose an active money pot and record the first contribution for this month.",
+            "Add money pot contribution",
+            "Choose a money pot",
+            "Money pot",
+            "Contribution notes",
+            isCarryOverEligible: true,
+            isMoneyPots: true,
+            year: year,
+            month: month);
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -121,6 +139,9 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             existing.Length,
             existing.Notes);
 
+        if (source == "savings")
+            await repo.ApplyReserveAllocationAsync(existing.Name, amount - existing.Amount);
+
         TempData["Success"] = $"{existing.DisplayName} amount updated.";
 
         var actionName = GetWorkspaceAction(source);
@@ -135,6 +156,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             "everyday_spending" => nameof(EverydaySpending),
             "extra_expenses" => nameof(ExtraExpenses),
             "investments" => nameof(Investments),
+            "savings" => nameof(MoneyPots),
             _ => throw new ArgumentOutOfRangeException(nameof(source), "Unknown monthly money workspace.")
         };
 
@@ -155,6 +177,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
         bool supportsType = false,
         bool supportsLength = false,
         bool isCarryOverEligible = false,
+        bool isMoneyPots = false,
         int? year = null,
         int? month = null)
     {
@@ -187,8 +210,12 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             SupportsType = supportsType,
             SupportsLength = supportsLength,
             IsCarryOverEligible = isCarryOverEligible,
+            IsMoneyPots = isMoneyPots,
             Rows = await repo.GetRowsAsync(source, selectedMonth, selectedYear),
-            ExistingOptions = await repo.GetExistingPaymentOptionsAsync(source)
+            ExistingOptions = await repo.GetExistingPaymentOptionsAsync(source),
+            PotOptions = isMoneyPots
+                ? (await repo.GetReservePotsAsync()).Where(x => x.IsActive).OrderBy(x => x.Priority).ThenBy(x => x.Name).ToList()
+                : []
         };
 
         return View("Workspace", model);

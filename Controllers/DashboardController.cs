@@ -160,6 +160,7 @@ public sealed class DashboardController(
             "everyday_spending" => "EverydaySpending",
             "extra_expenses" => "ExtraExpenses",
             "investments" => "Investments",
+            "savings" => "MoneyPots",
             _ => null
         };
         return View(item);
@@ -246,6 +247,7 @@ public sealed class DashboardController(
             "everyday_spending" or "everyday" => "EverydaySpending",
             "extra_expenses" or "extras" => "ExtraExpenses",
             "investments" => "Investments",
+            "savings" => "MoneyPots",
             _ => null
         };
 
