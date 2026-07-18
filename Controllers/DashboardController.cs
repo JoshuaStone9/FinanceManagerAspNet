@@ -23,6 +23,9 @@ public sealed class DashboardController(
 
         var incomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(y, m);
         var monthlyIncome = incomeEntriesTotal ?? 0m;
+        var passiveRecords = await repo.GetPassiveIncomeRecordsAsync(y, m);
+        var passiveIncome = passiveRecords.Sum(x => x.ActualAmount);
+        var operatingIncome = Math.Max(0m, monthlyIncome - passiveIncome);
         var carryForwardInfo = await repo.GetCarryForwardInfoAsync(y, m);
         var carryForward = carryForwardInfo.EffectiveAmount;
 
@@ -36,7 +39,7 @@ public sealed class DashboardController(
 
         var vm = new DashboardViewModel
         {
-            Year = y, Month = m, MonthlyIncome = monthlyIncome, CarryForwardAmount = carryForward,
+            Year = y, Month = m, MonthlyIncome = monthlyIncome, OperatingIncome = operatingIncome, PassiveIncome = passiveIncome, CarryForwardAmount = carryForward,
             CarryForwardCalculated = carryForwardInfo.CalculatedAmount, CarryForwardOverride = carryForwardInfo.OverrideAmount,
             CarryForwardOverrideReason = carryForwardInfo.OverrideReason, SickDays = 0,
             Bills = bills, Expenses = everyday, ExtraExpenses = extras, Investments = investments, Savings = reserveAllocations,

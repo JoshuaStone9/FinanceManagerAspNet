@@ -72,28 +72,6 @@
                         @if (estimate.IsReceived)
                         {
                             <span class="fm-status-pill">Received</span>
-                            @if (estimate.IsBalanceReconciled)
-                            {
-                                <span class="fm-status-pill">Balance updated</span>
-                            }
-                            else if (canEdit)
-                            {
-                                <details class="fm-income-edit">
-                                    <summary class="button">Account balance options</summary>
-                                    <div class="fm-income-edit-form">
-                                        <p class="muted">This payment is already included in monthly income. The recorded @estimate.SourceName balance has not been changed.</p>
-                                        <form asp-action="ReconcileInterestBalance" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="year" value="@Model.Year" />
-                                            <input type="hidden" name="month" value="@Model.Month" />
-                                            <input type="hidden" name="sourceKey" value="@estimate.SourceKey" />
-                                            <input type="hidden" name="sourceName" value="@estimate.SourceName" />
-                                            <button class="button" type="submit">Add @estimate.ActualAmount?.ToString("C", gb) to account balance</button>
-                                        </form>
-                                        <small class="muted">Leave this unchanged when the interest is available for this month's spending.</small>
-                                    </div>
-                                </details>
-                            }
                         }
                         else if (canEdit)
                         {

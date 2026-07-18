@@ -14,7 +14,7 @@ public sealed class SettingsController(
 {
     private static readonly string[] BackupTables =
     [
-        "finance_settings", "monthly_allowance", "monthly_income_stats", "monthly_income_entries", "passive_income_records",
+        "finance_settings", "monthly_allowance", "monthly_income_stats", "monthly_income_entries", "passive_income_records", "account_reconciliations",
         "bills", "everyday_spending", "extra_expenses", "investments", "savings",
         "monthly_entry_templates", "monthly_carry_forward", "emergency_fund", "household_reserve",
         "reserve_account_selections", "reserve_pots", "reserve_pot_monthly_funding", "reserve_pot_actions",

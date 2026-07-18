@@ -62,27 +62,6 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
 
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ReconcileInterestBalance(int year, int month, string sourceKey, string sourceName)
-    {
-        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
-        if (month is < 1 or > 12 || string.IsNullOrWhiteSpace(sourceKey))
-            return BadRequest("Choose a valid interest record.");
-
-        try
-        {
-            await repo.ReconcileInterestToSourceBalanceAsync(sourceKey, year, month);
-            TempData["Success"] = $"{sourceName} balance increased by the confirmed interest payment.";
-        }
-        catch (InvalidOperationException ex)
-        {
-            TempData["Error"] = ex.Message;
-        }
-
-        var url = Url.Action(nameof(Income), new { year, month });
-        return url is null ? RedirectToAction(nameof(Income), new { year, month }) : Redirect($"{url}#passive-income");
-    }
-
-    [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AddIncome(int year, int month, string name, decimal amount, DateTime date, string? category, string? notes, bool isRecurring = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();

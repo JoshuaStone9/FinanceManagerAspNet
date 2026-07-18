@@ -1016,3 +1016,11 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 @media (max-width: 850px) {
     .settings-reset-grid { grid-template-columns: 1fr; }
 }
+
+
+/* Phase 10.10 optional balance reconciliation */
+.fm-reconciliation-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-top:18px; }
+.fm-reconciliation-card { border:1px solid var(--border); border-radius:16px; padding:18px; background:var(--surface-soft); display:grid; gap:18px; }
+.fm-reconciliation-card h3 { margin:0 0 10px; }
+.fm-reconciliation-card small { display:block; color:var(--muted); margin-top:5px; }
+.fm-reconciliation-balance { display:block; font-size:1.55rem; margin:4px 0 8px; }

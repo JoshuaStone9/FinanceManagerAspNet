@@ -27,6 +27,8 @@ public sealed class DashboardViewModel
     public decimal MonthlySavingTarget { get; set; }
     public decimal GlobalGoal { get; set; }
     public decimal MonthlyIncome { get; set; }
+    public decimal OperatingIncome { get; set; }
+    public decimal PassiveIncome { get; set; }
     public decimal CarryForwardAmount { get; set; }
     public decimal CarryForwardCalculated { get; set; }
     public decimal? CarryForwardOverride { get; set; }

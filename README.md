@@ -383,3 +383,8 @@ Phase 10.8 adds Statistics interest separation so confirmed interest is excluded
 - Confirming interest does not silently change its source account balance.
 - An optional account-balance reconciliation action is available after confirmation and is protected against duplicate application.
 - Statistics separately shows interest received this month and interest still expected.
+
+
+## Phase 10.10 — Balance reconciliation
+
+Added an optional manual balance-check workspace. Confirmed interest remains monthly income only. The Income workspace no longer offers account-balance actions, and no warnings are created when balances are not reconciled. Users can occasionally enter an actual account balance, which updates the recorded balance and stores reconciliation history without creating duplicate income.

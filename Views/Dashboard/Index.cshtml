@@ -34,6 +34,12 @@
         <article class="fm-metric-card"><span>Allocated to the future</span><strong>@Model.Experience.AllocatedToFuture.ToString("C", gb)</strong><small>Investments and Money Pots</small></article>
         <article class="fm-metric-card @(Model.IsOverBudget ? "is-danger" : "is-positive")"><span>Remaining</span><strong>@Model.RemainingFund.ToString("C", gb)</strong><small>@(Model.IsOverBudget ? "The month is currently over budget" : "Available after all recorded allocations")</small></article>
     </div>
+    <div class="grid cards-4" style="margin-top:12px">
+        <article class="card"><p class="eyebrow">Operating income</p><h2>@Model.OperatingIncome.ToString("C", gb)</h2><p>Salary and other non-interest income.</p></article>
+        <article class="card"><p class="eyebrow">Passive income</p><h2>@Model.PassiveIncome.ToString("C", gb)</h2><p>Confirmed interest and passive income this month.</p></article>
+        <article class="card"><p class="eyebrow">Total available income</p><h2>@Model.MonthlyIncome.ToString("C", gb)</h2><p>Operating plus passive income.</p></article>
+        <article class="card"><p class="eyebrow">Balance checks</p><h2>Optional</h2><p><a asp-controller="Reconciliation" asp-action="Index">Compare recorded account balances</a></p></article>
+    </div>
 </section>
 
 <section class="fm-dashboard-section" aria-labelledby="health-title">
