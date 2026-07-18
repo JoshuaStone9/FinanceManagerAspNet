@@ -312,3 +312,7 @@ The former editable Carry over review has been replaced by a compact Prepare nex
 ## Phase 8.4.9 — Shared Components, Accessibility & UI Polish
 
 The five Monthly Money workspaces now share extracted tab and metric partials, clearer keyboard focus, entry-specific accessible action labels, improved long-name and mobile handling, reduced-motion support, and a Razor-safe Prepare Next Month view. This phase changes presentation and maintainability only; no database migration is required.
+
+### Phase 8.4.9.1 — Recurring month-setup filtering
+
+Month setup now offers only active recurring entries that existed in the immediately preceding month for the same workspace. Old, deleted, or unrelated recurring definitions no longer reappear as setup suggestions.

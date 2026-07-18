@@ -2637,10 +2637,21 @@ WHERE rn = 1;";
         var templates = await GetMonthlyEntryTemplatesAsync(source);
         var rows = await GetRowsAsync(source, month, year);
         var existingNames = rows.Select(x => x.Name.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var selectedMonth = new DateTime(year, month, 1);
+        var previousMonth = selectedMonth.AddMonths(-1);
+        var previousMonthNames = (await GetRowsAsync(source, previousMonth.Month, previousMonth.Year))
+            .Select(x => x.Name.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var latestValues = await GetLatestPaymentOptionsBeforeMonthAsync(source, year, month);
 
         var recurringEntries = templates
-            .Where(x => !existingNames.Contains(x.Name))
+            // A recurring definition is only offered when the entry still existed in
+            // the immediately preceding month. This prevents old or deleted templates
+            // from resurfacing in an unrelated workspace months later.
+            .Where(x => previousMonthNames.Contains(x.Name.Trim()))
+            .Where(x => !existingNames.Contains(x.Name.Trim()))
             .Select(template =>
             {
                 if (!latestValues.TryGetValue(template.Name.Trim(), out var latest))
@@ -2677,9 +2688,11 @@ WHERE rn = 1;";
         var selected = items.Where(x => x.Include && x.Amount >= 0).ToList();
         if (selected.Count == 0) return 0;
 
-        var templates = await GetMonthlyEntryTemplatesAsync(source);
+        var eligibleTemplates = await GetMissingMonthlyEntryTemplatesAsync(source, year, month);
         var selectedIds = selected.Select(x => x.TemplateId).ToHashSet();
-        var allowed = templates.Where(x => selectedIds.Contains(x.Id)).ToDictionary(x => x.Id);
+        var allowed = eligibleTemplates
+            .Where(x => selectedIds.Contains(x.Id))
+            .ToDictionary(x => x.Id);
         var existing = (await GetRowsAsync(source, month, year))
             .Select(x => x.Name.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
