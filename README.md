@@ -316,3 +316,7 @@ The five Monthly Money workspaces now share extracted tab and metric partials, c
 ### Phase 8.4.9.1 — Recurring month-setup filtering
 
 Month setup now offers only active recurring entries that existed in the immediately preceding month for the same workspace. Old, deleted, or unrelated recurring definitions no longer reappear as setup suggestions.
+
+## Phase 9.1 — Monthly Financial Health Summary
+
+The dashboard now includes a financial health section that interprets the selected month's income, spending and future allocations. It reports income committed, essential-bill pressure, monthly surplus or shortfall, comparisons with the previous month and plain-English insights. No database migration is required.

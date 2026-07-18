@@ -9,6 +9,7 @@ public sealed class DashboardController(
     IConfiguration config,
     IDashboardSummaryService dashboardSummaryService,
     IDashboardExperienceService dashboardExperienceService,
+    IMonthlyFinancialHealthService monthlyFinancialHealthService,
     IReserveAccountSelectionService reserveAccountSelectionService,
     IFinancialForecastService financialForecastService,
     IWhatIfForecastService whatIfForecastService,
@@ -86,6 +87,44 @@ public sealed class DashboardController(
         };
 
         vm.Experience = dashboardExperienceService.Build(vm);
+
+        var previousMonth = new DateTime(y, m, 1).AddMonths(-1);
+        var previousIncomeRecord = await repo.GetIncomeAsync(previousMonth.Year, previousMonth.Month);
+        var previousIncome = previousIncomeRecord?.Amount
+            ?? await repo.GetMonthlyAllowanceAsync(previousMonth.Month, fallbackIncome);
+        var previousCarryForward = (await repo.GetCarryForwardInfoAsync(previousMonth.Year, previousMonth.Month)).EffectiveAmount;
+        var previousBills = await repo.GetRowsAsync("bills", previousMonth.Month, previousMonth.Year);
+        var previousEveryday = await repo.GetRowsAsync("everyday_spending", previousMonth.Month, previousMonth.Year);
+        var previousExtras = await repo.GetRowsAsync("extra_expenses", previousMonth.Month, previousMonth.Year);
+        var previousInvestments = await repo.GetRowsAsync("investments", previousMonth.Month, previousMonth.Year);
+        var previousMoneyPots = await repo.GetRowsAsync("savings", previousMonth.Month, previousMonth.Year);
+
+        var hasPreviousMonthData = previousIncomeRecord is not null
+            || previousBills.Count > 0
+            || previousEveryday.Count > 0
+            || previousExtras.Count > 0
+            || previousInvestments.Count > 0
+            || previousMoneyPots.Count > 0;
+
+        vm.FinancialHealth = monthlyFinancialHealthService.Build(
+            new MonthlyFinancialSnapshot(
+                monthlyIncome,
+                carryForward,
+                vm.BillsTotal,
+                vm.ExpensesTotal,
+                vm.ExtraExpensesTotal,
+                vm.InvestmentsTotal,
+                vm.SavingsTotal),
+            hasPreviousMonthData
+                ? new MonthlyFinancialSnapshot(
+                    previousIncome,
+                    previousCarryForward,
+                    previousBills.Sum(x => x.Amount),
+                    previousEveryday.Sum(x => x.Amount),
+                    previousExtras.Sum(x => x.Amount),
+                    previousInvestments.Sum(x => x.Amount),
+                    previousMoneyPots.Sum(x => x.Amount))
+                : null);
 
         if (manage)
         {

@@ -889,3 +889,37 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 @media(prefers-reduced-motion:reduce){
   .fm-recurring-switch,.fm-recurring-switch span{transition:none}
 }
+
+/* Phase 9.1: monthly financial health summary */
+.fm-health-status{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:.78rem;font-weight:850}
+.fm-health-status.is-positive{color:#86efac;background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.35)}
+.fm-health-status.is-warning{color:#fde68a;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.35)}
+.fm-health-status.is-danger{color:#fca5a5;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35)}
+.fm-health-layout{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.4fr);gap:16px}
+.fm-health-score,.fm-health-insight{border:1px solid var(--line);background:var(--panel);border-radius:16px}
+.fm-health-score{padding:20px}
+.fm-health-score.is-positive{border-color:rgba(34,197,94,.32)}
+.fm-health-score.is-warning{border-color:rgba(245,158,11,.32)}
+.fm-health-score.is-danger{border-color:rgba(239,68,68,.38)}
+.fm-health-score-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.fm-health-score-head span{color:var(--muted);font-size:.82rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.fm-health-score-head strong{font-size:2rem;line-height:1}
+.fm-health-meter{height:10px;margin:18px 0;border-radius:999px;background:rgba(148,163,184,.13);overflow:hidden}
+.fm-health-meter span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b5cf6,#22c55e)}
+.fm-health-score.is-warning .fm-health-meter span{background:linear-gradient(90deg,#8b5cf6,#f59e0b)}
+.fm-health-score.is-danger .fm-health-meter span{background:linear-gradient(90deg,#f59e0b,#ef4444)}
+.fm-health-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.fm-health-breakdown div{display:flex;flex-direction:column;gap:5px;padding:11px;border:1px solid var(--line);border-radius:12px;background:rgba(15,23,42,.22)}
+.fm-health-breakdown span{font-size:.75rem;color:var(--muted)}
+.fm-health-breakdown strong{font-size:1rem}
+.fm-health-comparison{display:flex;align-items:center;gap:8px;margin:16px 0 0;color:var(--muted);font-size:.82rem}
+.fm-health-comparison svg{width:16px}
+.fm-health-comparison.is-better{color:#86efac}.fm-health-comparison.is-worse{color:#fca5a5}
+.fm-health-insights{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fm-health-insight{display:flex;gap:12px;padding:16px;min-width:0}
+.fm-health-insight>svg{width:20px;height:20px;flex:0 0 auto;color:var(--muted)}
+.fm-health-insight strong{display:block;margin-bottom:4px}
+.fm-health-insight p{margin:0;color:var(--muted);font-size:.84rem;line-height:1.5}
+.fm-health-insight.is-positive>svg{color:#4ade80}.fm-health-insight.is-warning>svg{color:#fbbf24}.fm-health-insight.is-danger>svg{color:#fb7185}
+@media(max-width:900px){.fm-health-layout{grid-template-columns:1fr}.fm-health-insights{grid-template-columns:1fr}}
+@media(max-width:560px){.fm-health-breakdown{grid-template-columns:1fr}.fm-health-score-head{align-items:flex-start;flex-direction:column}.fm-health-score-head strong{font-size:1.7rem}}

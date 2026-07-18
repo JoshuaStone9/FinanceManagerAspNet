@@ -36,6 +36,55 @@
     </div>
 </section>
 
+<section class="fm-dashboard-section" aria-labelledby="health-title">
+    <div class="fm-dashboard-section-head">
+        <div>
+            <p class="eyebrow">Financial health</p>
+            <h2 id="health-title">How @Model.MonthStart.ToString("MMMM") is looking</h2>
+        </div>
+        <span class="fm-health-status is-@Model.FinancialHealth.StatusCssClass">@Model.FinancialHealth.Status</span>
+    </div>
+
+    <div class="fm-health-layout">
+        <article class="fm-health-score is-@Model.FinancialHealth.StatusCssClass">
+            <div class="fm-health-score-head">
+                <span>Income committed</span>
+                <strong>@Model.FinancialHealth.CommittedPercent.ToString("0.#")%</strong>
+            </div>
+            <div class="fm-health-meter" role="progressbar" aria-label="Percentage of available income committed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@Math.Min(100m, Model.FinancialHealth.CommittedPercent)">
+                <span style="width:@Math.Min(100m, Model.FinancialHealth.CommittedPercent).ToString("0.#", CultureInfo.InvariantCulture)%"></span>
+            </div>
+            <div class="fm-health-breakdown">
+                <div><span>Essential bills</span><strong>@Model.FinancialHealth.EssentialBillsPercent.ToString("0.#")%</strong></div>
+                <div><span>Future allocations</span><strong>@Model.FinancialHealth.FutureAllocationPercent.ToString("0.#")%</strong></div>
+                <div><span>Remaining</span><strong class="@(Model.FinancialHealth.Remaining < 0 ? "bad" : "good")">@Model.FinancialHealth.Remaining.ToString("C", gb)</strong></div>
+            </div>
+            @if (Model.FinancialHealth.RemainingChange.HasValue)
+            {
+                var remainingChange = Model.FinancialHealth.RemainingChange.Value;
+                <p class="fm-health-comparison @(remainingChange < 0 ? "is-worse" : "is-better")">
+                    <i data-lucide="@(remainingChange < 0 ? "trending-down" : "trending-up")"></i>
+                    <span>@Math.Abs(remainingChange).ToString("C", gb) @(remainingChange < 0 ? "less" : "more") remaining than last month</span>
+                </p>
+            }
+            else
+            {
+                <p class="fm-health-comparison"><i data-lucide="calendar-range"></i><span>Add another month of data to unlock comparisons.</span></p>
+            }
+        </article>
+
+        <div class="fm-health-insights" aria-label="Monthly financial insights">
+            @foreach (var insight in Model.FinancialHealth.Insights)
+            {
+                <article class="fm-health-insight is-@insight.Severity">
+                    <i data-lucide="@insight.Icon"></i>
+                    <div><strong>@insight.Title</strong><p>@insight.Detail</p></div>
+                </article>
+            }
+        </div>
+    </div>
+</section>
+
 <section class="fm-dashboard-section" aria-labelledby="journey-title">
     <div class="fm-dashboard-section-head"><div><p class="eyebrow">Money journey</p><h2 id="journey-title">How this month's money flows</h2></div><a asp-controller="MonthlyMoney" asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Manage monthly money</a></div>
     <div class="fm-money-journey" role="list">

@@ -73,6 +73,7 @@ public sealed class DashboardViewModel
     public DashboardIntelligenceSummary Intelligence { get; set; } = new();
     public DashboardForecastSummary ForecastSummary { get; set; } = new();
     public DashboardExperience Experience { get; set; } = new();
+    public MonthlyFinancialHealthSummary FinancialHealth { get; set; } = new();
 }
 
 public sealed class DashboardIntelligenceSummary

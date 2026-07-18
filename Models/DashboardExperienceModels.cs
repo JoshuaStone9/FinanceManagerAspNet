@@ -49,3 +49,36 @@ public sealed record DashboardActivityItem(
     DateTime OccurredAt,
     string Icon,
     decimal? Amount = null);
+
+public sealed record MonthlyFinancialSnapshot(
+    decimal Income,
+    decimal CarryForward,
+    decimal Bills,
+    decimal EverydaySpending,
+    decimal ExtraExpenses,
+    decimal Investments,
+    decimal MoneyPots);
+
+public sealed class MonthlyFinancialHealthSummary
+{
+    public string Status { get; init; } = "Stable";
+    public string StatusCssClass { get; init; } = "positive";
+    public decimal EffectiveIncome { get; init; }
+    public decimal CoreSpending { get; init; }
+    public decimal FutureAllocations { get; init; }
+    public decimal Remaining { get; init; }
+    public decimal CommittedPercent { get; init; }
+    public decimal EssentialBillsPercent { get; init; }
+    public decimal FutureAllocationPercent { get; init; }
+    public decimal? PreviousRemaining { get; init; }
+    public decimal? RemainingChange { get; init; }
+    public decimal? EverydaySpendingChange { get; init; }
+    public decimal? ExtraExpensesChange { get; init; }
+    public IReadOnlyList<FinancialHealthInsight> Insights { get; init; } = [];
+}
+
+public sealed record FinancialHealthInsight(
+    string Title,
+    string Detail,
+    string Severity,
+    string Icon);
