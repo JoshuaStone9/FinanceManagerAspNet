@@ -352,3 +352,17 @@ Settings is now a full application control centre covering finance configuration
 ### Phase 9.6 — Protected Reserve clarity
 
 The Money Pots page now explains the relationship between selected backing accounts, the protected emergency-fund baseline and pot allocations. It shows current reserve, protected reserve, shortfall or surplus, allocated pot money and the amount still genuinely available. Negative “unallocated money” has been replaced by a clearer zero-floor “Still available” figure plus an explicit warning when pot earmarks exceed money above the protected reserve.
+
+
+## Phase 10.1 — Transparent Statistics Forecasting
+
+Statistics no longer reads a fixed £1,200 monthly savings target. It now uses the forecast method selected in Settings (latest completed month, last three completed months or last six completed months), averages genuine completed-month results, ignores empty months and floors a negative average at £0 for forward contributions. The page exposes the monthly forecast, source months, confidence level, account contributions, weighted interest assumption and expandable calculation breakdowns.
+
+
+## Phase 10.2 — Actual-data-only monthly testing
+
+Dashboard income, monthly results and carry-forward calculations now use only entries created in the Income workspace. Legacy income snapshots, monthly allowances and the default-income fallback no longer populate empty months. The existing Settings data reset can therefore produce a genuinely clean test state.
+
+## Phase 10.3 — Safe reset controls
+
+Settings now separates data cleanup into Reset Current Month, Reset Selected Month and Factory Reset. Month resets remove only operational records for the chosen period while retaining all other months, permanent Money Pot definitions, assets, reserve accounts, settings and Personal Vault data. Factory reset requires `DELETE EVERYTHING` and clears all finance records while retaining application configuration and Personal Vault items.

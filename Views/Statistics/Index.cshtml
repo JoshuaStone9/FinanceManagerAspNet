@@ -1,43 +1,203 @@
 @model FinanceManagerAspNet.Models.StatisticsViewModel
 @using System.Globalization
-@{ ViewData["Title"] = "Statistics"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; }
-<section class="hero card"><div><p class="eyebrow">Financial outlook</p><h1>Statistics</h1><p class="muted">A post-move view of your current ISA/pot totals and projections to your chosen goal date.</p></div></section>
+@{
+    ViewData["Title"] = "Statistics";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+}
+
+<section class="hero card">
+    <div>
+        <p class="eyebrow">Financial outlook</p>
+        <h1>Statistics</h1>
+        <p class="muted">A transparent view of your current balances and projections to your chosen goal date.</p>
+    </div>
+</section>
 
 <section class="grid cards-4">
-  <article class="card"><p class="eyebrow">Current ISA / pot total</p><h2>@Model.TotalNow.ToString("C", gb)</h2><p>Accounts included in the forecast.</p></article>
-  <article class="card"><p class="eyebrow">Goal date</p><h2>@Model.AprilTarget.ToString("dd MMM yyyy")</h2><p>@Model.MonthsToApril month(s) remaining.</p></article>
-  <article class="card"><p class="eyebrow">By goal date, no interest</p><h2>@Model.ProjectedByAprilWithoutInterest.ToString("C", gb)</h2><p>Current balances plus planned contributions.</p></article>
-  <article class="card"><p class="eyebrow">By goal date, with interest</p><h2 class="good">@Model.ProjectedByAprilWithInterest.ToString("C", gb)</h2><p>Estimated interest: @Model.ProjectedInterestEarned.ToString("C", gb).</p></article>
+    <details class="card statistics-detail-card">
+        <summary>
+            <span class="eyebrow">Current ISA / pot total</span>
+            <strong class="statistics-card-value">@Model.TotalNow.ToString("C", gb)</strong>
+            <span>Accounts included in the forecast.</span>
+        </summary>
+        <div class="statistics-detail-content">
+            @foreach (var account in Model.Accounts.Where(x => x.IncludeInGlobalGoal))
+            {
+                <div class="statistics-breakdown-row"><span>@account.Name</span><strong>@account.Amount.ToString("C", gb)</strong></div>
+            }
+        </div>
+    </details>
+
+    <article class="card">
+        <p class="eyebrow">Goal date</p>
+        <h2>@Model.AprilTarget.ToString("dd MMM yyyy")</h2>
+        <p>@Model.MonthsToApril month(s) remaining.</p>
+    </article>
+
+    <details class="card statistics-detail-card">
+        <summary>
+            <span class="eyebrow">By goal date, no interest</span>
+            <strong class="statistics-card-value">@Model.ProjectedByAprilWithoutInterest.ToString("C", gb)</strong>
+            <span>Current balances plus traceable contributions.</span>
+        </summary>
+        <div class="statistics-detail-content">
+            <div class="statistics-breakdown-row"><span>Current included balances</span><strong>@Model.TotalNow.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Account contributions</span><strong>@Model.AccountContributionsByGoalDate.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Forecast surplus contributions</span><strong>@Model.ForecastContributionsByGoalDate.ToString("C", gb)</strong></div>
+        </div>
+    </details>
+
+    <details class="card statistics-detail-card">
+        <summary>
+            <span class="eyebrow">By goal date, with interest</span>
+            <strong class="statistics-card-value good">@Model.ProjectedByAprilWithInterest.ToString("C", gb)</strong>
+            <span>Estimated interest: @Model.ProjectedInterestEarned.ToString("C", gb).</span>
+        </summary>
+        <div class="statistics-detail-content">
+            <div class="statistics-breakdown-row"><span>Projection before interest</span><strong>@Model.ProjectedByAprilWithoutInterest.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Estimated account interest</span><strong>@((Model.ProjectedInterestEarned - Model.ForecastContributionInterest).ToString("C", gb))</strong></div>
+            <div class="statistics-breakdown-row"><span>Estimated interest on forecast surplus</span><strong>@Model.ForecastContributionInterest.ToString("C", gb)</strong></div>
+        </div>
+    </details>
+</section>
+
+<section class="card">
+    <div class="statistics-assumption-heading">
+        <div>
+            <p class="eyebrow">Forecast assumptions</p>
+            <h2>How this projection is calculated</h2>
+            <p class="muted">The old fixed £1,200 target has been removed. The forecast now uses your completed monthly data and the method selected in Settings.</p>
+        </div>
+        <span class="status-pill @Model.ForecastConfidenceCssClass">@Model.ForecastConfidence</span>
+    </div>
+
+    <div class="grid cards-4 statistics-assumption-grid">
+        <div class="statistics-assumption-item"><span>Forecast method</span><strong>@Model.ForecastMethodLabel</strong></div>
+        <div class="statistics-assumption-item"><span>Monthly forecast surplus</span><strong>@Model.MonthlyForecastContribution.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Account monthly contributions</span><strong>@Model.AccountMonthlyContributions.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Months of usable history</span><strong>@Model.ForecastHistoryCount</strong></div>
+        <div class="statistics-assumption-item"><span>Goal date</span><strong>@Model.AprilTarget.ToString("dd MMM yyyy")</strong></div>
+        <div class="statistics-assumption-item"><span>Months remaining</span><strong>@Model.MonthsToApril</strong></div>
+        <div class="statistics-assumption-item"><span>Interest basis</span><strong>Saved account rates</strong></div>
+        <div class="statistics-assumption-item"><span>Weighted forecast rate</span><strong>@Model.ForecastWeightedInterestRate.ToString("0.##")%</strong></div>
+    </div>
+
+    @if (Model.ForecastHistory.Count == 0)
+    {
+        <div class="notice warning">No completed monthly history was found, so the monthly forecast contribution is currently £0. Complete a monthly budget to create a data-backed forecast.</div>
+    }
+    else
+    {
+        <details class="statistics-history">
+            <summary>View completed months used</summary>
+            <div class="statistics-history-list">
+                @foreach (var month in Model.ForecastHistory)
+                {
+                    <div class="statistics-breakdown-row">
+                        <span>@month.MonthDate.ToString("MMMM yyyy")</span>
+                        <strong class="@(month.Result >= 0 ? "good" : "bad")">@month.Result.ToString("C", gb)</strong>
+                    </div>
+                }
+            </div>
+        </details>
+    }
 </section>
 
 @if (canEdit)
 {
-<section class="card"><p class="eyebrow">Forecast settings</p><h2>Edit goal date</h2><p class="muted">Defaults to January of the following year, but can be changed whenever your plans change.</p>
-<form asp-action="SaveGoalDate" method="post" class="account-form">@Html.AntiForgeryToken()<label>Goal date<input name="goalDate" type="date" value="@Model.AprilTarget.ToString("yyyy-MM-dd")"/></label><button class="primary">Save goal date</button></form></section>
+    <section class="card">
+        <p class="eyebrow">Goal date</p>
+        <h2>Edit forecast date</h2>
+        <p class="muted">Your forecast method is managed in Settings. The date can be changed here whenever your plans change.</p>
+        <form asp-action="SaveGoalDate" method="post" class="account-form">
+            @Html.AntiForgeryToken()
+            <label>Goal date<input name="goalDate" type="date" value="@Model.AprilTarget.ToString("yyyy-MM-dd")" /></label>
+            <button class="primary">Save goal date</button>
+        </form>
+    </section>
 }
 
 <section class="grid cards-4">
-  <article class="card"><p class="eyebrow">Investments / assets now</p><h2>@Model.LiveAssetsValue.ToString("C", gb)</h2><p>@Model.LiveAssetsMonthlyContribution.ToString("C", gb) monthly contribution.</p></article>
-  <article class="card"><p class="eyebrow">Personal Vault</p><h2>@Model.VaultTotalValue.ToString("C", gb)</h2><p>@Model.VaultItemCount valued items included.</p></article>
-  <article class="card"><p class="eyebrow">Total value now</p><h2>@Model.TotalValueNow.ToString("C", gb)</h2><p>Accounts, investments and eligible Vault items.</p></article>
-  <article class="card"><p class="eyebrow">Total by goal date</p><h2 class="good">@Model.TotalValueByApril.ToString("C", gb)</h2><p>Projected accounts and investments plus current Vault value.</p></article>
+    <article class="card"><p class="eyebrow">Investments / assets now</p><h2>@Model.LiveAssetsValue.ToString("C", gb)</h2><p>@Model.LiveAssetsMonthlyContribution.ToString("C", gb) monthly contribution.</p></article>
+    <article class="card"><p class="eyebrow">Personal Vault</p><h2>@Model.VaultTotalValue.ToString("C", gb)</h2><p>@Model.VaultItemCount valued items included.</p></article>
+    <article class="card"><p class="eyebrow">Total value now</p><h2>@Model.TotalValueNow.ToString("C", gb)</h2><p>Accounts, investments and eligible Vault items.</p></article>
+    <article class="card"><p class="eyebrow">Total by goal date</p><h2 class="good">@Model.TotalValueByApril.ToString("C", gb)</h2><p>Projected accounts and investments plus current Vault value.</p></article>
 </section>
 
 @if (canEdit)
 {
-<section class="card"><h2>Edit ISA / pots</h2><p class="muted">Update balances, interest rates and regular monthly contributions.</p>
-@foreach (var a in Model.Accounts)
-{
-<form asp-action="SaveAccount" method="post" class="account-form account-edit-card"><input type="hidden" name="id" value="@a.Id"/><label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "")/></label><label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount"/></label><label>Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate"/></label><label>Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution"/></label><label class="checkbox-inline"><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@a.IncludeInGlobalGoal"/> Include in forecast</label><button class="primary">Save</button></form>
-@if (a.Id != 0) { <form asp-action="DeleteAccount" method="post" data-confirm="Delete this account?"><input type="hidden" name="id" value="@a.Id"/><button class="danger-inline">Delete</button></form> }
+    <section class="card">
+        <h2>Edit ISA / pots</h2>
+        <p class="muted">Update balances, interest rates and regular account contributions.</p>
+        @foreach (var a in Model.Accounts)
+        {
+            <form asp-action="SaveAccount" method="post" class="account-form account-edit-card">
+                <input type="hidden" name="id" value="@a.Id" />
+                <label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "") /></label>
+                <label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label>
+                <label>Interest %<input name="interestRate" type="number" step="0.01" value="@a.InterestRate" /></label>
+                <label>Monthly in<input name="monthlyContribution" type="number" step="0.01" value="@a.MonthlyContribution" /></label>
+                <label class="checkbox-inline"><input name="includeInGlobalGoal" type="checkbox" value="true" checked="@a.IncludeInGlobalGoal" /> Include in forecast</label>
+                <button class="primary">Save</button>
+            </form>
+            @if (a.Id != 0)
+            {
+                <form asp-action="DeleteAccount" method="post" data-confirm="Delete this account?">
+                    <input type="hidden" name="id" value="@a.Id" />
+                    <button class="danger-inline">Delete</button>
+                </form>
+            }
+        }
+        <hr />
+        <form asp-action="SaveAccount" method="post" class="account-form">
+            <input type="hidden" name="id" value="0" />
+            <label>Name<input name="name" placeholder="New account" /></label>
+            <label>Amount<input name="amount" type="number" step="0.01" /></label>
+            <label>Interest %<input name="interestRate" type="number" step="0.01" /></label>
+            <label>Monthly in<input name="monthlyContribution" type="number" step="0.01" /></label>
+            <input type="hidden" name="includeInGlobalGoal" value="true" />
+            <button class="primary">Add account</button>
+        </form>
+    </section>
 }
-<hr/>
-<form asp-action="SaveAccount" method="post" class="account-form"><input type="hidden" name="id" value="0"/><label>Name<input name="name" placeholder="New account"/></label><label>Amount<input name="amount" type="number" step="0.01"/></label><label>Interest %<input name="interestRate" type="number" step="0.01"/></label><label>Monthly in<input name="monthlyContribution" type="number" step="0.01"/></label><input type="hidden" name="includeInGlobalGoal" value="true"/><button class="primary">Add account</button></form>
+
+<section class="card table-card">
+    <h2>Forecast by account</h2>
+    <p class="muted">Account-specific monthly contributions and compounding through @Model.AprilTarget.ToString("dd MMM yyyy"). The data-backed surplus forecast is shown separately above.</p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Name</th><th>Now</th><th>Rate</th><th>Monthly in</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead>
+            <tbody>
+                @foreach (var p in Model.InterestProjections)
+                {
+                    <tr><td>@p.Name</td><td>@p.CurrentBalance.ToString("C", gb)</td><td>@p.AnnualInterestRate.ToString("0.##")%</td><td>@p.MonthlyContribution.ToString("C", gb)</td><td>@p.ContributionsAdded.ToString("C", gb)</td><td class="good">@p.InterestEarned.ToString("C", gb)</td><td><strong>@p.ProjectedBalance.ToString("C", gb)</strong></td></tr>
+                }
+                <tr>
+                    <td>Forecast monthly surplus</td>
+                    <td>£0.00</td>
+                    <td>@Model.ForecastWeightedInterestRate.ToString("0.##")%</td>
+                    <td>@Model.MonthlyForecastContribution.ToString("C", gb)</td>
+                    <td>@Model.ForecastContributionsByGoalDate.ToString("C", gb)</td>
+                    <td class="good">@Model.ForecastContributionInterest.ToString("C", gb)</td>
+                    <td><strong>@((Model.ForecastContributionsByGoalDate + Model.ForecastContributionInterest).ToString("C", gb))</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </section>
-}
 
-<section class="card table-card"><h2>Forecast by account</h2><p class="muted">Monthly compounding through @Model.AprilTarget.ToString("dd MMM yyyy").</p><div class="table-wrap"><table><thead><tr><th>Name</th><th>Now</th><th>Rate</th><th>Monthly in</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead><tbody>
-@foreach(var p in Model.InterestProjections){<tr><td>@p.Name</td><td>@p.CurrentBalance.ToString("C", gb)</td><td>@p.AnnualInterestRate.ToString("0.##")%</td><td>@p.MonthlyContribution.ToString("C", gb)</td><td>@p.ContributionsAdded.ToString("C", gb)</td><td class="good">@p.InterestEarned.ToString("C", gb)</td><td><strong>@p.ProjectedBalance.ToString("C", gb)</strong></td></tr>}
-</tbody></table></div></section>
-
-<section class="card table-card"><h2>Income history</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th>Amount</th><th>Updated</th></tr></thead><tbody>@foreach(var i in Model.IncomeHistory){<tr><td>@(new DateTime(i.Year, i.Month, 1).ToString("MMM yyyy"))</td><td>@i.Amount.ToString("C", gb)</td><td>@i.UpdatedAt.ToString("dd MMM yyyy")</td></tr>}</tbody></table></div></section>
+<section class="card table-card">
+    <h2>Income history</h2>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Month</th><th>Amount</th><th>Updated</th></tr></thead>
+            <tbody>
+                @foreach (var i in Model.IncomeHistory)
+                {
+                    <tr><td>@(new DateTime(i.Year, i.Month, 1).ToString("MMM yyyy"))</td><td>@i.Amount.ToString("C", gb)</td><td>@i.UpdatedAt.ToString("dd MMM yyyy")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

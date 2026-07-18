@@ -38,11 +38,6 @@
                     <small>The first part of your selected savings balance is protected before money is considered available for pots.</small>
                 </label>
                 <label class="settings-field">
-                    <span>Default household income fallback</span>
-                    <div class="money-input"><span>£</span><input asp-for="Finance.DefaultMonthlyIncome" min="0" step="0.01" /></div>
-                    <small>Used only when a month has no recorded income entries.</small>
-                </label>
-                <label class="settings-field">
                     <span>Forecast calculation</span>
                     <select asp-for="Finance.ForecastMethod">
                         <option value="LatestMonth">Latest monthly contribution</option>
@@ -112,11 +107,47 @@
                 @Html.AntiForgeryToken()<i data-lucide="upload"></i><div><h3>Restore JSON backup</h3><p>Replaces backed-up finance tables with the selected snapshot.</p></div><input type="file" name="backupFile" accept="application/json,.json" required /><button class="button" type="submit" disabled="@(!Model.CanEdit)">Restore backup</button>
             </form>
         </div>
-        <form asp-action="ResetFinanceData" method="post" class="settings-card danger-card">
+        <div class="settings-reset-grid">
+            <form asp-action="ResetCurrentMonth" method="post" class="settings-card reset-card" data-confirm="Reset the current month? Other months and permanent records will be kept.">
+                @Html.AntiForgeryToken()
+                <div class="reset-card-heading">
+                    <span class="reset-number">1</span>
+                    <div><h3>Reset current month</h3><p>Clear only @DateTime.Today.ToString("MMMM yyyy") so you can test the monthly workflow again.</p></div>
+                </div>
+                <ul class="reset-retains-list">
+                    <li>Removes income, bills, everyday spending, extra expenses and investments for this month.</li>
+                    <li>Removes this month's Money Pot contributions and Household Reserve allocations.</li>
+                    <li>Keeps all previous months, Money Pot definitions, assets, accounts, settings and Personal Vault.</li>
+                </ul>
+                <button class="button" type="submit" disabled="@(!Model.CanEdit)">Reset current month</button>
+            </form>
+
+            <form asp-action="ResetSelectedMonth" method="post" class="settings-card reset-card" data-confirm="Reset the selected month? This cannot be undone unless you restore a backup.">
+                @Html.AntiForgeryToken()
+                <div class="reset-card-heading">
+                    <span class="reset-number">2</span>
+                    <div><h3>Reset selected month</h3><p>Choose one historical or future month and remove only its operational records.</p></div>
+                </div>
+                <label class="settings-field">
+                    <span>Month to reset</span>
+                    <input id="reset-selected-month" type="month" value="@DateTime.Today.ToString("yyyy-MM")" required />
+                    <input id="reset-selected-year" type="hidden" name="year" value="@DateTime.Today.Year" />
+                    <input id="reset-selected-month-number" type="hidden" name="month" value="@DateTime.Today.Month" />
+                </label>
+                <p class="reset-note">Only the chosen month is cleared. Definitions, balances, assets and every other month remain untouched.</p>
+                <button class="button" type="submit" disabled="@(!Model.CanEdit)">Reset selected month</button>
+            </form>
+        </div>
+
+        <form asp-action="FactoryReset" method="post" class="settings-card danger-card factory-reset-card" data-confirm="Permanently delete all finance data? This action is designed for a complete fresh start.">
             @Html.AntiForgeryToken()
-            <div><h3>Reset finance transaction data</h3><p>Deletes monthly entries, pots, assets and finance history while retaining application settings and the emergency-fund configuration. Create a backup first.</p></div>
-            <label class="settings-field"><span>Type RESET to confirm</span><input name="confirmation" autocomplete="off" /></label>
-            <button class="button danger" type="submit" disabled="@(!Model.CanEdit)">Reset finance data</button>
+            <div class="reset-card-heading">
+                <span class="reset-number danger-number">3</span>
+                <div><h3>Factory reset finance data</h3><p>Deletes all monthly finance data, Money Pots, assets, Household Reserve records, forecasts, events and reminders. Create a JSON backup first.</p></div>
+            </div>
+            <div class="factory-warning"><strong>This does not delete application settings, security preferences or Personal Vault items.</strong></div>
+            <label class="settings-field"><span>Type DELETE EVERYTHING to confirm</span><input name="confirmation" autocomplete="off" /></label>
+            <button class="button danger" type="submit" disabled="@(!Model.CanEdit)">Factory reset finance data</button>
         </form>
     </section>
 
@@ -146,6 +177,18 @@
     }
     document.documentElement.dataset.compact = '@Model.Appearance.CompactMode'.toLowerCase();
     document.documentElement.dataset.accent = '@Model.Appearance.Accent'.toLowerCase();
+
+    const selectedMonth = document.getElementById('reset-selected-month');
+    const selectedYear = document.getElementById('reset-selected-year');
+    const selectedMonthNumber = document.getElementById('reset-selected-month-number');
+    const syncSelectedMonth = () => {
+        if (!selectedMonth?.value) return;
+        const [year, month] = selectedMonth.value.split('-');
+        selectedYear.value = year;
+        selectedMonthNumber.value = Number(month);
+    };
+    selectedMonth?.addEventListener('change', syncSelectedMonth);
+    syncSelectedMonth();
 })();
 </script>
 }

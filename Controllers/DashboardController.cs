@@ -6,7 +6,6 @@ namespace FinanceManagerAspNet.Controllers;
 
 public sealed class DashboardController(
     FinanceRepository repo,
-    IConfiguration config,
     IDashboardSummaryService dashboardSummaryService,
     IDashboardExperienceService dashboardExperienceService,
     IMonthlyFinancialHealthService monthlyFinancialHealthService,
@@ -22,10 +21,8 @@ public sealed class DashboardController(
         var m = month ?? now.Month;
         await repo.EnsureModernTablesAsync();
 
-        var fallbackIncome = await repo.GetDecimalSettingAsync("DefaultMonthlyIncome", decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var defaultIncome) ? defaultIncome : 3600m);
-        var income = await repo.GetIncomeAsync(y, m);
         var incomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(y, m);
-        var monthlyIncome = incomeEntriesTotal ?? income?.Amount ?? await repo.GetMonthlyAllowanceAsync(m, fallbackIncome);
+        var monthlyIncome = incomeEntriesTotal ?? 0m;
         var carryForwardInfo = await repo.GetCarryForwardInfoAsync(y, m);
         var carryForward = carryForwardInfo.EffectiveAmount;
 
@@ -41,7 +38,7 @@ public sealed class DashboardController(
         {
             Year = y, Month = m, MonthlyIncome = monthlyIncome, CarryForwardAmount = carryForward,
             CarryForwardCalculated = carryForwardInfo.CalculatedAmount, CarryForwardOverride = carryForwardInfo.OverrideAmount,
-            CarryForwardOverrideReason = carryForwardInfo.OverrideReason, SickDays = income?.SickDays ?? 0,
+            CarryForwardOverrideReason = carryForwardInfo.OverrideReason, SickDays = 0,
             Bills = bills, Expenses = everyday, ExtraExpenses = extras, Investments = investments, Savings = reserveAllocations,
             BillsTotal = bills.Sum(x => x.Amount), ExpensesTotal = everyday.Sum(x => x.Amount), ExtraExpensesTotal = extras.Sum(x => x.Amount),
             InvestmentsTotal = investments.Sum(x => x.Amount), SavingsTotal = reserveAllocations.Sum(x => x.Amount),
@@ -90,10 +87,8 @@ public sealed class DashboardController(
         vm.Experience = dashboardExperienceService.Build(vm);
 
         var previousMonth = new DateTime(y, m, 1).AddMonths(-1);
-        var previousIncomeRecord = await repo.GetIncomeAsync(previousMonth.Year, previousMonth.Month);
         var previousIncomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(previousMonth.Year, previousMonth.Month);
-        var previousIncome = previousIncomeEntriesTotal ?? previousIncomeRecord?.Amount
-            ?? await repo.GetMonthlyAllowanceAsync(previousMonth.Month, fallbackIncome);
+        var previousIncome = previousIncomeEntriesTotal ?? 0m;
         var previousCarryForward = (await repo.GetCarryForwardInfoAsync(previousMonth.Year, previousMonth.Month)).EffectiveAmount;
         var previousBills = await repo.GetRowsAsync("bills", previousMonth.Month, previousMonth.Year);
         var previousEveryday = await repo.GetRowsAsync("everyday_spending", previousMonth.Month, previousMonth.Year);
@@ -101,7 +96,7 @@ public sealed class DashboardController(
         var previousInvestments = await repo.GetRowsAsync("investments", previousMonth.Month, previousMonth.Year);
         var previousMoneyPots = await repo.GetRowsAsync("savings", previousMonth.Month, previousMonth.Year);
 
-        var hasPreviousMonthData = previousIncomeRecord is not null
+        var hasPreviousMonthData = previousIncomeEntriesTotal.HasValue
             || previousBills.Count > 0
             || previousEveryday.Count > 0
             || previousExtras.Count > 0

@@ -14,12 +14,14 @@ public sealed class SettingsController(
 {
     private static readonly string[] BackupTables =
     [
-        "finance_settings", "monthly_income_stats", "monthly_income_entries", "bills",
-        "everyday_spending", "extra_expenses", "investments", "savings",
-        "monthly_entry_templates", "monthly_carry_forward", "household_reserve",
-        "reserve_pots", "reserve_pot_monthly_funding", "reserve_pot_actions",
+        "finance_settings", "monthly_allowance", "monthly_income_stats", "monthly_income_entries",
+        "bills", "everyday_spending", "extra_expenses", "investments", "savings",
+        "monthly_entry_templates", "monthly_carry_forward", "emergency_fund", "household_reserve",
+        "reserve_account_selections", "reserve_pots", "reserve_pot_monthly_funding", "reserve_pot_actions",
         "reserve_pot_recovery_allocations", "finance_events", "finance_reminders",
-        "account_balances", "account_balance_history", "asset_holdings", "reserved_funds"
+        "account_balances", "account_balance_history", "asset_holdings", "reserved_funds",
+        "forecast_scenarios", "recommendation_applications", "saving_pots", "saving_pot_months",
+        "saving_pot_extras", "savings_contribution_changes"
     ];
 
     [HttpGet]
@@ -30,7 +32,6 @@ public sealed class SettingsController(
             Finance = new FinanceSettingsInput
             {
                 EmergencyFundBaseline = await repo.GetDecimalSettingAsync("EmergencyFundBaseline", 12000m),
-                DefaultMonthlyIncome = await repo.GetDecimalSettingAsync("DefaultMonthlyIncome", 3500m),
                 ForecastMethod = await repo.GetStringSettingAsync("ForecastMethod", "Last3Months"),
                 CurrencyCode = await repo.GetStringSettingAsync("CurrencyCode", "GBP"),
                 ShowPence = await repo.GetBoolSettingAsync("ShowPence", true),
@@ -66,7 +67,6 @@ public sealed class SettingsController(
         if (!ModelState.IsValid) return await ReturnInvalidAsync("finance");
 
         await repo.SaveDecimalSettingAsync("EmergencyFundBaseline", input.EmergencyFundBaseline);
-        await repo.SaveDecimalSettingAsync("DefaultMonthlyIncome", input.DefaultMonthlyIncome);
         await repo.SaveStringSettingAsync("ForecastMethod", Normalise(input.ForecastMethod, "Last3Months"));
         await repo.SaveStringSettingAsync("CurrencyCode", Normalise(input.CurrencyCode, "GBP"));
         await repo.SaveBoolSettingAsync("ShowPence", input.ShowPence);
@@ -174,16 +174,27 @@ public sealed class SettingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResetFinanceData(string confirmation)
+    public Task<IActionResult> ResetCurrentMonth()
+    {
+        var today = DateTime.Today;
+        return ResetMonthAsync(today.Year, today.Month);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public Task<IActionResult> ResetSelectedMonth(int year, int month)
+        => ResetMonthAsync(year, month);
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> FactoryReset(string confirmation)
     {
         if (!CanEdit()) return Unauthorized();
-        if (!string.Equals(confirmation?.Trim(), "RESET", StringComparison.Ordinal))
+        if (!string.Equals(confirmation?.Trim(), "DELETE EVERYTHING", StringComparison.Ordinal))
         {
-            TempData["Error"] = "Type RESET exactly to confirm the finance-data reset.";
+            TempData["Error"] = "Type DELETE EVERYTHING exactly to confirm the factory reset.";
             return RedirectToSettings("data");
         }
 
-        var tables = BackupTables.Where(x => x != "finance_settings" && x != "household_reserve").Reverse().ToArray();
+        var tables = BackupTables.Where(x => x != "finance_settings").Reverse().ToArray();
         await using var connection = new SqlConnection(GetConnectionString());
         await connection.OpenAsync();
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
@@ -195,15 +206,95 @@ public sealed class SettingsController(
                 await using var command = new SqlCommand($"DELETE FROM dbo.[{table}]", connection, transaction);
                 await command.ExecuteNonQueryAsync();
             }
+
             await transaction.CommitAsync();
-            TempData["Success"] = "Finance transaction data reset. Settings and the protected emergency-fund configuration were retained.";
+            TempData["Success"] = "Factory reset complete. Application settings, security preferences and Personal Vault data were retained.";
         }
         catch
         {
             await transaction.RollbackAsync();
             throw;
         }
+
         return RedirectToSettings("data");
+    }
+
+    private async Task<IActionResult> ResetMonthAsync(int year, int month)
+    {
+        if (!CanEdit()) return Unauthorized();
+        if (year is < 2000 or > 2200 || month is < 1 or > 12)
+        {
+            TempData["Error"] = "Choose a valid month to reset.";
+            return RedirectToSettings("data");
+        }
+
+        var monthStart = new DateTime(year, month, 1);
+        var monthEnd = monthStart.AddMonths(1);
+        var deletedRows = 0;
+
+        await using var connection = new SqlConnection(GetConnectionString());
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            // Delete dependent monthly records before their parent monthly funding rows.
+            deletedRows += await DeleteWhereAsync(connection, transaction, "reserve_pot_recovery_allocations",
+                "([source_year]=@year AND [source_month]=@month) OR ([target_year]=@year AND [target_month]=@month)",
+                year, month, monthStart, monthEnd);
+
+            foreach (var table in new[] { "reserve_pot_monthly_funding", "saving_pot_months", "monthly_income_stats", "monthly_carry_forward" })
+                deletedRows += await DeleteWhereAsync(connection, transaction, table, "[year]=@year AND [month]=@month", year, month, monthStart, monthEnd);
+
+            foreach (var (table, column) in new[]
+            {
+                ("monthly_income_entries", "date"),
+                ("bills", "date"),
+                ("everyday_spending", "date"),
+                ("extra_expenses", "duedate"),
+                ("investments", "date"),
+                ("savings", "date"),
+                ("reserve_pot_actions", "action_date"),
+                ("saving_pot_extras", "date")
+            })
+            {
+                deletedRows += await DeleteWhereAsync(connection, transaction, table,
+                    $"[{column}]>=@monthStart AND [{column}]<@monthEnd", year, month, monthStart, monthEnd);
+            }
+
+            // Legacy allowance records only store a month number, not a year.
+            deletedRows += await DeleteWhereAsync(connection, transaction, "monthly_allowance", "[month_id]=@month", year, month, monthStart, monthEnd);
+
+            await transaction.CommitAsync();
+            var monthLabel = monthStart.ToString("MMMM yyyy");
+            TempData["Success"] = $"{monthLabel} reset complete. {deletedRows} monthly record{(deletedRows == 1 ? string.Empty : "s")} removed; other months and permanent records were retained.";
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        return RedirectToSettings("data");
+    }
+
+    private static async Task<int> DeleteWhereAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string table,
+        string predicate,
+        int year,
+        int month,
+        DateTime monthStart,
+        DateTime monthEnd)
+    {
+        if (!await TableExistsAsync(connection, table, transaction)) return 0;
+
+        await using var command = new SqlCommand($"DELETE FROM dbo.[{table}] WHERE {predicate}", connection, transaction);
+        command.Parameters.AddWithValue("@year", year);
+        command.Parameters.AddWithValue("@month", month);
+        command.Parameters.AddWithValue("@monthStart", monthStart);
+        command.Parameters.AddWithValue("@monthEnd", monthEnd);
+        return await command.ExecuteNonQueryAsync();
     }
 
     private async Task<IActionResult> ReturnInvalidAsync(string fragment)
