@@ -1,0 +1,264 @@
+@model FinanceManagerAspNet.Models.MoneyPotActivityViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Money Pot Activity";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var previous = Model.ActivityMonth.AddMonths(-1);
+    var next = Model.ActivityMonth.AddMonths(1);
+}
+
+<section class="hero card">
+    <div>
+        <p class="eyebrow">Phase 10.4</p>
+        <h1>Money Pot Activity</h1>
+        <p class="muted">See what was added to your Money Pots, how each goal is progressing and which pots may need attention in @Model.MonthLabel.</p>
+    </div>
+    <a class="secondary button" asp-controller="SavingPots" asp-action="Index">Manage Money Pots</a>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <div>
+            <p class="eyebrow">Activity period</p>
+            <h2>@Model.MonthLabel</h2>
+        </div>
+        <div class="inline-actions">
+            <a class="secondary button" asp-action="Index" asp-route-year="@previous.Year" asp-route-month="@previous.Month">Previous month</a>
+            <a class="secondary button" asp-action="Index" asp-route-year="@next.Year" asp-route-month="@next.Month">Next month</a>
+        </div>
+    </div>
+    <form method="get" class="account-form">
+        <label>Month
+            <select name="month">
+                @for (var month = 1; month <= 12; month++)
+                {
+                    <option value="@month" selected="@(month == Model.Month)">@CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month)</option>
+                }
+            </select>
+        </label>
+        <label>Year<input type="number" name="year" min="2000" max="2100" value="@Model.Year" /></label>
+        <button class="primary" type="submit">Open activity</button>
+    </form>
+</section>
+
+<section class="grid cards-4 compact-grid">
+    <article class="card">
+        <p class="eyebrow">Added this month</p>
+        <h2>@Model.TotalAdded.ToString("C", gb)</h2>
+        <p class="muted">Across @Model.ContributionCount contribution@(Model.ContributionCount == 1 ? string.Empty : "s")</p>
+    </article>
+    <article class="card">
+        <p class="eyebrow">Largest contribution</p>
+        <h2>@Model.LargestContributionAmount.ToString("C", gb)</h2>
+        <p class="muted">@(Model.LargestContributionPotName ?? "No contributions yet")</p>
+    </article>
+    <article class="card">
+        <p class="eyebrow">Most funded pot</p>
+        <h2>@Model.MostFundedPotAmount.ToString("C", gb)</h2>
+        <p class="muted">@(Model.MostFundedPotName ?? "No contributions yet")</p>
+    </article>
+    <article class="card">
+        <p class="eyebrow">Goals reached</p>
+        <h2>@Model.CompletedThisMonth</h2>
+        <p class="muted">@Model.PotsBehindTarget pot@(Model.PotsBehindTarget == 1 ? string.Empty : "s") currently behind target</p>
+    </article>
+</section>
+
+<section class="grid two-col">
+    <article class="card">
+        <div class="section-head">
+            <div>
+                <p class="eyebrow">Monthly summary</p>
+                <h2>What happened</h2>
+            </div>
+        </div>
+        <div class="stack-list">
+            @foreach (var insight in Model.Insights)
+            {
+                <div class="activity-insight"><i data-lucide="sparkles"></i><span>@insight</span></div>
+            }
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-head">
+            <div>
+                <p class="eyebrow">Contribution timeline</p>
+                <h2>Recent activity</h2>
+            </div>
+            <strong>@Model.Activity.Count</strong>
+        </div>
+        @if (Model.Activity.Count == 0)
+        {
+            <p class="muted">No Money Pot activity was recorded during @Model.MonthLabel.</p>
+        }
+        else
+        {
+            <div class="stack-list activity-timeline">
+                @foreach (var item in Model.Activity.Take(10))
+                {
+                    <div class="activity-entry">
+                        <div>
+                            <strong>@item.PotName</strong><br />
+                            <span class="muted">@item.Date.ToString("dd MMM yyyy")@(string.IsNullOrWhiteSpace(item.Notes) ? string.Empty : $" · {item.Notes}")</span>
+                        </div>
+                        <strong class="@(item.Amount >= 0m ? "amount-positive" : "amount-negative")">@(item.Amount >= 0m ? "+" : string.Empty)@item.Amount.ToString("C", gb)</strong>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <div>
+            <p class="eyebrow">Goal progress</p>
+            <h2>Your Money Pots</h2>
+        </div>
+        <p class="muted">Progress uses current balances and your real contribution history.</p>
+    </div>
+
+    @if (Model.Pots.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No Money Pots yet</h3>
+            <p class="muted">Create a Money Pot and add a contribution to begin tracking activity.</p>
+            <a class="primary button" asp-controller="SavingPots" asp-action="Index">Create Money Pot</a>
+        </div>
+    }
+    else
+    {
+        <div class="pot-progress-grid">
+            @foreach (var pot in Model.Pots)
+            {
+                <article class="pot-progress-card" id="pot-@pot.PotId">
+                    <div class="section-head">
+                        <div>
+                            <a asp-controller="SavingPots" asp-action="Index" asp-fragment="pot-@pot.PotId"><h3>@pot.PotName</h3></a>
+                            <p class="muted">@pot.ForecastLabel</p>
+                        </div>
+                        @if (pot.IsPaused)
+                        {
+                            <span class="status warning">Paused</span>
+                        }
+                        else if (pot.IsComplete)
+                        {
+                            <span class="status good">Complete</span>
+                        }
+                    </div>
+
+                    <div class="pot-progress-figures">
+                        <div><span class="muted">Current</span><strong>@pot.CurrentBalance.ToString("C", gb)</strong></div>
+                        <div><span class="muted">Target</span><strong>@(pot.TargetAmount?.ToString("C", gb) ?? "Not set")</strong></div>
+                        <div><span class="muted">Added in @Model.ActivityMonth.ToString("MMM")</span><strong class="amount-positive">@pot.ContributedThisMonth.ToString("C", gb)</strong></div>
+                    </div>
+
+                    @if (pot.TargetAmount.HasValue)
+                    {
+                        <div class="pot-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pot.ProgressPercent" aria-label="@pot.PotName progress">
+                            <span style="width:@pot.ProgressPercent%"></span>
+                        </div>
+                        <div class="pot-progress-footer">
+                            <span>@pot.ProgressPercent%</span>
+                            <span>@pot.RemainingToTarget.ToString("C", gb) remaining</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="muted">Add an optional target to show percentage progress and a remaining amount.</p>
+                    }
+                </article>
+            }
+        </div>
+    }
+</section>
+
+<style>
+    .activity-insight,
+    .activity-entry {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .activity-insight {
+        justify-content: flex-start;
+    }
+
+    .activity-insight svg {
+        width: 1.1rem;
+        color: var(--accent, #8b5cf6);
+        flex: 0 0 auto;
+    }
+
+    .activity-entry {
+        padding: .85rem 0;
+        border-bottom: 1px solid var(--border-color, rgba(148, 163, 184, .18));
+    }
+
+    .activity-entry:last-child {
+        border-bottom: 0;
+    }
+
+    .amount-positive { color: #34d399; }
+    .amount-negative { color: #fb7185; }
+
+    .pot-progress-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+        gap: 1rem;
+    }
+
+    .pot-progress-card {
+        padding: 1rem;
+        border: 1px solid var(--border-color, rgba(148, 163, 184, .18));
+        border-radius: 1rem;
+        background: rgba(15, 23, 42, .35);
+    }
+
+    .pot-progress-card h3 {
+        margin: 0 0 .25rem;
+    }
+
+    .pot-progress-figures {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: .75rem;
+        margin: 1rem 0;
+    }
+
+    .pot-progress-figures div {
+        display: flex;
+        flex-direction: column;
+        gap: .2rem;
+    }
+
+    .pot-progress-track {
+        height: .55rem;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, .18);
+    }
+
+    .pot-progress-track span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+    }
+
+    .pot-progress-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: .5rem;
+        color: var(--muted-color, #9fb4cf);
+        font-size: .9rem;
+    }
+
+    @@media (max-width: 700px) {
+        .pot-progress-figures { grid-template-columns: 1fr; }
+    }
+</style>

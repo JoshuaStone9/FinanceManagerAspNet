@@ -41,7 +41,7 @@ builder.Services.AddScoped<IRecommendationApplicationService, RecommendationAppl
 builder.Services.AddScoped<IDashboardSummaryService, DashboardSummaryService>();
 builder.Services.AddScoped<IDashboardExperienceService, DashboardExperienceService>();
 builder.Services.AddScoped<IMonthlyFinancialHealthService, MonthlyFinancialHealthService>();
-builder.Services.AddScoped<IMonthlyFundingReviewService, MonthlyFundingReviewService>();
+builder.Services.AddScoped<IMoneyPotActivityService, MoneyPotActivityService>();
 builder.Services.AddScoped<IReserveAccountSelectionService, ReserveAccountSelectionService>();
 builder.Services.AddScoped<IReservePotActionService, ReservePotActionService>();
 builder.Services.AddScoped<IReserveInterestForecastService, ReserveInterestForecastService>();

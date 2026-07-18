@@ -28,6 +28,75 @@
     <article class="fm-metric-card"><span>Average source</span><strong>@Model.Average.ToString("C", gb)</strong><small>Across recorded income</small></article>
     <article class="fm-metric-card"><span>Recurring sources</span><strong>@Model.RecurringCount</strong><small>Available for next month</small></article>
 </section>
+<section class="fm-month-setup-card" id="passive-income">
+    <div class="fm-month-setup-head">
+        <div>
+            <p class="eyebrow">Passive income</p>
+            <h2>Expected account interest</h2>
+            <p class="muted">Estimated from each account balance and its saved AER. Confirm the actual payment only when it reaches the account.</p>
+        </div>
+        <div class="fm-passive-summary">
+            <span class="fm-status-pill">Expected @Model.EstimatedPassiveIncome.ToString("C", gb)</span>
+            <span class="fm-status-pill">Received @Model.ReceivedPassiveIncome.ToString("C", gb)</span>
+        </div>
+    </div>
+    @if (Model.PassiveIncomeEstimates.Count == 0)
+    {
+        <div class="fm-workspace-empty">
+            <i data-lucide="badge-pound-sterling"></i>
+            <strong>No interest-bearing accounts found</strong>
+            <span>Add a balance and AER to an account before estimating monthly interest.</span>
+        </div>
+    }
+    else
+    {
+        <div class="fm-workspace-rows">
+            @foreach (var estimate in Model.PassiveIncomeEstimates)
+            {
+                <article class="fm-workspace-row">
+                    <div class="fm-workspace-row-icon"><i data-lucide="badge-pound-sterling"></i></div>
+                    <div class="fm-workspace-row-copy">
+                        <strong>@estimate.SourceName</strong>
+                        <small>@estimate.Balance.ToString("C", gb) at @estimate.AnnualInterestRate.ToString("0.##")% AER</small>
+                        @if (estimate.IsReceived)
+                        {
+                            <small>Received @estimate.ReceivedDate?.ToString("d MMM yyyy") · estimated @estimate.EstimatedAmount.ToString("C", gb)</small>
+                        }
+                        else
+                        {
+                            <small>Estimate uses the current recorded balance; your provider's daily calculation may differ slightly.</small>
+                        }
+                    </div>
+                    <div class="fm-workspace-row-amount">@((estimate.ActualAmount ?? estimate.EstimatedAmount).ToString("C", gb))</div>
+                    <div class="fm-workspace-row-actions">
+                        @if (estimate.IsReceived)
+                        {
+                            <span class="fm-status-pill">Received</span>
+                        }
+                        else if (canEdit)
+                        {
+                            <details class="fm-income-edit">
+                                <summary class="button primary">Confirm received</summary>
+                                <form asp-action="RecordInterest" method="post" class="fm-income-edit-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="year" value="@Model.Year" />
+                                    <input type="hidden" name="month" value="@Model.Month" />
+                                    <input type="hidden" name="sourceKey" value="@estimate.SourceKey" />
+                                    <input type="hidden" name="sourceName" value="@estimate.SourceName" />
+                                    <input type="hidden" name="estimatedAmount" value="@estimate.EstimatedAmount.ToString("0.00", CultureInfo.InvariantCulture)" />
+                                    <label>Actual interest received<input name="actualAmount" type="number" min="0" step="0.01" value="@estimate.EstimatedAmount.ToString("0.00", CultureInfo.InvariantCulture)" required /></label>
+                                    <label>Date received<input name="receivedDate" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required /></label>
+                                    <label>Notes<textarea name="notes" rows="2" placeholder="Optional statement reference"></textarea></label>
+                                    <button class="button primary" type="submit">Add to income</button>
+                                </form>
+                            </details>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
 @if (canEdit && Model.MissingRecurringEntries.Count > 0)
 {
 <section class="fm-month-setup-card">
@@ -133,7 +202,7 @@ else
     </div>
 }
 </section>
-<aside class="fm-workspace-entry-card" aria-labelledby="add-income-title"><p class="eyebrow">Quick entry</p><h2 id="add-income-title">Add income</h2><p class="muted">Add each salary, bonus, overtime payment or other source separately.</p>@if(canEdit){<form asp-action="AddIncome" method="post" id="quick-entry-form" class="fm-workspace-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income source<input name="name" required autofocus placeholder="e.g. Salary 1"/></label><label>Amount<input name="amount" type="number" min="0" step="0.01" required inputmode="decimal"/></label><label>Date<input name="date" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required/></label><label>Income type<select name="category"><option>Salary</option><option>Overtime</option><option>Bonus</option><option>Benefits</option><option>Refund</option><option>Other income</option></select></label><label>Notes<textarea name="notes" rows="3"></textarea></label><label class="fm-checkbox-row"><input name="isRecurring" type="checkbox" value="true"/><span><strong>Repeats every month</strong><small>Offer this income source when preparing the next month.</small></span></label><button class="button primary" type="submit">Add income</button></form>}else{<p class="muted">Sign in to add income.</p>}</aside>
+<aside class="fm-workspace-entry-card" aria-labelledby="add-income-title"><p class="eyebrow">Quick entry</p><h2 id="add-income-title">Add income</h2><p class="muted">Add each salary, bonus, overtime payment or other source separately.</p>@if(canEdit){<form asp-action="AddIncome" method="post" id="quick-entry-form" class="fm-workspace-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income source<input name="name" required autofocus placeholder="e.g. Salary 1"/></label><label>Amount<input name="amount" type="number" min="0" step="0.01" required inputmode="decimal"/></label><label>Date<input name="date" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required/></label><label>Income type<select name="category"><option>Salary</option><option>Overtime</option><option>Bonus</option><option>Benefits</option><option>Refund</option><option>Interest</option><option>Dividends</option><option>Rental income</option><option>Other passive income</option><option>Other income</option></select></label><label>Notes<textarea name="notes" rows="3"></textarea></label><label class="fm-checkbox-row"><input name="isRecurring" type="checkbox" value="true"/><span><strong>Repeats every month</strong><small>Offer this income source when preparing the next month.</small></span></label><button class="button primary" type="submit">Add income</button></form>}else{<p class="muted">Sign in to add income.</p>}</aside>
 </div>
 @section Scripts
 {

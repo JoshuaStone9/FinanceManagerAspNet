@@ -120,6 +120,27 @@ CREATE TABLE dbo.monthly_income_entries(
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_monthly_income_entries_date' AND object_id=OBJECT_ID('dbo.monthly_income_entries'))
 CREATE INDEX IX_monthly_income_entries_date ON dbo.monthly_income_entries([date]);
 
+
+IF OBJECT_ID('dbo.passive_income_records','U') IS NULL
+CREATE TABLE dbo.passive_income_records(
+    passive_income_record_id int IDENTITY(1,1) PRIMARY KEY,
+    source_key nvarchar(120) NOT NULL,
+    source_name nvarchar(150) NOT NULL,
+    income_type nvarchar(80) NOT NULL,
+    [year] int NOT NULL,
+    [month] int NOT NULL,
+    estimated_amount decimal(18,2) NOT NULL DEFAULT 0,
+    actual_amount decimal(18,2) NOT NULL,
+    received_date date NOT NULL,
+    monthly_income_entry_id int NULL,
+    notes nvarchar(500) NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_passive_income_records_source_month UNIQUE(source_key,[year],[month]),
+    CONSTRAINT FK_passive_income_records_monthly_income FOREIGN KEY(monthly_income_entry_id)
+        REFERENCES dbo.monthly_income_entries(monthly_income_entry_id) ON DELETE SET NULL
+);
+
 IF OBJECT_ID('dbo.monthly_carry_forward','U') IS NULL
 CREATE TABLE dbo.monthly_carry_forward(
     monthly_carry_forward_id int IDENTITY(1,1) PRIMARY KEY,
@@ -497,6 +518,117 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
         return value is null or DBNull ? null : Convert.ToDateTime(value);
     }
 
+    public async Task<List<PassiveIncomeEstimate>> GetPassiveIncomeEstimatesAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var emergencyFund = await GetEmergencyFundAsync();
+        var accounts = await GetAccountsAsync(emergencyFund);
+        var recorded = await GetPassiveIncomeRecordsAsync(year, month);
+        var recordedBySource = recorded.ToDictionary(x => x.SourceKey, StringComparer.OrdinalIgnoreCase);
+
+        return accounts
+            .Where(x => x.Amount > 0m && x.InterestRate > 0m)
+            .Select(account =>
+            {
+                var sourceKey = account.Id == 0 ? "emergency-fund" : $"account-{account.Id}";
+                recordedBySource.TryGetValue(sourceKey, out var actual);
+                var monthlyRate = (decimal)(Math.Pow(1d + ((double)account.InterestRate / 100d), 1d / 12d) - 1d);
+                var estimate = Math.Round(account.Amount * monthlyRate, 2, MidpointRounding.AwayFromZero);
+                return new PassiveIncomeEstimate(
+                    sourceKey,
+                    account.Name,
+                    account.Amount,
+                    account.InterestRate,
+                    estimate,
+                    actual?.ActualAmount,
+                    actual?.ReceivedDate,
+                    actual?.IncomeEntryId);
+            })
+            .OrderBy(x => x.SourceName)
+            .ToList();
+    }
+
+    public async Task<List<PassiveIncomeRecord>> GetPassiveIncomeRecordsAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var records = new List<PassiveIncomeRecord>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes
+FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY received_date,source_name", con);
+        cmd.Parameters.AddWithValue("@year", year);
+        cmd.Parameters.AddWithValue("@month", month);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            records.Add(new PassiveIncomeRecord(
+                reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetInt32(4), reader.GetInt32(5), reader.GetDecimal(6), reader.GetDecimal(7),
+                reader.GetDateTime(8), reader.IsDBNull(9) ? null : reader.GetInt32(9),
+                reader.IsDBNull(10) ? null : reader.GetString(10)));
+        }
+        return records;
+    }
+
+    public async Task RecordInterestIncomeAsync(
+        string sourceKey,
+        string sourceName,
+        decimal estimatedAmount,
+        decimal actualAmount,
+        DateTime receivedDate,
+        string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(sourceName))
+            throw new ArgumentException("A passive-income source is required.");
+        if (actualAmount < 0m)
+            throw new ArgumentOutOfRangeException(nameof(actualAmount));
+
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var transaction = (SqlTransaction)await con.BeginTransactionAsync();
+        try
+        {
+            await using var existing = new SqlCommand(@"SELECT COUNT(*) FROM dbo.passive_income_records
+WHERE source_key=@sourceKey AND [year]=@year AND [month]=@month", con, transaction);
+            existing.Parameters.AddWithValue("@sourceKey", sourceKey);
+            existing.Parameters.AddWithValue("@year", receivedDate.Year);
+            existing.Parameters.AddWithValue("@month", receivedDate.Month);
+            var existingCount = Convert.ToInt32(await existing.ExecuteScalarAsync());
+            if (existingCount > 0)
+                throw new InvalidOperationException($"{sourceName} interest has already been recorded for {receivedDate:MMMM yyyy}.");
+
+            await using var income = new SqlCommand(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
+VALUES(@name,@amount,@date,'Interest',@notes,0); SELECT CAST(SCOPE_IDENTITY() AS int);", con, transaction);
+            income.Parameters.AddWithValue("@name", $"{sourceName} interest");
+            income.Parameters.AddWithValue("@amount", actualAmount);
+            income.Parameters.AddWithValue("@date", receivedDate.Date);
+            income.Parameters.AddWithValue("@notes", DbValue(notes));
+            var incomeEntryId = Convert.ToInt32(await income.ExecuteScalarAsync());
+
+            await using var passive = new SqlCommand(@"INSERT INTO dbo.passive_income_records(source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes)
+VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@incomeEntryId,@notes)", con, transaction);
+            passive.Parameters.AddWithValue("@sourceKey", sourceKey);
+            passive.Parameters.AddWithValue("@sourceName", sourceName.Trim());
+            passive.Parameters.AddWithValue("@year", receivedDate.Year);
+            passive.Parameters.AddWithValue("@month", receivedDate.Month);
+            passive.Parameters.AddWithValue("@estimated", estimatedAmount);
+            passive.Parameters.AddWithValue("@actual", actualAmount);
+            passive.Parameters.AddWithValue("@date", receivedDate.Date);
+            passive.Parameters.AddWithValue("@incomeEntryId", incomeEntryId);
+            passive.Parameters.AddWithValue("@notes", DbValue(notes));
+            await passive.ExecuteNonQueryAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        await SyncMonthlyIncomeTotalAsync(receivedDate.Year, receivedDate.Month);
+    }
+
     public async Task<decimal> GetMonthlyAllowanceAsync(int month, decimal fallback)
     {
         var value = await ScalarAsync("SELECT TOP 1 amount FROM dbo.monthly_allowance WHERE month_id=@month", ("@month", month));
@@ -589,6 +721,9 @@ VALUES(@name,@amount,@date,@category,@notes,@isRecurring)",
         var oldDateValue = await ScalarAsync("SELECT [date] FROM dbo.monthly_income_entries WHERE monthly_income_entry_id=@id", ("@id", id));
         await ExecuteAsync(@"UPDATE dbo.monthly_income_entries SET [name]=@name,amount=@amount,[date]=@date,category=@category,notes=@notes,is_recurring=@isRecurring,updated_at=SYSUTCDATETIME()
 WHERE monthly_income_entry_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date.Date), ("@category", DbValue(category)), ("@notes", DbValue(notes)), ("@isRecurring", isRecurring));
+        await ExecuteAsync(@"UPDATE dbo.passive_income_records
+SET actual_amount=@amount, received_date=@date, [year]=YEAR(@date), [month]=MONTH(@date), notes=@notes, updated_at=SYSUTCDATETIME()
+WHERE monthly_income_entry_id=@id", ("@id", id), ("@amount", amount), ("@date", date.Date), ("@notes", DbValue(notes)));
         if (oldDateValue is not null and not DBNull)
         {
             var oldDate = Convert.ToDateTime(oldDateValue);
@@ -601,6 +736,7 @@ WHERE monthly_income_entry_id=@id", ("@id", id), ("@name", name.Trim()), ("@amou
     {
         await EnsureModernTablesAsync();
         var dateValue = await ScalarAsync("SELECT [date] FROM dbo.monthly_income_entries WHERE monthly_income_entry_id=@id", ("@id", id));
+        await ExecuteAsync("DELETE FROM dbo.passive_income_records WHERE monthly_income_entry_id=@id", ("@id", id));
         await ExecuteAsync("DELETE FROM dbo.monthly_income_entries WHERE monthly_income_entry_id=@id", ("@id", id));
         if (dateValue is not null and not DBNull)
         {

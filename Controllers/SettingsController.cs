@@ -14,7 +14,7 @@ public sealed class SettingsController(
 {
     private static readonly string[] BackupTables =
     [
-        "finance_settings", "monthly_allowance", "monthly_income_stats", "monthly_income_entries",
+        "finance_settings", "monthly_allowance", "monthly_income_stats", "monthly_income_entries", "passive_income_records",
         "bills", "everyday_spending", "extra_expenses", "investments", "savings",
         "monthly_entry_templates", "monthly_carry_forward", "emergency_fund", "household_reserve",
         "reserve_account_selections", "reserve_pots", "reserve_pot_monthly_funding", "reserve_pot_actions",
@@ -238,6 +238,8 @@ public sealed class SettingsController(
         try
         {
             // Delete dependent monthly records before their parent monthly funding rows.
+            deletedRows += await DeleteWhereAsync(connection, transaction, "passive_income_records", "[year]=@year AND [month]=@month", year, month, monthStart, monthEnd);
+
             deletedRows += await DeleteWhereAsync(connection, transaction, "reserve_pot_recovery_allocations",
                 "([source_year]=@year AND [source_month]=@month) OR ([target_year]=@year AND [target_month]=@month)",
                 year, month, monthStart, monthEnd);

@@ -9,7 +9,7 @@ Controllers
 Services
 - FundingEngineService
 - DashboardSummaryService
-- MonthlyFundingReviewService
+- MoneyPotActivityService
 - ReserveRecommendationService
 - RecommendationApplicationService
 - FinancialForecastService (pure, read-only calculation service)

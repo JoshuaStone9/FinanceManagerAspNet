@@ -118,15 +118,14 @@ Complete financial audit trail including:
 * Dismiss
 * Reopen
 
-## Monthly Funding Review
+## Money Pot Activity
 
-* Month selector
-* Summary cards
-* Per-pot funding review
-* Monthly funding statistics
-* Events
-* Reminders
-* Recommendation history
+* Month selector and contribution timeline
+* Total and largest monthly contributions
+* Most-funded pot and goals reached
+* Current balance, target and progress for each pot
+* Contribution-history completion forecasts
+* Simple monthly insights and target-risk warnings
 
 ## Statistics
 
@@ -367,3 +366,7 @@ Statistics no longer reads a fixed £1,200 monthly savings target. It now uses t
 ## Phase 10.2 — Actual-data-only monthly testing
 
 Dashboard income, monthly results and carry-forward calculations now use only entries created in the Income workspace. Legacy income snapshots, monthly allowances and the default-income fallback no longer populate empty months. The existing Settings data reset can therefore produce a genuinely clean test state.
+
+
+## Phase 10.7
+The Income workspace includes a Passive Income section. Account interest is estimated from the current balance and AER, then confirmed using the actual amount received.
