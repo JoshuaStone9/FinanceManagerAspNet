@@ -7,17 +7,58 @@ public sealed class FinancialTrendsViewModel
     public DateTime RangeEnd { get; init; }
     public IReadOnlyList<FinancialTrendMonth> Months { get; init; } = [];
 
-    public decimal AverageMonthlySurplus => Months.Count == 0 ? 0m : Months.Average(x => x.Remaining);
-    public decimal TotalIncome => Months.Sum(x => x.TotalIncome);
-    public decimal TotalOperatingIncome => Months.Sum(x => x.OperatingIncome);
-    public decimal TotalPassiveIncome => Months.Sum(x => x.PassiveIncome);
-    public decimal TotalSpending => Months.Sum(x => x.CoreSpending);
-    public decimal TotalFutureAllocations => Months.Sum(x => x.FutureAllocations);
+    public IReadOnlyList<FinancialTrendMonth> ActiveMonths => Months.Where(x => x.HasData).ToList();
+    public IReadOnlyList<FinancialTrendMonth> IncomeMonths => ActiveMonths.Where(x => x.TotalIncome > 0m).ToList();
+    public int HiddenEmptyMonthCount => Months.Count - ActiveMonths.Count;
+    public decimal AverageMonthlySurplus => IncomeMonths.Count == 0 ? 0m : IncomeMonths.Average(x => x.Remaining);
+    public decimal TotalIncome => ActiveMonths.Sum(x => x.TotalIncome);
+    public decimal TotalOperatingIncome => ActiveMonths.Sum(x => x.OperatingIncome);
+    public decimal TotalPassiveIncome => ActiveMonths.Sum(x => x.PassiveIncome);
+    public decimal TotalSpending => ActiveMonths.Sum(x => x.CoreSpending);
+    public decimal TotalFutureAllocations => ActiveMonths.Sum(x => x.FutureAllocations);
     public decimal PassiveIncomeShare => TotalIncome <= 0m ? 0m : TotalPassiveIncome / TotalIncome * 100m;
-    public decimal BestMonthlySurplus => Months.Count == 0 ? 0m : Months.Max(x => x.Remaining);
-    public FinancialTrendMonth? BestMonth => Months.OrderByDescending(x => x.Remaining).FirstOrDefault();
-    public decimal CashFlowChartMaximum => Math.Max(1m, Months.SelectMany(x => new[] { x.TotalIncome, x.CoreSpending, x.FutureAllocations, Math.Abs(x.Remaining) }).DefaultIfEmpty(1m).Max());
-    public decimal PassiveChartMaximum => Math.Max(1m, Months.Select(x => x.PassiveIncome).DefaultIfEmpty(1m).Max());
+    public decimal BestMonthlySurplus => ActiveMonths.Count == 0 ? 0m : ActiveMonths.Max(x => x.Remaining);
+    public FinancialTrendMonth? BestMonth => ActiveMonths.OrderByDescending(x => x.Remaining).FirstOrDefault();
+    public FinancialTrendMonth? HighestPassiveIncomeMonth => ActiveMonths.OrderByDescending(x => x.PassiveIncome).FirstOrDefault(x => x.PassiveIncome > 0m);
+    public FinancialTrendMonth? HighestSpendingMonth => ActiveMonths.OrderByDescending(x => x.CoreSpending).FirstOrDefault(x => x.CoreSpending > 0m);
+    public FinancialTrendMonth? LatestActiveMonth => ActiveMonths.OrderByDescending(x => x.MonthStart).FirstOrDefault();
+    public FinancialTrendMonth? PreviousActiveMonth => ActiveMonths.OrderByDescending(x => x.MonthStart).Skip(1).FirstOrDefault();
+    public decimal? LatestSurplusChange => LatestActiveMonth is null || PreviousActiveMonth is null ? null : LatestActiveMonth.Remaining - PreviousActiveMonth.Remaining;
+    public decimal? LatestPassiveIncomeChange => LatestActiveMonth is null || PreviousActiveMonth is null ? null : LatestActiveMonth.PassiveIncome - PreviousActiveMonth.PassiveIncome;
+    public decimal? LatestSpendingChange => LatestActiveMonth is null || PreviousActiveMonth is null ? null : LatestActiveMonth.CoreSpending - PreviousActiveMonth.CoreSpending;
+    public decimal CashFlowChartMaximum => Math.Max(1m, ActiveMonths.SelectMany(x => new[] { x.TotalIncome, x.CoreSpending, x.FutureAllocations, Math.Abs(x.Remaining) }).DefaultIfEmpty(1m).Max());
+    public decimal PassiveChartMaximum => Math.Max(1m, ActiveMonths.Select(x => x.PassiveIncome).DefaultIfEmpty(1m).Max());
+
+    public IReadOnlyList<string> Insights
+    {
+        get
+        {
+            var insights = new List<string>();
+
+            if (BestMonth is not null)
+            {
+                insights.Add($"{BestMonth.FullLabel} produced the strongest monthly result at {BestMonth.Remaining:C}.");
+            }
+
+            if (HighestPassiveIncomeMonth is not null)
+            {
+                insights.Add($"Passive income peaked in {HighestPassiveIncomeMonth.FullLabel} at {HighestPassiveIncomeMonth.PassiveIncome:C}.");
+            }
+
+            if (LatestSurplusChange.HasValue && LatestActiveMonth is not null && PreviousActiveMonth is not null)
+            {
+                var direction = LatestSurplusChange.Value >= 0m ? "improved" : "fell";
+                insights.Add($"Remaining money {direction} by {Math.Abs(LatestSurplusChange.Value):C} from {PreviousActiveMonth.FullLabel} to {LatestActiveMonth.FullLabel}.");
+            }
+
+            if (HighestSpendingMonth is not null)
+            {
+                insights.Add($"Core spending was highest in {HighestSpendingMonth.FullLabel} at {HighestSpendingMonth.CoreSpending:C}.");
+            }
+
+            return insights;
+        }
+    }
 }
 
 public sealed class FinancialTrendMonth
