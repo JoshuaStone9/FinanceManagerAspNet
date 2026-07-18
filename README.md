@@ -394,3 +394,6 @@ Added an optional manual balance-check workspace. Confirmed interest remains mon
 Account editing is centralised in Account Management; Statistics is now read-only.
 
 - Phase 10.11 account cards now stay collapsed by default with separate edit and balance panels, a hidden add-account form, and responsive two-column layout.
+
+## Phase 10.12 — Financial Trends
+Financial Trends now provides 3, 6 and 12 month cash-flow and passive-income analysis using recorded monthly data.

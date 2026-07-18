@@ -1,0 +1,97 @@
+@model FinanceManagerAspNet.Models.FinancialTrendsViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Financial Trends";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    string Money(decimal value) => value.ToString("C", gb);
+    string Height(decimal value, decimal maximum) => $"{Math.Clamp(Math.Abs(value) / maximum * 100m, 2m, 100m):0.##}%";
+}
+
+<section class="fm-trends-page">
+  <header class="fm-trends-hero">
+    <div>
+      <p class="eyebrow">Phase 10.12</p>
+      <h1>Financial Trends</h1>
+      <p>See how income, spending, future allocations and passive income are changing over time.</p>
+    </div>
+    <nav class="fm-range-switcher" aria-label="Trend range">
+      @foreach (var range in new[] { 3, 6, 12 })
+      {
+        <a class="@(Model.RangeMonths == range ? "active" : "")" asp-action="Index" asp-route-range="@range">@range months</a>
+      }
+    </nav>
+  </header>
+
+  <section class="fm-trend-summary-grid" aria-label="Trend summary">
+    <article class="fm-stat-card"><span>Average monthly surplus</span><strong class="@(Model.AverageMonthlySurplus < 0 ? "negative" : "positive")">@Money(Model.AverageMonthlySurplus)</strong><small>Across the selected period</small></article>
+    <article class="fm-stat-card"><span>Passive income</span><strong>@Money(Model.TotalPassiveIncome)</strong><small>@Model.PassiveIncomeShare.ToString("0.0")% of recorded income</small></article>
+    <article class="fm-stat-card"><span>Total core spending</span><strong>@Money(Model.TotalSpending)</strong><small>Bills, everyday and extra expenses</small></article>
+    <article class="fm-stat-card"><span>Best monthly result</span><strong>@Money(Model.BestMonthlySurplus)</strong><small>@(Model.BestMonth?.FullLabel ?? "No recorded months")</small></article>
+  </section>
+
+  @if (!Model.Months.Any(x => x.HasData))
+  {
+    <section class="fm-empty-trends">
+      <i data-lucide="chart-no-axes-combined"></i>
+      <h2>No trend data yet</h2>
+      <p>Record income and monthly spending to begin building your financial history.</p>
+      <a class="fm-button-primary" asp-controller="MonthlyMoney" asp-action="Income">Record income</a>
+    </section>
+  }
+  else
+  {
+    <section class="fm-trend-panel">
+      <div class="fm-trend-panel-heading">
+        <div><p class="eyebrow">Cash flow</p><h2>Monthly money movement</h2><p>Income compared with core spending, future allocations and the amount left over.</p></div>
+        <div class="fm-chart-legend"><span><i class="income"></i>Income</span><span><i class="spending"></i>Core spending</span><span><i class="future"></i>Future allocations</span></div>
+      </div>
+      <div class="fm-cashflow-chart" role="img" aria-label="Cash-flow chart for @Model.RangeMonths months">
+        @foreach (var month in Model.Months)
+        {
+          <article class="fm-chart-month">
+            <div class="fm-chart-bars">
+              <div class="fm-chart-bar income" style="height:@Height(month.TotalIncome, Model.CashFlowChartMaximum)" title="Income @Money(month.TotalIncome)"></div>
+              <div class="fm-chart-bar spending" style="height:@Height(month.CoreSpending, Model.CashFlowChartMaximum)" title="Core spending @Money(month.CoreSpending)"></div>
+              <div class="fm-chart-bar future" style="height:@Height(month.FutureAllocations, Model.CashFlowChartMaximum)" title="Future allocations @Money(month.FutureAllocations)"></div>
+            </div>
+            <strong class="@(month.Remaining < 0 ? "negative" : "positive")">@Money(month.Remaining)</strong>
+            <span>@month.Label</span>
+          </article>
+        }
+      </div>
+      <div class="fm-trend-table-wrap">
+        <table class="fm-trend-table">
+          <thead><tr><th>Month</th><th>Operating income</th><th>Passive income</th><th>Core spending</th><th>Future allocations</th><th>Remaining</th></tr></thead>
+          <tbody>
+          @foreach (var month in Model.Months.OrderByDescending(x => x.MonthStart))
+          {
+            <tr><th>@month.FullLabel</th><td>@Money(month.OperatingIncome)</td><td>@Money(month.PassiveIncome)</td><td>@Money(month.CoreSpending)</td><td>@Money(month.FutureAllocations)</td><td class="@(month.Remaining < 0 ? "negative" : "positive")">@Money(month.Remaining)</td></tr>
+          }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="fm-trend-panel">
+      <div class="fm-trend-panel-heading">
+        <div><p class="eyebrow">Passive income</p><h2>Income earned by your money</h2><p>Interest, dividends, rental income and other passive sources recorded in Income.</p></div>
+        <strong class="fm-panel-total">@Money(Model.TotalPassiveIncome)</strong>
+      </div>
+      <div class="fm-passive-chart">
+        @foreach (var month in Model.Months)
+        {
+          <article class="fm-passive-month">
+            <div class="fm-passive-bar-track"><div class="fm-passive-bar" style="height:@Height(month.PassiveIncome, Model.PassiveChartMaximum)"></div></div>
+            <strong>@Money(month.PassiveIncome)</strong><span>@month.Label</span>
+          </article>
+        }
+      </div>
+      <div class="fm-passive-breakdown-grid">
+        <article><span>Interest</span><strong>@Money(Model.Months.Sum(x => x.InterestIncome))</strong></article>
+        <article><span>Dividends</span><strong>@Money(Model.Months.Sum(x => x.DividendIncome))</strong></article>
+        <article><span>Rental income</span><strong>@Money(Model.Months.Sum(x => x.RentalIncome))</strong></article>
+        <article><span>Other passive income</span><strong>@Money(Model.Months.Sum(x => x.OtherPassiveIncome))</strong></article>
+      </div>
+    </section>
+  }
+</section>
