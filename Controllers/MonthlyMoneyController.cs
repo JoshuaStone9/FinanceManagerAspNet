@@ -49,7 +49,29 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
         try
         {
             await repo.RecordInterestIncomeAsync(sourceKey, sourceName, estimatedAmount, actualAmount, date, notes);
-            TempData["Success"] = $"{sourceName} interest recorded as passive income.";
+            TempData["Success"] = $"{sourceName} interest added to this month's income. The source account balance was left unchanged.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+
+        var url = Url.Action(nameof(Income), new { year, month });
+        return url is null ? RedirectToAction(nameof(Income), new { year, month }) : Redirect($"{url}#passive-income");
+    }
+
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReconcileInterestBalance(int year, int month, string sourceKey, string sourceName)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        if (month is < 1 or > 12 || string.IsNullOrWhiteSpace(sourceKey))
+            return BadRequest("Choose a valid interest record.");
+
+        try
+        {
+            await repo.ReconcileInterestToSourceBalanceAsync(sourceKey, year, month);
+            TempData["Success"] = $"{sourceName} balance increased by the confirmed interest payment.";
         }
         catch (InvalidOperationException ex)
         {

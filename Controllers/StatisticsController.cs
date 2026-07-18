@@ -58,6 +58,9 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var expectedInterestThisMonth = currentMonthPassiveIncome
             .Where(x => !x.IsReceived)
             .Sum(x => x.EstimatedAmount);
+        var interestReceivedThisMonth = currentMonthPassiveIncome
+            .Where(x => x.IsReceived)
+            .Sum(x => x.ActualAmount ?? 0m);
         var interestReceivedThisYear = await repo.GetInterestIncomeTotalAsync(
             new DateTime(DateTime.Today.Year, 1, 1),
             new DateTime(DateTime.Today.Year + 1, 1, 1));
@@ -132,6 +135,7 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             InterestReceivedInForecastHistory = forecast.InterestReceived,
             InterestReceivedThisYear = Math.Round(interestReceivedThisYear, 2),
             ExpectedInterestThisMonth = Math.Round(expectedInterestThisMonth, 2),
+            InterestReceivedThisMonth = Math.Round(interestReceivedThisMonth, 2),
             ProjectedFutureInterest = projectedFutureInterest,
             AprilTarget = target,
             MonthsToApril = months,

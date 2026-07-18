@@ -134,12 +134,16 @@ CREATE TABLE dbo.passive_income_records(
     received_date date NOT NULL,
     monthly_income_entry_id int NULL,
     notes nvarchar(500) NULL,
+    balance_reconciled_at datetime2 NULL,
     created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
     updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT UQ_passive_income_records_source_month UNIQUE(source_key,[year],[month]),
     CONSTRAINT FK_passive_income_records_monthly_income FOREIGN KEY(monthly_income_entry_id)
         REFERENCES dbo.monthly_income_entries(monthly_income_entry_id) ON DELETE SET NULL
 );
+
+IF OBJECT_ID('dbo.passive_income_records','U') IS NOT NULL AND COL_LENGTH('dbo.passive_income_records','balance_reconciled_at') IS NULL
+    ALTER TABLE dbo.passive_income_records ADD balance_reconciled_at datetime2 NULL;
 
 IF OBJECT_ID('dbo.monthly_carry_forward','U') IS NULL
 CREATE TABLE dbo.monthly_carry_forward(
@@ -542,7 +546,8 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
                     estimate,
                     actual?.ActualAmount,
                     actual?.ReceivedDate,
-                    actual?.IncomeEntryId);
+                    actual?.IncomeEntryId,
+                    actual?.IsBalanceReconciled ?? false);
             })
             .OrderBy(x => x.SourceName)
             .ToList();
@@ -554,7 +559,7 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
         var records = new List<PassiveIncomeRecord>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes
+        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes,balance_reconciled_at
 FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY received_date,source_name", con);
         cmd.Parameters.AddWithValue("@year", year);
         cmd.Parameters.AddWithValue("@month", month);
@@ -565,7 +570,8 @@ FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY r
                 reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.GetInt32(4), reader.GetInt32(5), reader.GetDecimal(6), reader.GetDecimal(7),
                 reader.GetDateTime(8), reader.IsDBNull(9) ? null : reader.GetInt32(9),
-                reader.IsDBNull(10) ? null : reader.GetString(10)));
+                reader.IsDBNull(10) ? null : reader.GetString(10),
+                !reader.IsDBNull(11)));
         }
         return records;
     }
@@ -627,6 +633,77 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
         }
 
         await SyncMonthlyIncomeTotalAsync(receivedDate.Year, receivedDate.Month);
+    }
+
+    public async Task ReconcileInterestToSourceBalanceAsync(string sourceKey, int year, int month)
+    {
+        if (string.IsNullOrWhiteSpace(sourceKey))
+            throw new ArgumentException("An interest source is required.", nameof(sourceKey));
+
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var transaction = (SqlTransaction)await con.BeginTransactionAsync();
+
+        try
+        {
+            await using var recordCommand = new SqlCommand(@"SELECT actual_amount,balance_reconciled_at
+FROM dbo.passive_income_records
+WHERE source_key=@sourceKey AND [year]=@year AND [month]=@month", con, transaction);
+            recordCommand.Parameters.AddWithValue("@sourceKey", sourceKey);
+            recordCommand.Parameters.AddWithValue("@year", year);
+            recordCommand.Parameters.AddWithValue("@month", month);
+
+            decimal amount;
+            await using (var reader = await recordCommand.ExecuteReaderAsync())
+            {
+                if (!await reader.ReadAsync())
+                    throw new InvalidOperationException("The confirmed interest record could not be found.");
+                if (!reader.IsDBNull(1))
+                    throw new InvalidOperationException("This interest has already been added to the source account balance.");
+                amount = reader.GetDecimal(0);
+            }
+
+            if (sourceKey.Equals("emergency-fund", StringComparison.OrdinalIgnoreCase))
+            {
+                await using var updateEmergency = new SqlCommand(@"UPDATE dbo.emergency_fund
+SET amount=amount+@amount, updated_at=SYSUTCDATETIME()", con, transaction);
+                updateEmergency.Parameters.AddWithValue("@amount", amount);
+                if (await updateEmergency.ExecuteNonQueryAsync() == 0)
+                    throw new InvalidOperationException("The Emergency Fund balance could not be updated.");
+            }
+            else if (sourceKey.StartsWith("account-", StringComparison.OrdinalIgnoreCase)
+                     && int.TryParse(sourceKey[8..], out var accountId))
+            {
+                await using var updateAccount = new SqlCommand(@"UPDATE dbo.account_balances
+SET amount=amount+@amount, updated_at=SYSUTCDATETIME()
+WHERE account_balance_id=@accountId", con, transaction);
+                updateAccount.Parameters.AddWithValue("@amount", amount);
+                updateAccount.Parameters.AddWithValue("@accountId", accountId);
+                if (await updateAccount.ExecuteNonQueryAsync() == 0)
+                    throw new InvalidOperationException("The source account balance could not be updated.");
+            }
+            else
+            {
+                throw new InvalidOperationException("This passive-income source is not linked to an editable account balance.");
+            }
+
+            await using var markReconciled = new SqlCommand(@"UPDATE dbo.passive_income_records
+SET balance_reconciled_at=SYSUTCDATETIME(), updated_at=SYSUTCDATETIME()
+WHERE source_key=@sourceKey AND [year]=@year AND [month]=@month AND balance_reconciled_at IS NULL", con, transaction);
+            markReconciled.Parameters.AddWithValue("@sourceKey", sourceKey);
+            markReconciled.Parameters.AddWithValue("@year", year);
+            markReconciled.Parameters.AddWithValue("@month", month);
+            if (await markReconciled.ExecuteNonQueryAsync() == 0)
+                throw new InvalidOperationException("The account reconciliation could not be completed.");
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<decimal> GetMonthlyAllowanceAsync(int month, decimal fallback)
