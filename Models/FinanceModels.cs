@@ -408,7 +408,8 @@ public sealed class SavingPotsViewModel
 public sealed record StatisticsForecastMonth(
     int Year,
     int Month,
-    decimal Result)
+    decimal Result,
+    decimal InterestReceived)
 {
     public DateTime MonthDate => new(Year, Month, 1);
 }
@@ -428,6 +429,10 @@ public sealed class StatisticsViewModel
     public decimal AccountContributionsByGoalDate { get; set; }
     public decimal ForecastContributionInterest { get; set; }
     public decimal ForecastWeightedInterestRate { get; set; }
+    public decimal InterestReceivedInForecastHistory { get; set; }
+    public decimal InterestReceivedThisYear { get; set; }
+    public decimal ExpectedInterestThisMonth { get; set; }
+    public decimal ProjectedFutureInterest { get; set; }
     public decimal ManualAverageIncome { get; set; }
     public decimal CalculatedSalaryEstimate { get; set; }
     public decimal AverageSavingPace { get; set; }

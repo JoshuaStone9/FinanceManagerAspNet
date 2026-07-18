@@ -1,3 +1,10 @@
+
+## Phase 10.8 — Statistics Interest Separation
+
+- Excluded confirmed interest income from the completed-month operating-surplus average.
+- Added received, expected and projected interest figures to Statistics.
+- Clarified that current balances already contain previously credited interest.
+- Kept future account compounding separate to prevent interest being forecast twice.
 # Changelog
 
 ## Phase 10.4 — Money Pot Activity
