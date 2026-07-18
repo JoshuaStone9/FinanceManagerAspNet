@@ -53,36 +53,9 @@
     </nav>
 </header>
 
-<nav class="fm-workspace-tabs" aria-label="Monthly money workspaces">
-    <a class="@(Model.ActionName == "EssentialBills" ? "active" : "")" asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Essential bills</a>
-    <a class="@(Model.ActionName == "EverydaySpending" ? "active" : "")" asp-action="EverydaySpending" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Everyday spending</a>
-    <a class="@(Model.ActionName == "ExtraExpenses" ? "active" : "")" asp-action="ExtraExpenses" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Extra expenses</a>
-    <a class="@(Model.ActionName == "Investments" ? "active" : "")" asp-action="Investments" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Investments</a>
-    <a class="@(Model.ActionName == "MoneyPots" ? "active" : "")" asp-action="MoneyPots" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Money pots</a>
-</nav>
+<partial name="_WorkspaceTabs" model="Model" />
 
-<section class="fm-workspace-metrics" aria-label="@Model.Title summary">
-    <article class="fm-metric-card">
-        <span>Total this month</span>
-        <strong>@Model.Total.ToString("C", gb)</strong>
-        <small>@Model.MonthStart.ToString("MMMM yyyy")</small>
-    </article>
-    <article class="fm-metric-card">
-        <span>@(Model.IsMoneyPots ? "Contributions" : "Recorded entries")</span>
-        <strong>@Model.Rows.Count</strong>
-        <small>@(Model.IsMoneyPots ? "Contribution records this month" : $"Item{(Model.Rows.Count == 1 ? "" : "s")} in this workspace")</small>
-    </article>
-    <article class="fm-metric-card">
-        <span>@(Model.IsMoneyPots ? "Average contribution" : "Average entry")</span>
-        <strong>@Model.Average.ToString("C", gb)</strong>
-        <small>Across recorded entries</small>
-    </article>
-    <article class="fm-metric-card">
-        <span>Monthly behaviour</span>
-        <strong>@(Model.SupportsPermanentEntries ? "Recurring supported" : "One-off only")</strong>
-        <small>@(Model.SupportsPermanentEntries ? "Choose which entries should repeat next month" : "These costs stay in the selected month")</small>
-    </article>
-</section>
+<partial name="_WorkspaceMetrics" model="Model" />
 
 @if (canEdit && Model.HasMonthSetupItems)
 {
@@ -164,8 +137,12 @@
                         <div class="fm-workspace-row-copy">
                             @{
                                 var repeatsMonthly = Model.IsPermanent(row.Name);
+                                var recurringActionLabel = repeatsMonthly
+                                    ? $"Stop repeating {row.DisplayName} each month"
+                                    : $"Repeat {row.DisplayName} each month";
+                                var amountEditTitle = $"Update {row.DisplayName} amount for {Model.MonthStart:MMMM yyyy}";
                             }
-                            <strong>@row.DisplayName</strong>
+                            <strong class="fm-workspace-row-name" title="@row.DisplayName">@row.DisplayName</strong>
                             <span>
                                 @row.Date.ToString("dd MMM yyyy")
                                 @if (!string.IsNullOrWhiteSpace(row.Category))
@@ -189,8 +166,8 @@
                                             type="submit"
                                             role="switch"
                                             aria-checked="@repeatsMonthly.ToString().ToLowerInvariant()"
-                                            aria-label="@(repeatsMonthly ? "Stop repeating this entry each month" : "Repeat this entry each month")"
-                                            title="@(repeatsMonthly ? "Stop repeating this entry each month" : "Repeat this entry each month")">
+                                            aria-label="@recurringActionLabel"
+                                            title="@recurringActionLabel">
                                         <span class="fm-recurring-switch" aria-hidden="true"><span></span></span>
                                         <span class="fm-recurring-label">@(repeatsMonthly ? "Repeats monthly" : "One-off")</span>
                                     </button>
@@ -213,7 +190,7 @@
                                         type="button"
                                         aria-expanded="false"
                                         aria-controls="amount-editor-@row.Id"
-                                        title="Update this month's amount">
+                                        title="@amountEditTitle">
                                     <span>@row.Amount.ToString("C", gb)</span>
                                     <i data-lucide="pencil"></i>
                                 </button>
@@ -252,7 +229,7 @@
                                    asp-route-id="@row.Id"
                                    asp-route-year="@Model.Year"
                                    asp-route-month="@Model.Month">
-                                    Edit
+                                    <span aria-hidden="true">Edit</span><span class="fm-visually-hidden">Edit @row.DisplayName</span>
                                 </a>
                                 <form asp-controller="Dashboard"
                                       asp-action="DeletePayment"
@@ -264,7 +241,7 @@
                                     <input type="hidden" name="source" value="@row.Source" />
                                     <input type="hidden" name="id" value="@row.Id" />
                                     <input type="hidden" name="returnAnchor" value="@Model.Source" />
-                                    <button class="button danger-inline" type="submit">Delete</button>
+                                    <button class="button danger-inline" type="submit"><span aria-hidden="true">Delete</span><span class="fm-visually-hidden">Delete @row.DisplayName</span></button>
                                 </form>
                             </div>
                         }

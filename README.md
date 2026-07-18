@@ -308,3 +308,7 @@ Recurring controls now display only two visual states: **One-off** and **Repeats
 ## Phase 8.4.8.5 — Prepare next month
 
 The former editable Carry over review has been replaced by a compact Prepare next month workflow. It adds only missing recurring entries using their latest recorded amounts, never replaces existing destination-month entries, excludes one-off entries and extra expenses, and carries the completed month's excess or shortfall separately as a financial balance.
+
+## Phase 8.4.9 — Shared Components, Accessibility & UI Polish
+
+The five Monthly Money workspaces now share extracted tab and metric partials, clearer keyboard focus, entry-specific accessible action labels, improved long-name and mobile handling, reduced-motion support, and a Razor-safe Prepare Next Month view. This phase changes presentation and maintainability only; no database migration is required.

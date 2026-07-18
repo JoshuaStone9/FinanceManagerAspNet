@@ -1,0 +1,19 @@
+@model FinanceManagerAspNet.Models.MonthlyMoneyWorkspaceViewModel
+
+<nav class="fm-workspace-tabs" aria-label="Monthly money workspaces">
+    <a class="@(Model.ActionName == "EssentialBills" ? "active" : "")"
+       aria-current="@(Model.ActionName == "EssentialBills" ? "page" : null)"
+       asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Essential bills</a>
+    <a class="@(Model.ActionName == "EverydaySpending" ? "active" : "")"
+       aria-current="@(Model.ActionName == "EverydaySpending" ? "page" : null)"
+       asp-action="EverydaySpending" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Everyday spending</a>
+    <a class="@(Model.ActionName == "ExtraExpenses" ? "active" : "")"
+       aria-current="@(Model.ActionName == "ExtraExpenses" ? "page" : null)"
+       asp-action="ExtraExpenses" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Extra expenses</a>
+    <a class="@(Model.ActionName == "Investments" ? "active" : "")"
+       aria-current="@(Model.ActionName == "Investments" ? "page" : null)"
+       asp-action="Investments" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Investments</a>
+    <a class="@(Model.ActionName == "MoneyPots" ? "active" : "")"
+       aria-current="@(Model.ActionName == "MoneyPots" ? "page" : null)"
+       asp-action="MoneyPots" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Money pots</a>
+</nav>

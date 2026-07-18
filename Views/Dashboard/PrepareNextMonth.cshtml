@@ -61,18 +61,18 @@
         </div>
 
         <div class="fm-prepare-next-sections">
-            @foreach (var carrySection in Model.Sections)
+            @foreach (var preparationSection in Model.Sections)
             {
                 <article class="fm-prepare-next-section">
                     <div class="fm-prepare-next-section-head">
                         <div>
-                            <strong>@carrySection.Title</strong>
-                            <span>@carrySection.Items.Count item@(carrySection.Items.Count == 1 ? "" : "s")</span>
+                            <strong>@preparationSection.Title</strong>
+                            <span>@preparationSection.Items.Count item@(preparationSection.Items.Count == 1 ? "" : "s")</span>
                         </div>
-                        <strong>@carrySection.Total.ToString("C", gb)</strong>
+                        <strong>@preparationSection.Total.ToString("C", gb)</strong>
                     </div>
                     <div class="fm-prepare-next-items">
-                        @foreach (var item in carrySection.Items)
+                        @foreach (var item in preparationSection.Items)
                         {
                             <div class="fm-prepare-next-item">
                                 <span>@item.Name</span>
