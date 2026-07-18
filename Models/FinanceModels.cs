@@ -822,56 +822,67 @@ public sealed class ReservePotActionResult
     public string Message { get; set; } = string.Empty;
 }
 
-public sealed class MonthlyFundingReview
+public sealed class MoneyPotActivityViewModel
 {
     public int Year { get; set; }
     public int Month { get; set; }
-    public decimal PlannedTotal { get; set; }
-    public decimal ActualTotal { get; set; }
-    public decimal EffectiveFundingTotal { get; set; }
-    public decimal RemainingTotal { get; set; }
-    public decimal RecoveryAppliedTotal { get; set; }
-    public decimal GenuineExcessTotal { get; set; }
-    public decimal CarriedExcessUsedTotal { get; set; }
-    public decimal CarriedExcessCreatedTotal { get; set; }
-    public decimal ShortfallTotal { get; set; }
-    public int ReminderCount { get; set; }
-    public int RecommendationApplicationCount { get; set; }
-    public decimal RecommendationApplicationTotal { get; set; }
-    public List<MonthlyFundingReviewPotRow> PotRows { get; set; } = [];
-    public List<FinanceEventRow> Events { get; set; } = [];
-    public List<FinanceReminderRow> Reminders { get; set; } = [];
-    public DateTime ReviewMonth => new(Year, Month, 1);
-    public string MonthLabel => ReviewMonth.ToString("MMMM yyyy");
-    public int FundedPotCount => PotRows.Count(x => x.Status is "Funded" or "Overfunded" or "Funded from carried excess");
-    public int AttentionPotCount => PotRows.Count(x => x.Status is "Overdue" or "Missed" or "Partially funded");
+    public decimal TotalAdded { get; set; }
+    public int ContributionCount { get; set; }
+    public decimal LargestContributionAmount { get; set; }
+    public string? LargestContributionPotName { get; set; }
+    public string? MostFundedPotName { get; set; }
+    public decimal MostFundedPotAmount { get; set; }
+    public int CompletedThisMonth { get; set; }
+    public int PotsBehindTarget { get; set; }
+    public List<MoneyPotActivityRow> Activity { get; set; } = [];
+    public List<MoneyPotProgressRow> Pots { get; set; } = [];
+    public List<string> Insights { get; set; } = [];
+    public DateTime ActivityMonth => new(Year, Month, 1);
+    public string MonthLabel => ActivityMonth.ToString("MMMM yyyy");
 }
 
-public sealed class MonthlyFundingReviewPotRow
+public sealed class MoneyPotActivityRow
+{
+    public int ContributionId { get; set; }
+    public int? PotId { get; set; }
+    public string PotName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateTime Date { get; set; }
+    public string? Notes { get; set; }
+    public bool IsContribution => Amount >= 0m;
+}
+
+public sealed class MoneyPotProgressRow
 {
     public int PotId { get; set; }
     public string PotName { get; set; } = string.Empty;
-    public int Priority { get; set; }
-    public bool IsActive { get; set; }
+    public decimal CurrentBalance { get; set; }
+    public decimal? TargetAmount { get; set; }
+    public DateTime? DueDate { get; set; }
+    public decimal ContributedThisMonth { get; set; }
+    public decimal RecentMonthlyContribution { get; set; }
+    public DateTime? EstimatedCompletionDate { get; set; }
     public bool IsPaused { get; set; }
-    public decimal PlannedAmount { get; set; }
-    public decimal ActualAmount { get; set; }
-    public decimal EffectiveFunding { get; set; }
-    public decimal RemainingAmount { get; set; }
-    public decimal RecoveryApplied { get; set; }
-    public decimal GenuineExcess { get; set; }
-    public decimal CarriedExcessUsed { get; set; }
-    public decimal CarriedExcessCreated { get; set; }
-    public decimal ShortfallAmount { get; set; }
-    public string Status { get; set; } = "Not scheduled";
-    public string StatusCssClass => Status switch
+    public bool IsActive { get; set; }
+    public decimal RemainingToTarget => TargetAmount.HasValue ? Math.Max(0m, TargetAmount.Value - CurrentBalance) : 0m;
+    public int ProgressPercent => !TargetAmount.HasValue || TargetAmount.Value <= 0m
+        ? 0
+        : Math.Clamp((int)Math.Round(CurrentBalance / TargetAmount.Value * 100m), 0, 100);
+    public bool IsComplete => TargetAmount.HasValue && CurrentBalance >= TargetAmount.Value;
+    public bool IsBehindTarget => DueDate.HasValue && EstimatedCompletionDate.HasValue && EstimatedCompletionDate.Value.Date > DueDate.Value.Date;
+    public string ForecastLabel
     {
-        "Funded" or "Overfunded" or "Funded from carried excess" => "good",
-        "Overdue" or "Missed" => "bad",
-        "Partially funded" => "warning",
-        "Paused" => "muted",
-        _ => "muted"
-    };
+        get
+        {
+            if (IsComplete) return "Target reached";
+            if (!TargetAmount.HasValue) return "No target set";
+            if (!EstimatedCompletionDate.HasValue) return "Add more contribution history to estimate";
+            if (!DueDate.HasValue) return $"Estimated {EstimatedCompletionDate.Value:MMM yyyy}";
+            return IsBehindTarget
+                ? $"Estimated {EstimatedCompletionDate.Value:MMM yyyy} · after needed-by date"
+                : $"Estimated {EstimatedCompletionDate.Value:MMM yyyy} · on track";
+        }
+    }
 }
 
 public sealed record ExistingPaymentOption(

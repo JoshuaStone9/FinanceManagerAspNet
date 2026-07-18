@@ -1,31 +1,19 @@
-# Combined Finance Manager + Personal Vault
+# Phase 10.4.1 — Complete Project
 
-## What changed
-- Merged Personal Vault into Finance Manager as one ASP.NET MVC app.
-- Front screen button renamed from **Inventory Database** to **Personal Vault** and now opens the vault.
-- Added shared top navigation for Dashboard, Statistics, Saving Pots, Personal Vault, and Locations.
-- Personal Vault now uses the Finance Manager SQL Server connection string (`ConnectionStrings:FinanceManager`) via EF Core SQL Server.
-- Removed the separate Personal Vault login flow. The existing Finance Manager login now controls editing for both apps.
-- Anonymous/read-only users can view finance and vault summaries, but cannot create, edit, delete, loan, maintain, manage locations, or export vault data.
-- Location filters and item location text are hidden unless logged in.
-- Added basic security headers and hardened the auth cookie settings.
-- Increased new password minimum from 4 characters to 8 characters.
-- Kept the simplified mobile-friendly Personal Vault item form.
+This complete project includes all recent Phase 9 and Phase 10 changes through the Money Pot Activity replacement.
 
-## Important setup
-The app will create the Personal Vault EF tables in the same SQL Server database used by Finance Manager. Check `appsettings.json`:
+The legacy Monthly Funding Review implementation has been fully removed:
 
-```json
-"ConnectionStrings": {
-  "FinanceManager": "Data Source=STONEYMINI;Initial Catalog=Finance_Manager;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
-}
-```
+- `Controllers/MonthlyFundingReviewController.cs`
+- `Services/MonthlyFundingReviewService.cs`
+- `Views/MonthlyFundingReview/`
+- `IMonthlyFundingReviewService` dependency registration
 
-Run the project as normal. The first run will call `Database.EnsureCreated()` for the Personal Vault tables.
+The replacement files are:
 
-## Main URLs
-- `/` front screen
-- `/Dashboard` finance dashboard
-- `/SavingPots` saving pots
-- `/Items` or `/PersonalVault` personal vault
-- `/Locations` manage locations, login required
+- `Controllers/MoneyPotActivityController.cs`
+- `Services/MoneyPotActivityService.cs`
+- `Views/MoneyPotActivity/Index.cshtml`
+- `MoneyPotActivityViewModel` models
+
+Before opening the project, replace your existing project folder with this complete copy rather than merging individual files. If Visual Studio still shows stale Razor errors, close Visual Studio and delete the local `bin` and `obj` folders before rebuilding.

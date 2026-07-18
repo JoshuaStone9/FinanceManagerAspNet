@@ -18,9 +18,46 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             Year = selectedYear,
             Month = selectedMonth,
             Entries = await repo.GetMonthlyIncomeEntriesAsync(selectedYear, selectedMonth),
-            MissingRecurringEntries = await repo.GetMissingRecurringIncomeEntriesAsync(selectedYear, selectedMonth)
+            MissingRecurringEntries = await repo.GetMissingRecurringIncomeEntriesAsync(selectedYear, selectedMonth),
+            PassiveIncomeEstimates = await repo.GetPassiveIncomeEstimatesAsync(selectedYear, selectedMonth)
         };
         return View("Income", model);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> RecordInterest(
+        int year,
+        int month,
+        string sourceKey,
+        string sourceName,
+        decimal estimatedAmount,
+        decimal actualAmount,
+        DateTime receivedDate,
+        string? notes)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        if (month is < 1 or > 12 || string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(sourceName) || actualAmount < 0m)
+            return BadRequest("Enter a valid interest payment.");
+
+        var date = receivedDate == default
+            ? new DateTime(year, month, DateTime.DaysInMonth(year, month))
+            : receivedDate;
+
+        if (date.Year != year || date.Month != month)
+            return BadRequest("The received date must be inside the selected month.");
+
+        try
+        {
+            await repo.RecordInterestIncomeAsync(sourceKey, sourceName, estimatedAmount, actualAmount, date, notes);
+            TempData["Success"] = $"{sourceName} interest recorded as passive income.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+
+        var url = Url.Action(nameof(Income), new { year, month });
+        return url is null ? RedirectToAction(nameof(Income), new { year, month }) : Redirect($"{url}#passive-income");
     }
 
     [HttpPost, ValidateAntiForgeryToken]

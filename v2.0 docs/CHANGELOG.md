@@ -1,3 +1,10 @@
+# Changelog
+
+## Phase 10.4 — Money Pot Activity
+- Removed the legacy Monthly Funding Review page and its rigid planned/recovery/excess terminology.
+- Added a contribution-driven Money Pot Activity page with monthly summaries, a contribution timeline, goal progress and forecast insights.
+- Updated the Finance navigation to use Pot Activity.
+
 ## Phase 8.4.1 Batch 1 — Allocation pot-link data foundation
 
 - Added nullable reserve-pot links and pot-name snapshots to dashboard reserve allocations.
@@ -46,3 +53,9 @@
 - Added the Finance Manager logo and favicon to the application shell.
 - Refreshed the dashboard header and content hierarchy while preserving existing data and actions.
 - Added Phase 8 roadmap, design-system, navigation, component and sidebar documentation.
+
+## Phase 10.7 — Passive Income Engine
+- Added automatic monthly interest estimates for interest-bearing accounts.
+- Added expected-versus-received passive income to the Income workspace.
+- Confirmed interest is recorded as real monthly income only after receipt.
+- Added duplicate protection, backup/restore support and safe monthly reset support.
