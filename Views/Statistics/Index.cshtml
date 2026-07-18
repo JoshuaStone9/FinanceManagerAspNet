@@ -81,7 +81,8 @@
         <div class="statistics-assumption-item"><span>Goal date</span><strong>@Model.AprilTarget.ToString("dd MMM yyyy")</strong></div>
         <div class="statistics-assumption-item"><span>Months remaining</span><strong>@Model.MonthsToApril</strong></div>
         <div class="statistics-assumption-item"><span>Interest received in sampled months</span><strong>@Model.InterestReceivedInForecastHistory.ToString("C", gb)</strong></div>
-        <div class="statistics-assumption-item"><span>Expected interest this month</span><strong>@Model.ExpectedInterestThisMonth.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Interest received this month</span><strong>@Model.InterestReceivedThisMonth.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Interest still expected this month</span><strong>@Model.ExpectedInterestThisMonth.ToString("C", gb)</strong></div>
         <div class="statistics-assumption-item"><span>Projected future interest</span><strong>@Model.ProjectedFutureInterest.ToString("C", gb)</strong></div>
         <div class="statistics-assumption-item"><span>Weighted forecast rate</span><strong>@Model.ForecastWeightedInterestRate.ToString("0.##")%</strong></div>
     </div>
@@ -173,7 +174,7 @@
 
 <section class="card table-card">
     <h2>Forecast by account</h2>
-    <p class="muted">Account-specific monthly contributions and future compounding through @Model.AprilTarget.ToString("dd MMM yyyy"). Confirmed past interest is already contained in current balances and is not projected a second time.</p>
+    <p class="muted">Account-specific monthly contributions and future compounding through @Model.AprilTarget.ToString("dd MMM yyyy"). Confirmed interest is included in monthly income. It only becomes part of an account balance forecast when you explicitly reconcile it to that account.</p>
     <div class="table-wrap">
         <table>
             <thead><tr><th>Name</th><th>Now</th><th>Rate</th><th>Monthly in</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead>

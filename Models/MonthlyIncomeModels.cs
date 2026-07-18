@@ -35,7 +35,8 @@ public sealed record PassiveIncomeEstimate(
     decimal EstimatedAmount,
     decimal? ActualAmount,
     DateTime? ReceivedDate,
-    int? IncomeEntryId)
+    int? IncomeEntryId,
+    bool IsBalanceReconciled)
 {
     public bool IsReceived => ActualAmount.HasValue;
     public decimal Difference => IsReceived ? ActualAmount!.Value - EstimatedAmount : 0m;
@@ -52,4 +53,5 @@ public sealed record PassiveIncomeRecord(
     decimal ActualAmount,
     DateTime ReceivedDate,
     int? IncomeEntryId,
-    string? Notes);
+    string? Notes,
+    bool IsBalanceReconciled);
