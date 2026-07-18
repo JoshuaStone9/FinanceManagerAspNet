@@ -1,5 +1,10 @@
 # Finance Manager V2
 
+## Phase 10.3.1 — Backup restore integrity fix
+
+JSON restore now safely handles foreign-key-linked finance records, including Savings linked to Money Pots. Constraints are validated before the restore transaction commits.
+
+
 Finance Manager V2 is a modern ASP.NET Core MVC personal finance and financial planning application designed to provide complete visibility and control over household finances, savings goals, reserve funds and long-term financial planning.
 
 The application has evolved from the original WinForms Finance Manager into a service-oriented web application with dashboard intelligence, funding automation and historical reporting while remaining compatible with the existing SQL Server data model.
@@ -362,7 +367,3 @@ Statistics no longer reads a fixed £1,200 monthly savings target. It now uses t
 ## Phase 10.2 — Actual-data-only monthly testing
 
 Dashboard income, monthly results and carry-forward calculations now use only entries created in the Income workspace. Legacy income snapshots, monthly allowances and the default-income fallback no longer populate empty months. The existing Settings data reset can therefore produce a genuinely clean test state.
-
-## Phase 10.3 — Safe reset controls
-
-Settings now separates data cleanup into Reset Current Month, Reset Selected Month and Factory Reset. Month resets remove only operational records for the chosen period while retaining all other months, permanent Money Pot definitions, assets, reserve accounts, settings and Personal Vault data. Factory reset requires `DELETE EVERYTHING` and clears all finance records while retaining application configuration and Personal Vault items.

@@ -357,24 +357,69 @@ public sealed class SettingsController(
         await using var connection = new SqlConnection(GetConnectionString());
         await connection.OpenAsync();
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        var restoreTables = new List<string>();
+        foreach (var table in BackupTables)
+        {
+            if (snapshot.Tables.ContainsKey(table) && await TableExistsAsync(connection, table, transaction))
+                restoreTables.Add(table);
+        }
+
         try
         {
-            foreach (var table in BackupTables.Reverse())
-            {
-                if (!snapshot.Tables.ContainsKey(table) || !await TableExistsAsync(connection, table, transaction)) continue;
+            // A backup preserves identity values and therefore also preserves foreign-key values.
+            // Temporarily suspend checks so parent/child rows can be replaced safely regardless of
+            // table ordering, then fully validate every relationship before committing.
+            foreach (var table in restoreTables)
+                await SetConstraintsEnabledAsync(connection, transaction, table, enabled: false);
+
+            foreach (var table in restoreTables.AsEnumerable().Reverse())
                 await new SqlCommand($"DELETE FROM dbo.[{table}]", connection, transaction).ExecuteNonQueryAsync();
-            }
-            foreach (var table in BackupTables)
+
+            foreach (var table in restoreTables)
             {
-                if (!snapshot.Tables.TryGetValue(table, out var rows) || rows.Count == 0 || !await TableExistsAsync(connection, table, transaction)) continue;
+                if (!snapshot.Tables.TryGetValue(table, out var rows) || rows.Count == 0) continue;
+
                 var identity = await HasIdentityAsync(connection, table, transaction);
-                if (identity) await new SqlCommand($"SET IDENTITY_INSERT dbo.[{table}] ON", connection, transaction).ExecuteNonQueryAsync();
-                foreach (var row in rows) await InsertRowAsync(connection, transaction, table, row);
-                if (identity) await new SqlCommand($"SET IDENTITY_INSERT dbo.[{table}] OFF", connection, transaction).ExecuteNonQueryAsync();
+                try
+                {
+                    if (identity)
+                        await new SqlCommand($"SET IDENTITY_INSERT dbo.[{table}] ON", connection, transaction).ExecuteNonQueryAsync();
+
+                    foreach (var row in rows)
+                        await InsertRowAsync(connection, transaction, table, row);
+                }
+                finally
+                {
+                    if (identity)
+                        await new SqlCommand($"SET IDENTITY_INSERT dbo.[{table}] OFF", connection, transaction).ExecuteNonQueryAsync();
+                }
             }
+
+            foreach (var table in restoreTables)
+                await SetConstraintsEnabledAsync(connection, transaction, table, enabled: true);
+
             await transaction.CommitAsync();
         }
-        catch { await transaction.RollbackAsync(); throw; }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static async Task SetConstraintsEnabledAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string table,
+        bool enabled)
+    {
+        var sql = enabled
+            ? $"ALTER TABLE dbo.[{table}] WITH CHECK CHECK CONSTRAINT ALL"
+            : $"ALTER TABLE dbo.[{table}] NOCHECK CONSTRAINT ALL";
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task InsertRowAsync(SqlConnection connection, SqlTransaction transaction, string table, Dictionary<string, JsonElement> row)
