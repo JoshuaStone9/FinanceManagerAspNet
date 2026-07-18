@@ -22,7 +22,7 @@ public sealed class DashboardController(
         var m = month ?? now.Month;
         await repo.EnsureModernTablesAsync();
 
-        var fallbackIncome = decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var defaultIncome) ? defaultIncome : 3600m;
+        var fallbackIncome = await repo.GetDecimalSettingAsync("DefaultMonthlyIncome", decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var defaultIncome) ? defaultIncome : 3600m);
         var income = await repo.GetIncomeAsync(y, m);
         var incomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(y, m);
         var monthlyIncome = incomeEntriesTotal ?? income?.Amount ?? await repo.GetMonthlyAllowanceAsync(m, fallbackIncome);

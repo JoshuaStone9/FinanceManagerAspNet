@@ -1,0 +1,151 @@
+@model FinanceManagerAspNet.Models.ApplicationSettingsViewModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="settings-shell">
+    <header class="settings-hero">
+        <div>
+            <span class="fm-eyebrow">Phase 9 · Application control centre</span>
+            <h1>Settings</h1>
+            <p>Choose how Finance Manager protects savings, forecasts goals, looks, behaves and stores your data.</p>
+        </div>
+        <div class="settings-health @(Model.Diagnostics.DatabaseConnected ? "good" : "bad")">
+            <i data-lucide="activity"></i>
+            <div><strong>@Model.Diagnostics.Status</strong><span>System check @Model.Diagnostics.CheckedAt.ToLocalTime().ToString("dd MMM HH:mm")</span></div>
+        </div>
+    </header>
+
+    <nav class="settings-nav" aria-label="Settings sections">
+        <a href="#finance"><i data-lucide="landmark"></i>Finance</a>
+        <a href="#appearance"><i data-lucide="palette"></i>Appearance</a>
+        <a href="#security"><i data-lucide="shield-check"></i>Security</a>
+        <a href="#data"><i data-lucide="database-backup"></i>Data &amp; backup</a>
+        <a href="#about"><i data-lucide="info"></i>About</a>
+    </nav>
+
+    <section class="settings-section" id="finance">
+        <div class="settings-section-heading">
+            <div class="settings-icon"><i data-lucide="landmark"></i></div>
+            <div><span>9.1</span><h2>Finance</h2><p>Global values used across Money Pots, forecasts and monthly summaries.</p></div>
+        </div>
+        <form asp-action="SaveFinance" method="post" class="settings-card">
+            @Html.AntiForgeryToken()
+            <div class="settings-grid">
+                <label class="settings-field settings-field-featured">
+                    <span>Protected emergency fund</span>
+                    <div class="money-input"><span>£</span><input asp-for="Finance.EmergencyFundBaseline" min="0" step="0.01" /></div>
+                    <small>The first part of your selected savings balance is protected before money is considered available for pots.</small>
+                </label>
+                <label class="settings-field">
+                    <span>Default household income fallback</span>
+                    <div class="money-input"><span>£</span><input asp-for="Finance.DefaultMonthlyIncome" min="0" step="0.01" /></div>
+                    <small>Used only when a month has no recorded income entries.</small>
+                </label>
+                <label class="settings-field">
+                    <span>Forecast calculation</span>
+                    <select asp-for="Finance.ForecastMethod">
+                        <option value="LatestMonth">Latest monthly contribution</option>
+                        <option value="Last3Months">Average of last 3 months</option>
+                        <option value="Last6Months">Average of last 6 months</option>
+                    </select>
+                    <small>Controls the contribution pace used for future Money Pot estimates.</small>
+                </label>
+                <label class="settings-field">
+                    <span>Currency</span>
+                    <select asp-for="Finance.CurrencyCode"><option value="GBP">GBP (£)</option><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option></select>
+                </label>
+            </div>
+            <div class="settings-toggles">
+                <label><input asp-for="Finance.ShowPence" /><span><strong>Show pence</strong><small>Display values such as £24.99 instead of £25.</small></span></label>
+                <label><input asp-for="Finance.PrepareRecurringEntriesByDefault" /><span><strong>Prepare recurring entries by default</strong><small>Preselect repeating items when preparing a new month.</small></span></label>
+                <label><input asp-for="Finance.PauseCompletedPotsAutomatically" /><span><strong>Pause completed pots automatically</strong><small>Completed pots stay visible but stop appearing in future funding preparation.</small></span></label>
+            </div>
+            <div class="settings-actions"><button class="button primary" type="submit" disabled="@(!Model.CanEdit)">Save finance settings</button></div>
+        </form>
+    </section>
+
+    <section class="settings-section" id="appearance">
+        <div class="settings-section-heading"><div class="settings-icon"><i data-lucide="palette"></i></div><div><span>9.2</span><h2>Appearance</h2><p>Set the default visual experience across Finance Manager.</p></div></div>
+        <form asp-action="SaveAppearance" method="post" class="settings-card">
+            @Html.AntiForgeryToken()
+            <div class="settings-grid">
+                <label class="settings-field"><span>Default theme</span><select asp-for="Appearance.Theme"><option>Dark</option><option>Light</option><option>System</option></select></label>
+                <label class="settings-field"><span>Accent colour</span><select asp-for="Appearance.Accent"><option>Purple</option><option>Blue</option><option>Green</option><option>Amber</option></select></label>
+            </div>
+            <div class="settings-toggles">
+                <label><input asp-for="Appearance.CompactMode" /><span><strong>Compact mode</strong><small>Reduce spacing to fit more information on screen.</small></span></label>
+                <label><input asp-for="Appearance.SidebarCollapsedByDefault" /><span><strong>Collapse sidebar by default</strong><small>Start desktop sessions with the compact navigation rail.</small></span></label>
+            </div>
+            <div class="settings-actions"><button class="button primary" type="submit" disabled="@(!Model.CanEdit)">Save appearance</button></div>
+        </form>
+    </section>
+
+    <section class="settings-section" id="security">
+        <div class="settings-section-heading"><div class="settings-icon"><i data-lucide="shield-check"></i></div><div><span>9.3</span><h2>Security</h2><p>Control sign-in persistence, session behaviour and owner access.</p></div></div>
+        <form asp-action="SaveSecurity" method="post" class="settings-card">
+            @Html.AntiForgeryToken()
+            <div class="settings-grid">
+                <label class="settings-field"><span>Remember login for</span><div class="suffix-input"><input asp-for="Security.RememberDays" min="1" max="365" /><span>days</span></div></label>
+                <label class="settings-field"><span>Idle session guidance</span><div class="suffix-input"><input asp-for="Security.SessionTimeoutMinutes" min="5" max="240" /><span>minutes</span></div><small>Stored for session policy and future activity-timeout enforcement.</small></label>
+            </div>
+            <div class="settings-toggles"><label><input asp-for="Security.ReadOnlyWhenLoggedOut" /><span><strong>Read-only when logged out</strong><small>Visitors can review data but cannot change it.</small></span></label></div>
+            <div class="settings-actions"><button class="button primary" type="submit" disabled="@(!Model.CanEdit)">Save security settings</button></div>
+        </form>
+        <form asp-action="ChangePassword" method="post" class="settings-card settings-card-secondary">
+            @Html.AntiForgeryToken()
+            <div><h3>Change owner password</h3><p>Use at least eight characters.</p></div>
+            <div class="settings-grid">
+                <label class="settings-field"><span>New password</span><input name="NewPassword" type="password" minlength="8" autocomplete="new-password" /></label>
+                <label class="settings-field"><span>Confirm password</span><input name="ConfirmPassword" type="password" minlength="8" autocomplete="new-password" /></label>
+            </div>
+            <div class="settings-actions"><button class="button" type="submit" disabled="@(!Model.CanEdit)">Update password</button></div>
+        </form>
+    </section>
+
+    <section class="settings-section" id="data">
+        <div class="settings-section-heading"><div class="settings-icon"><i data-lucide="database-backup"></i></div><div><span>9.4</span><h2>Data &amp; backup</h2><p>Download portable backups, restore them and export monthly records.</p></div></div>
+        <div class="settings-card data-actions-grid">
+            <div class="data-action"><i data-lucide="download"></i><div><h3>Create JSON backup</h3><p>Downloads finance settings, monthly entries, Money Pots, balances and assets.</p></div><a class="button primary" asp-action="ExportBackup">Download backup</a></div>
+            <div class="data-action"><i data-lucide="file-spreadsheet"></i><div><h3>Export CSV</h3><p>Creates a simple spreadsheet-friendly export of income and monthly spending.</p></div><a class="button" asp-action="ExportCsv">Download CSV</a></div>
+            <form class="data-action" asp-action="RestoreBackup" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()<i data-lucide="upload"></i><div><h3>Restore JSON backup</h3><p>Replaces backed-up finance tables with the selected snapshot.</p></div><input type="file" name="backupFile" accept="application/json,.json" required /><button class="button" type="submit" disabled="@(!Model.CanEdit)">Restore backup</button>
+            </form>
+        </div>
+        <form asp-action="ResetFinanceData" method="post" class="settings-card danger-card">
+            @Html.AntiForgeryToken()
+            <div><h3>Reset finance transaction data</h3><p>Deletes monthly entries, pots, assets and finance history while retaining application settings and the emergency-fund configuration. Create a backup first.</p></div>
+            <label class="settings-field"><span>Type RESET to confirm</span><input name="confirmation" autocomplete="off" /></label>
+            <button class="button danger" type="submit" disabled="@(!Model.CanEdit)">Reset finance data</button>
+        </form>
+    </section>
+
+    <section class="settings-section" id="about">
+        <div class="settings-section-heading"><div class="settings-icon"><i data-lucide="info"></i></div><div><span>9.5</span><h2>About &amp; system information</h2><p>Version and environment details for support and diagnostics.</p></div></div>
+        <div class="settings-card about-grid">
+            <div><span>Application version</span><strong>@Model.AppVersion</strong></div>
+            <div><span>Database</span><strong>@Model.DatabaseName</strong></div>
+            <div><span>Database status</span><strong class="@(Model.Diagnostics.DatabaseConnected ? "text-good" : "text-bad")">@Model.Diagnostics.Status</strong></div>
+            <div><span>Detected tables</span><strong>@Model.Diagnostics.FinanceTableCount</strong></div>
+            <div><span>Saved settings</span><strong>@Model.Diagnostics.SettingsCount</strong></div>
+            <div><span>Release</span><strong>Phase 9 · Settings</strong></div>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+<script>
+(() => {
+    const configuredTheme = '@Model.Appearance.Theme'.toLowerCase();
+    if (!localStorage.getItem('pv-theme') && configuredTheme !== 'system') {
+        localStorage.setItem('pv-theme', configuredTheme);
+        document.documentElement.setAttribute('data-theme', configuredTheme);
+    }
+    if (!localStorage.getItem('fm-sidebar-collapsed')) {
+        localStorage.setItem('fm-sidebar-collapsed', '@Model.Appearance.SidebarCollapsedByDefault'.toLowerCase());
+    }
+    document.documentElement.dataset.compact = '@Model.Appearance.CompactMode'.toLowerCase();
+    document.documentElement.dataset.accent = '@Model.Appearance.Accent'.toLowerCase();
+})();
+</script>
+}

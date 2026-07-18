@@ -955,10 +955,11 @@ SELECT @@ROWCOUNT;", con);
     WHERE [year] = @year AND [month] = @month
 """, ("@year", year), ("@month", month));
 
+        var configuredDefaultIncome = await GetDecimalSettingAsync(
+            "DefaultMonthlyIncome",
+            decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var d) ? d : 3500m);
         decimal monthlyIncome = monthlyIncomeObj is null || monthlyIncomeObj is DBNull
-            ? await GetMonthlyAllowanceAsync(
-                month,
-                decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var d) ? d : 3500m)
+            ? await GetMonthlyAllowanceAsync(month, configuredDefaultIncome)
             : Convert.ToDecimal(monthlyIncomeObj);
 
         var billsTotalObj = await ScalarAsync("""
@@ -1140,7 +1141,7 @@ WHEN NOT MATCHED THEN INSERT([year],[month],amount,override_amount,override_reas
         await EnsureModernTablesAsync();
 
         var income = await GetIncomeAsync(year, month);
-        var fallbackIncome = decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var configuredIncome) ? configuredIncome : 3600m;
+        var fallbackIncome = await GetDecimalSettingAsync("DefaultMonthlyIncome", decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var configuredIncome) ? configuredIncome : 3600m);
         var monthlyIncome = income?.Amount ?? await GetMonthlyAllowanceAsync(month, fallbackIncome);
         var carryForward = await GetCarryForwardAsync(year, month);
 
@@ -1252,6 +1253,30 @@ WHERE household_reserve_id = 1;
                 Math.Abs(amount), "Dashboard");
             await RebuildReservePotFundingHistoryAsync(potId);
         }
+    }
+
+    private async Task<decimal> GetForecastContributionPaceAsync(string potName, decimal fallback)
+    {
+        var method = await GetStringSettingAsync("ForecastMethod", "Last3Months");
+        var take = method switch
+        {
+            "LatestMonth" => 1,
+            "Last6Months" => 6,
+            _ => 3
+        };
+
+        var value = await ScalarAsync("""
+SELECT AVG(month_total)
+FROM (
+    SELECT TOP (@take) SUM(amount) AS month_total, YEAR([date]) AS [year], MONTH([date]) AS [month]
+    FROM dbo.savings
+    WHERE [name] = @name AND amount > 0
+    GROUP BY YEAR([date]), MONTH([date])
+    ORDER BY YEAR([date]) DESC, MONTH([date]) DESC
+) recent_months
+""", ("@take", take), ("@name", potName));
+
+        return value is null or DBNull ? Math.Max(0m, fallback) : Math.Max(0m, Convert.ToDecimal(value));
     }
 
     public async Task SyncReservePotContributionAverageAsync(string name)
@@ -1549,6 +1574,30 @@ WHEN NOT MATCHED THEN
 
     public async Task<decimal> GetDecimalSettingAsync(string key, decimal fallback) { var db = await ScalarAsync("IF OBJECT_ID('dbo.finance_settings','U') IS NOT NULL SELECT [value] FROM dbo.finance_settings WHERE [key]=@key", ("@key", key)); return decimal.TryParse(Convert.ToString(db), out var v) ? v : (decimal.TryParse(config[$"FinanceSettings:{key}"], out var c) ? c : fallback); }
     public async Task SaveDecimalSettingAsync(string key, decimal value) { await EnsureModernTablesAsync(); await ExecuteAsync("MERGE dbo.finance_settings AS t USING (SELECT @key AS [key]) AS s ON t.[key]=s.[key] WHEN MATCHED THEN UPDATE SET [value]=@value, updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([key],[value]) VALUES(@key,@value);", ("@key", key), ("@value", value)); }
+    public async Task<string> GetStringSettingAsync(string key, string fallback)
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync("SELECT [value] FROM dbo.finance_settings WHERE [key]=@key", ("@key", key));
+        return value is null or DBNull ? config[$"FinanceSettings:{key}"] ?? fallback : Convert.ToString(value) ?? fallback;
+    }
+
+    public async Task SaveStringSettingAsync(string key, string value)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("MERGE dbo.finance_settings AS t USING (SELECT @key AS [key]) AS s ON t.[key]=s.[key] WHEN MATCHED THEN UPDATE SET [value]=@value, updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([key],[value]) VALUES(@key,@value);", ("@key", key), ("@value", value));
+    }
+
+    public async Task<bool> GetBoolSettingAsync(string key, bool fallback)
+        => bool.TryParse(await GetStringSettingAsync(key, fallback.ToString()), out var value) ? value : fallback;
+
+    public Task SaveBoolSettingAsync(string key, bool value)
+        => SaveStringSettingAsync(key, value.ToString());
+
+    public async Task<int> GetIntSettingAsync(string key, int fallback)
+        => int.TryParse(await GetStringSettingAsync(key, fallback.ToString()), out var value) ? value : fallback;
+
+    public Task SaveIntSettingAsync(string key, int value)
+        => SaveStringSettingAsync(key, value.ToString());
     private async Task<object?> ScalarAsync(string sql, params (string, object)[] ps) { await using var con = new SqlConnection(ConnStr); await con.OpenAsync(); await using var cmd = new SqlCommand(sql, con); foreach (var p in ps) cmd.Parameters.AddWithValue(p.Item1, p.Item2); return await cmd.ExecuteScalarAsync(); }
     private async Task ExecuteAsync(string sql, params (string, object)[] ps) { await using var con = new SqlConnection(ConnStr); await con.OpenAsync(); await using var cmd = new SqlCommand(sql, con); foreach (var p in ps) cmd.Parameters.AddWithValue(p.Item1, p.Item2); await cmd.ExecuteNonQueryAsync(); }
 
@@ -2127,7 +2176,7 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
         decimal? requiredMonthly = null, projectedShortfall = null, extraRequired = null;
         decimal projected = pot.AllocatedAmount;
         DateTime? estimatedCompletion = null;
-        var recentMonthlyContribution = Math.Max(0m, pot.DefaultMonthlyContribution);
+        var recentMonthlyContribution = await GetForecastContributionPaceAsync(pot.Name, pot.DefaultMonthlyContribution);
         if (pot.TargetAmount.HasValue && pot.TargetAmount.Value > pot.AllocatedAmount && recentMonthlyContribution > 0m)
         {
             var monthsToTarget = (int)Math.Ceiling((pot.TargetAmount.Value - pot.AllocatedAmount) / recentMonthlyContribution);

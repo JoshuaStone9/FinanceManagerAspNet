@@ -4,14 +4,15 @@ namespace FinanceManagerAspNet.Services;
 
 public interface IReserveAccountSelectionService
 {
-    Task<HouseholdReserveAccountSummary> BuildSummaryAsync(decimal baseline = 12000m);
+    Task<HouseholdReserveAccountSummary> BuildSummaryAsync(decimal? baseline = null);
     Task SaveSelectionAsync(IEnumerable<int> accountIds);
 }
 
 public sealed class ReserveAccountSelectionService(FinanceRepository repo) : IReserveAccountSelectionService
 {
-    public async Task<HouseholdReserveAccountSummary> BuildSummaryAsync(decimal baseline = 12000m)
+    public async Task<HouseholdReserveAccountSummary> BuildSummaryAsync(decimal? baseline = null)
     {
+        var configuredBaseline = baseline ?? await repo.GetDecimalSettingAsync("EmergencyFundBaseline", 12000m);
         var emergencyFund = await repo.GetEmergencyFundAsync();
         var accounts = await repo.GetAccountsAsync(emergencyFund);
         var selectedIds = await repo.GetSelectedReserveAccountIdsAsync();
@@ -25,7 +26,7 @@ public sealed class ReserveAccountSelectionService(FinanceRepository repo) : IRe
 
         return new HouseholdReserveAccountSummary
         {
-            Baseline = Math.Max(0m, baseline),
+            Baseline = Math.Max(0m, configuredBaseline),
             AvailableAccounts = available,
             SelectedAccounts = available.Where(x => x.IsSelected).ToList()
         };

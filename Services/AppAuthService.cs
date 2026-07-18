@@ -31,7 +31,7 @@ public sealed class AppAuthService(FinanceRepository repo, IConfiguration config
 
     public async Task SignInAsync(HttpContext httpContext)
     {
-        var rememberDays = int.TryParse(config["AppSecurity:RememberDays"], out var days) ? days : 365;
+        var rememberDays = await repo.GetIntSettingAsync("RememberDays", int.TryParse(config["AppSecurity:RememberDays"], out var days) ? days : 365);
         var claims = new List<Claim>
         {
             new(ClaimTypes.Name, "Owner"),

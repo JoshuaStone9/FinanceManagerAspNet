@@ -343,3 +343,7 @@ The Forecast page now uses the same contribution-driven Money Pot calculations a
 ## Phase 9.1.1 — Financial health presentation fix
 
 The dashboard financial-health summary now uses an isolated, versioned stylesheet so its score card, progress meter, status pill and insight cards render consistently. This corrects the unstyled stacked presentation that could occur after the Phase 8.6 style consolidation.
+
+## Phase 9 — Settings & Application Configuration
+
+Settings is now a full application control centre covering finance configuration, the protected emergency-fund baseline, appearance, security, portable JSON backups, restore, CSV export, finance-data reset and system diagnostics. The £12,000 baseline is visible and editable under Settings → Finance and is used by the reserve summary shared across Dashboard, Money Pots and Forecast.
