@@ -370,3 +370,8 @@ Dashboard income, monthly results and carry-forward calculations now use only en
 
 ## Phase 10.7
 The Income workspace includes a Passive Income section. Account interest is estimated from the current balance and AER, then confirmed using the actual amount received.
+
+
+## Latest refinement
+
+Phase 10.8 adds Statistics interest separation so confirmed interest is excluded from operating-surplus averages and future interest is projected independently.

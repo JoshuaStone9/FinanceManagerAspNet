@@ -669,6 +669,28 @@ ORDER BY [date],[name]", con);
         return entries;
     }
 
+    public async Task<decimal> GetInterestIncomeTotalAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync(@"SELECT COALESCE(SUM(amount), 0)
+FROM dbo.monthly_income_entries
+WHERE YEAR([date])=@year AND MONTH([date])=@month
+  AND LOWER(LTRIM(RTRIM(COALESCE(category, ''))))='interest'",
+            ("@year", year), ("@month", month));
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    public async Task<decimal> GetInterestIncomeTotalAsync(DateTime fromInclusive, DateTime toExclusive)
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync(@"SELECT COALESCE(SUM(amount), 0)
+FROM dbo.monthly_income_entries
+WHERE [date] >= @from AND [date] < @to
+  AND LOWER(LTRIM(RTRIM(COALESCE(category, ''))))='interest'",
+            ("@from", fromInclusive.Date), ("@to", toExclusive.Date));
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
     public async Task<decimal?> GetMonthlyIncomeEntriesTotalAsync(int year, int month)
     {
         await EnsureModernTablesAsync();

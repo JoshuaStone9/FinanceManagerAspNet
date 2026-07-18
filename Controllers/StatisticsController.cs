@@ -52,6 +52,15 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var forecastContributionInterest = Math.Max(0m, forecastContributionProjection - forecastContributions);
         var projectedWithoutInterest = Math.Round(baseProjectionWithoutInterest + forecastContributions, 2);
         var projectedWithInterest = Math.Round(baseProjectionWithInterest + forecastContributionProjection, 2);
+        var projectedFutureInterest = Math.Round(projectedWithInterest - projectedWithoutInterest, 2);
+
+        var currentMonthPassiveIncome = await repo.GetPassiveIncomeEstimatesAsync(DateTime.Today.Year, DateTime.Today.Month);
+        var expectedInterestThisMonth = currentMonthPassiveIncome
+            .Where(x => !x.IsReceived)
+            .Sum(x => x.EstimatedAmount);
+        var interestReceivedThisYear = await repo.GetInterestIncomeTotalAsync(
+            new DateTime(DateTime.Today.Year, 1, 1),
+            new DateTime(DateTime.Today.Year + 1, 1, 1));
         var totalMonthlyForecastPace = accountMonthlyContributions + forecast.MonthlyContribution;
         var monthsToGoalWithInterest = calc.MonthsToGoalWithInterest(included, goal, forecast.MonthlyContribution);
 
@@ -120,12 +129,16 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             AccountContributionsByGoalDate = Math.Round(accountMonthlyContributions * months, 2),
             ForecastContributionInterest = Math.Round(forecastContributionInterest, 2),
             ForecastWeightedInterestRate = Math.Round(weightedRate, 2),
+            InterestReceivedInForecastHistory = forecast.InterestReceived,
+            InterestReceivedThisYear = Math.Round(interestReceivedThisYear, 2),
+            ExpectedInterestThisMonth = Math.Round(expectedInterestThisMonth, 2),
+            ProjectedFutureInterest = projectedFutureInterest,
             AprilTarget = target,
             MonthsToApril = months,
             ProjectedSalarySavingsByApril = forecastContributions,
             ProjectedByAprilWithoutInterest = projectedWithoutInterest,
             ProjectedByAprilWithInterest = projectedWithInterest,
-            ProjectedInterestEarned = Math.Round(projectedWithInterest - projectedWithoutInterest, 2),
+            ProjectedInterestEarned = projectedFutureInterest,
             EstimatedMonthsToGoal = monthsToGoalWithInterest,
             EstimatedGoalDate = monthsToGoalWithInterest < 0 ? null : DateTime.Today.AddMonths(monthsToGoalWithInterest),
             InterestProjections = projections,
@@ -187,7 +200,16 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             }
 
             if (!hasEntries) continue;
-            samples.Add(new StatisticsForecastMonth(cursor.Year, cursor.Month, await repo.GetMonthResultAsync(cursor.Year, cursor.Month)));
+
+            var totalResult = await repo.GetMonthResultAsync(cursor.Year, cursor.Month);
+            var interestReceived = await repo.GetInterestIncomeTotalAsync(cursor.Year, cursor.Month);
+            var operatingResult = Math.Round(totalResult - interestReceived, 2);
+
+            samples.Add(new StatisticsForecastMonth(
+                cursor.Year,
+                cursor.Month,
+                operatingResult,
+                Math.Round(interestReceived, 2)));
         }
 
         var rawAverage = samples.Count == 0 ? 0m : samples.Average(x => x.Result);
@@ -205,6 +227,7 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             monthlyContribution,
             confidence.Item1,
             confidence.Item2,
+            samples.Sum(x => x.InterestReceived),
             samples);
     }
 
@@ -214,6 +237,7 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         decimal MonthlyContribution,
         string Confidence,
         string ConfidenceCssClass,
+        decimal InterestReceived,
         List<StatisticsForecastMonth> Months);
 
 
