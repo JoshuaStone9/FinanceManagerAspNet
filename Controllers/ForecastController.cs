@@ -20,6 +20,7 @@ public sealed class ForecastController(
 
         var accountSummary = await reserveAccountSelectionService.BuildSummaryAsync();
         var pots = await repo.GetReservePotsAsync();
+        var fundingSummaries = await repo.GetReservePotFundingSummariesAsync(pots);
         var forecast = financialForecastService.Build(new FinancialForecastRequest
         {
             StartDate = DateTime.Today,
@@ -27,7 +28,10 @@ public sealed class ForecastController(
             ProtectedReserveBaseline = accountSummary.Baseline,
             IncludeAccountContributions = includeAccountContributions,
             Accounts = accountSummary.SelectedAccounts,
-            Pots = pots
+            Pots = pots,
+            PotMonthlyContributions = fundingSummaries.ToDictionary(
+                x => x.Key,
+                x => Math.Max(0m, x.Value.RecentMonthlyContribution))
         });
 
         return View(new ForecastPageViewModel

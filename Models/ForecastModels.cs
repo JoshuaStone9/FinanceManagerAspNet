@@ -23,6 +23,7 @@ public sealed class FinancialForecastRequest
     public IReadOnlyList<ReserveAccountOption> Accounts { get; init; } = Array.Empty<ReserveAccountOption>();
     public IReadOnlyList<ReservePot> Pots { get; init; } = Array.Empty<ReservePot>();
     public IReadOnlyDictionary<int, decimal> PotOneOffContributions { get; init; } = new Dictionary<int, decimal>();
+    public IReadOnlyDictionary<int, decimal> PotMonthlyContributions { get; init; } = new Dictionary<int, decimal>();
 }
 
 public sealed class FinancialForecastResult
@@ -67,6 +68,7 @@ public sealed class PotForecastResult
     public decimal? TargetAmount { get; init; }
     public DateTime? DueDate { get; init; }
     public decimal IntendedMonthlyContribution { get; init; }
+    public decimal RecentMonthlyContribution => IntendedMonthlyContribution;
     public decimal OneOffContribution { get; init; }
     public decimal ProjectedBalance { get; init; }
     public DateTime? ProjectedCompletionDate { get; init; }

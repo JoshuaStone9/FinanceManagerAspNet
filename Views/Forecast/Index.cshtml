@@ -99,10 +99,10 @@
                     <div><dt>Current balance</dt><dd>@pot.CurrentBalance.ToString("C")</dd></div>
                     <div><dt>Target</dt><dd>@(pot.TargetAmount?.ToString("C") ?? "Not set")</dd></div>
                     <div><dt>Projected balance</dt><dd>@pot.ProjectedBalance.ToString("C")</dd></div>
-                    <div><dt>Projected completion</dt><dd>@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not available")</dd></div>
-                    <div><dt>Intended contribution</dt><dd>@pot.IntendedMonthlyContribution.ToString("C") / month</dd></div>
-                    <div><dt>Required contribution</dt><dd>@(pot.RequiredMonthlyContribution.HasValue ? $"{pot.RequiredMonthlyContribution.Value:C} / month" : "Not available")</dd></div>
-                    <div><dt>Additional required</dt><dd>@(pot.AdditionalMonthlyContributionRequired.HasValue ? $"{pot.AdditionalMonthlyContributionRequired.Value:C} / month" : "None")</dd></div>
+                    <div><dt>Estimated completion</dt><dd>@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not enough history")</dd></div>
+                    <div><dt>Recent monthly average</dt><dd>@pot.RecentMonthlyContribution.ToString("C") / month</dd></div>
+                    <div><dt>Date needed by</dt><dd>@(pot.DueDate?.ToString("dd MMM yyyy") ?? "Not set")</dd></div>
+                    <div><dt>Contribution needed</dt><dd>@(pot.RequiredMonthlyContribution.HasValue ? $"{pot.RequiredMonthlyContribution.Value:C} / month" : "Not applicable")</dd></div>
                     <div><dt>Timing</dt><dd>@(pot.MonthsEarlyOrLate.HasValue ? (pot.MonthsEarlyOrLate.Value > 0 ? $"{pot.MonthsEarlyOrLate.Value} month(s) late" : pot.MonthsEarlyOrLate.Value < 0 ? $"{Math.Abs(pot.MonthsEarlyOrLate.Value)} month(s) early" : "On target month") : "Not available")</dd></div>
                 </dl>
                 <p class="muted">@pot.Explanation</p>

@@ -20,6 +20,10 @@
   else
   {
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @if (controller == "Dashboard")
+    {
+      <link rel="stylesheet" href="~/css/dashboard-health.css" asp-append-version="true" />
+    }
   }
 </head>
 <body>

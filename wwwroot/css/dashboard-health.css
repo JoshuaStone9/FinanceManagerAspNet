@@ -1,0 +1,144 @@
+/* Phase 9.1.1 — Financial health presentation fix
+   Kept separate from site.css so dashboard intelligence styling remains isolated
+   and cannot be lost during later shared-style consolidation. */
+.fm-health-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 7px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(148, 163, 184, .08);
+    color: var(--muted);
+    font-size: .76rem;
+    font-weight: 850;
+    white-space: nowrap;
+}
+.fm-health-status.is-positive { color: #86efac; background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.38); }
+.fm-health-status.is-warning { color: #fde68a; background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.38); }
+.fm-health-status.is-danger { color: #fca5a5; background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.42); }
+
+.fm-health-layout {
+    display: grid;
+    grid-template-columns: minmax(330px, .9fr) minmax(0, 1.35fr);
+    gap: 16px;
+    align-items: stretch;
+}
+.fm-health-score,
+.fm-health-insight {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 12px 30px rgba(2, 6, 23, .12);
+}
+.fm-health-score {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 20px;
+}
+.fm-health-score.is-positive { border-color: rgba(34,197,94,.32); }
+.fm-health-score.is-warning { border-color: rgba(245,158,11,.34); }
+.fm-health-score.is-danger { border-color: rgba(239,68,68,.42); }
+.fm-health-score-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+.fm-health-score-head span {
+    color: var(--muted);
+    font-size: .76rem;
+    font-weight: 850;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.fm-health-score-head strong {
+    color: var(--ink);
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    line-height: 1;
+}
+.fm-health-meter {
+    height: 10px;
+    margin: 18px 0;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(148,163,184,.15);
+}
+.fm-health-meter > span {
+    display: block;
+    height: 100%;
+    min-width: 3px;
+    border-radius: inherit;
+    background: linear-gradient(90deg,#8b5cf6,#22c55e);
+}
+.fm-health-score.is-warning .fm-health-meter > span { background: linear-gradient(90deg,#8b5cf6,#f59e0b); }
+.fm-health-score.is-danger .fm-health-meter > span { background: linear-gradient(90deg,#f59e0b,#ef4444); }
+.fm-health-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 10px;
+}
+.fm-health-breakdown > div {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(15,23,42,.28);
+}
+.fm-health-breakdown span { color: var(--muted); font-size: .73rem; }
+.fm-health-breakdown strong { overflow-wrap: anywhere; font-size: 1rem; }
+.fm-health-comparison {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0 0;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+}
+.fm-health-comparison svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.fm-health-comparison.is-better { color: #86efac; }
+.fm-health-comparison.is-worse { color: #fca5a5; }
+
+.fm-health-insights {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 12px;
+}
+.fm-health-insight {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+}
+.fm-health-insight > svg {
+    width: 21px;
+    height: 21px;
+    flex: 0 0 auto;
+    margin-top: 1px;
+    color: var(--muted);
+}
+.fm-health-insight > div { min-width: 0; }
+.fm-health-insight strong { display: block; margin-bottom: 5px; color: var(--ink); }
+.fm-health-insight p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+.fm-health-insight.is-positive { border-color: rgba(34,197,94,.25); }
+.fm-health-insight.is-warning { border-color: rgba(245,158,11,.28); }
+.fm-health-insight.is-danger { border-color: rgba(239,68,68,.32); }
+.fm-health-insight.is-positive > svg { color: #4ade80; }
+.fm-health-insight.is-warning > svg { color: #fbbf24; }
+.fm-health-insight.is-danger > svg { color: #fb7185; }
+
+@media (max-width: 980px) {
+    .fm-health-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+    .fm-health-insights,
+    .fm-health-breakdown { grid-template-columns: 1fr; }
+    .fm-health-score-head { align-items: flex-start; flex-direction: column; }
+    .fm-dashboard-section-head { align-items: flex-start; }
+}

@@ -333,3 +333,13 @@ Income records now use the same recorded-entry row layout and two-state recurrin
 
 ## Phase 8.6 — Money Pots & Monthly Entry Simplification
 Monthly entry forms now use workspace-specific types and support either month-count or end-date durations. Money Pot creation and editing have been reduced to name, optional target, optional date needed by and notes. Forecasts now use real contribution history, while explicit Pause/Resume actions replace legacy priority and carry-forward controls.
+
+
+## Phase 8.6.1 — Forecast consistency
+
+The Forecast page now uses the same contribution-driven Money Pot calculations as the main Money Pots page. Recent real contribution history replaces legacy intended-contribution fields in forecast cards, so status, estimated completion and timing remain consistent across the application.
+
+
+## Phase 9.1.1 — Financial health presentation fix
+
+The dashboard financial-health summary now uses an isolated, versioned stylesheet so its score card, progress meter, status pill and insight cards render consistently. This corrects the unstyled stacked presentation that could occur after the Phase 8.6 style consolidation.

@@ -59,7 +59,7 @@ public sealed class FinancialForecastService : IFinancialForecastService
             foreach (var pot in pots)
             {
                 if (pot.IsPausedFor(month)) continue;
-                var contribution = Math.Max(0m, pot.IntendedMonthlyContribution);
+                var contribution = GetMonthlyContribution(request, pot);
                 var projected = potBalances[pot.Id] + contribution;
                 potBalances[pot.Id] = pot.TargetAmount.HasValue
                     ? Math.Min(projected, pot.TargetAmount.Value)
@@ -88,7 +88,8 @@ public sealed class FinancialForecastService : IFinancialForecastService
             pot,
             startDate,
             endDate,
-            GetOneOff(request, pot.Id))).ToList();
+            GetOneOff(request, pot.Id),
+            GetMonthlyContribution(request, pot))).ToList();
         var projectedReserve = accountStates.Values.Sum();
         var projectedAllocated = potResults.Sum(x => Math.Max(0m, x.ProjectedBalance));
         var surplus = Math.Max(0m, projectedReserve - baseline);
@@ -115,6 +116,7 @@ public sealed class FinancialForecastService : IFinancialForecastService
                 request.IncludeAccountContributions
                     ? "Configured monthly reserve-account contributions are included."
                     : "Future reserve-account contributions are excluded.",
+                "Pot forecasts use recent real contribution history where available; legacy intended contribution values are only a compatibility fallback.",
                 "Pot contributions are treated as virtual allocations within the household reserve, not additional cash leaving the reserve.",
                 request.FutureExpenseAmount > 0m
                     ? "The selected future expense is deducted once from the reserve in its chosen month."
@@ -125,9 +127,14 @@ public sealed class FinancialForecastService : IFinancialForecastService
         };
     }
 
-    private static PotForecastResult BuildPotForecast(ReservePot pot, DateTime startDate, DateTime endDate, decimal oneOffContribution)
+    private static PotForecastResult BuildPotForecast(
+        ReservePot pot,
+        DateTime startDate,
+        DateTime endDate,
+        decimal oneOffContribution,
+        decimal monthlyContribution)
     {
-        var contribution = Math.Max(0m, pot.IntendedMonthlyContribution);
+        var contribution = Math.Max(0m, monthlyContribution);
         var target = pot.TargetAmount;
         var current = pot.AllocatedAmount;
         var effectiveOpening = current + Math.Max(0m, oneOffContribution);
@@ -155,7 +162,7 @@ public sealed class FinancialForecastService : IFinancialForecastService
                 : Math.Round((target.Value - effectiveOpening) / monthsUntilDue, 2);
         }
 
-        var status = DetermineStatus(pot, effectiveOpening, startDate, completionDate);
+        var status = DetermineStatus(pot, effectiveOpening, startDate, completionDate, contribution);
         decimal? additional = required.HasValue
             ? Math.Round(Math.Max(0m, required.Value - contribution), 2)
             : null;
@@ -183,13 +190,18 @@ public sealed class FinancialForecastService : IFinancialForecastService
         };
     }
 
-    private static ForecastGoalStatus DetermineStatus(ReservePot pot, decimal effectiveOpening, DateTime startDate, DateTime? completionDate)
+    private static ForecastGoalStatus DetermineStatus(
+        ReservePot pot,
+        decimal effectiveOpening,
+        DateTime startDate,
+        DateTime? completionDate,
+        decimal monthlyContribution)
     {
         if (effectiveOpening < 0m) return ForecastGoalStatus.Overdrawn;
         if (!pot.TargetAmount.HasValue || pot.TargetAmount.Value <= 0m) return ForecastGoalStatus.NoTarget;
         if (effectiveOpening >= pot.TargetAmount.Value) return ForecastGoalStatus.Completed;
         if (!pot.DueDate.HasValue) return ForecastGoalStatus.NoDueDate;
-        if (pot.IntendedMonthlyContribution <= 0m) return ForecastGoalStatus.NoContributionPlanned;
+        if (monthlyContribution <= 0m) return ForecastGoalStatus.NoContributionPlanned;
         if (pot.DueDate.Value.Date < startDate.Date) return ForecastGoalStatus.Behind;
         if (!completionDate.HasValue) return ForecastGoalStatus.Behind;
         if (completionDate.Value.Date <= pot.DueDate.Value.Date) return ForecastGoalStatus.OnTrack;
@@ -212,7 +224,7 @@ public sealed class FinancialForecastService : IFinancialForecastService
             ForecastGoalStatus.Behind when monthsEarlyOrLate > 0 => $"This pot is projected to finish {monthsEarlyOrLate.Value} month(s) after its target date.",
             ForecastGoalStatus.Behind when additional.GetValueOrDefault() > 0m => $"The current contribution is insufficient. An additional {additional.Value:C} per month is required.",
             ForecastGoalStatus.Behind => "The target is overdue or cannot be reached with the current plan.",
-            ForecastGoalStatus.NoContributionPlanned => "A target and due date exist, but no intended monthly contribution is planned.",
+            ForecastGoalStatus.NoContributionPlanned => "A target and date needed by exist, but there is not enough contribution history to estimate completion.",
             ForecastGoalStatus.NoTarget => "A completion forecast cannot be calculated until a target amount is set.",
             ForecastGoalStatus.NoDueDate => "A balance can be projected, but goal risk cannot be measured without a due date.",
             ForecastGoalStatus.Overdrawn => $"The pot is {Math.Abs(pot.AllocatedAmount):C} overdrawn and must first recover to £0.",
@@ -225,14 +237,19 @@ public sealed class FinancialForecastService : IFinancialForecastService
             ForecastGoalStatus.Completed => "No action is required.",
             ForecastGoalStatus.OnTrack => "Continue with the current contribution.",
             ForecastGoalStatus.AtRisk or ForecastGoalStatus.Behind when additional.GetValueOrDefault() > 0m
-                => $"Increase the intended contribution by {additional.Value:C} per month.",
+                => $"Contributing an additional {additional.Value:C} per month would meet the date needed by.",
             ForecastGoalStatus.NoContributionPlanned when pot.TargetAmount.HasValue && pot.DueDate.HasValue
-                => "Add a monthly contribution or make a one-off contribution.",
+                => "Record contributions to build a contribution-driven completion estimate.",
             ForecastGoalStatus.NoTarget => "Set a target amount.",
             ForecastGoalStatus.NoDueDate => "Set a target date to enable risk analysis.",
             ForecastGoalStatus.Overdrawn => $"Restore {Math.Abs(pot.AllocatedAmount):C} before allocating towards the target.",
             _ => "Review the target, due date or planned contribution."
         };
+
+    private static decimal GetMonthlyContribution(FinancialForecastRequest request, ReservePot pot)
+        => request.PotMonthlyContributions.TryGetValue(pot.Id, out var amount)
+            ? Math.Max(0m, amount)
+            : Math.Max(0m, pot.IntendedMonthlyContribution);
 
     private static decimal GetOneOff(FinancialForecastRequest request, int potId)
         => request.PotOneOffContributions.TryGetValue(potId, out var amount) ? Math.Max(0m, amount) : 0m;
