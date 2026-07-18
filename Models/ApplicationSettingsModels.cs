@@ -16,7 +16,6 @@ public sealed class ApplicationSettingsViewModel
 public sealed class FinanceSettingsInput
 {
     [Range(0, 10000000)] public decimal EmergencyFundBaseline { get; set; } = 12000m;
-    [Range(0, 10000000)] public decimal DefaultMonthlyIncome { get; set; } = 3500m;
     public string ForecastMethod { get; set; } = "Last3Months";
     public string CurrencyCode { get; set; } = "GBP";
     public bool ShowPence { get; set; } = true;

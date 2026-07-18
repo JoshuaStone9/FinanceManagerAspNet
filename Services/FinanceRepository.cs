@@ -949,18 +949,7 @@ SELECT @@ROWCOUNT;", con);
     """, ("@toDate", to), ("@month", month), ("@year", year), ("@autoNote", autoNote));
         }
 
-        var monthlyIncomeObj = await ScalarAsync("""
-    SELECT TOP 1 amount
-    FROM dbo.monthly_income_stats
-    WHERE [year] = @year AND [month] = @month
-""", ("@year", year), ("@month", month));
-
-        var configuredDefaultIncome = await GetDecimalSettingAsync(
-            "DefaultMonthlyIncome",
-            decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var d) ? d : 3500m);
-        decimal monthlyIncome = monthlyIncomeObj is null || monthlyIncomeObj is DBNull
-            ? await GetMonthlyAllowanceAsync(month, configuredDefaultIncome)
-            : Convert.ToDecimal(monthlyIncomeObj);
+        var monthlyIncome = await GetMonthlyIncomeEntriesTotalAsync(year, month) ?? 0m;
 
         var billsTotalObj = await ScalarAsync("""
     SELECT SUM(amount)
@@ -994,11 +983,8 @@ SELECT @@ROWCOUNT;", con);
         var grandOutgoings = billsTotal + expensesTotal + investmentsTotal;
         var remainingFund = monthlyIncome - grandOutgoings + savingsTotal;
 
-        var monthlyTarget = decimal.TryParse(config["FinanceSettings:MonthlySavingTarget"], out var mt)
-            ? mt
-            : 1200m;
-
-        var carryAmount = Math.Round(remainingFund - monthlyTarget, 2);
+        // V2 carries the actual monthly result. There is no fixed monthly savings target.
+        var carryAmount = Math.Round(remainingFund, 2);
 
         if (carryAmount < 0)
         {
@@ -1140,9 +1126,7 @@ WHEN NOT MATCHED THEN INSERT([year],[month],amount,override_amount,override_reas
     {
         await EnsureModernTablesAsync();
 
-        var income = await GetIncomeAsync(year, month);
-        var fallbackIncome = await GetDecimalSettingAsync("DefaultMonthlyIncome", decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var configuredIncome) ? configuredIncome : 3600m);
-        var monthlyIncome = income?.Amount ?? await GetMonthlyAllowanceAsync(month, fallbackIncome);
+        var monthlyIncome = await GetMonthlyIncomeEntriesTotalAsync(year, month) ?? 0m;
         var carryForward = await GetCarryForwardAsync(year, month);
 
         var bills = await GetRowsAsync("bills", month, year);

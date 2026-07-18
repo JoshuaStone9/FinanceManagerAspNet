@@ -405,11 +405,29 @@ public sealed class SavingPotsViewModel
     public List<SavingsRecommendation> Recommendations { get; set; } = [];
 }
 
+public sealed record StatisticsForecastMonth(
+    int Year,
+    int Month,
+    decimal Result)
+{
+    public DateTime MonthDate => new(Year, Month, 1);
+}
+
 public sealed class StatisticsViewModel
 {
-    // Retained for the existing long-term statistics page. The monthly dashboard no longer uses a forced target.
     public decimal GlobalGoal { get; set; }
-    public decimal MonthlySavingTarget { get; set; }
+    public decimal MonthlyForecastContribution { get; set; }
+    public string ForecastMethod { get; set; } = "Last3Months";
+    public string ForecastMethodLabel { get; set; } = "Last 3 completed months";
+    public string ForecastConfidence { get; set; } = "Limited history";
+    public string ForecastConfidenceCssClass { get; set; } = "warning";
+    public int ForecastHistoryCount { get; set; }
+    public List<StatisticsForecastMonth> ForecastHistory { get; set; } = [];
+    public decimal AccountMonthlyContributions { get; set; }
+    public decimal ForecastContributionsByGoalDate { get; set; }
+    public decimal AccountContributionsByGoalDate { get; set; }
+    public decimal ForecastContributionInterest { get; set; }
+    public decimal ForecastWeightedInterestRate { get; set; }
     public decimal ManualAverageIncome { get; set; }
     public decimal CalculatedSalaryEstimate { get; set; }
     public decimal AverageSavingPace { get; set; }
