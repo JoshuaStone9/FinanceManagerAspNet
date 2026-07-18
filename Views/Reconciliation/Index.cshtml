@@ -1,46 +1,256 @@
 @model FinanceManagerAspNet.Models.AccountReconciliationViewModel
 @using System.Globalization
-@{ ViewData["Title"] = "Balance Reconciliation"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; }
+@{
+    ViewData["Title"] = "Account Management";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+}
 
-<header class="fm-dashboard-hero">
+<header class="fm-dashboard-hero fm-account-hero">
     <div>
-        <p class="eyebrow">Phase 10.10</p>
-        <h1>Balance Reconciliation</h1>
-        <p>Optionally compare Finance Manager with your real accounts and update a recorded balance whenever you choose.</p>
+        <p class="eyebrow">Phase 10.11</p>
+        <h1>Account Management</h1>
+        <p>Keep balances and forecast assumptions organised in one place.</p>
+    </div>
+    <div class="fm-account-hero-actions">
+        @if (canEdit)
+        {
+            <button class="primary" type="button" data-toggle-new-account>Add account</button>
+        }
+        <a class="button" asp-controller="Statistics" asp-action="Index">View Statistics</a>
     </div>
 </header>
 
 @if (TempData["Success"] is string success) { <div class="fm-dashboard-notice">@success</div> }
 @if (TempData["Error"] is string error) { <div class="alert error">@error</div> }
 
-<section class="card">
-    <p class="eyebrow">Optional balance check</p>
-    <h2>Recorded account balances</h2>
-    <p class="muted">Interest recorded from the Income workspace already counts towards that month's available income. Updating a balance here is a separate manual check and does not create another income entry.</p>
+@if (canEdit)
+{
+    <section class="card fm-add-account-panel" data-new-account-panel hidden>
+        <div class="fm-section-heading">
+            <div>
+                <p class="eyebrow">New account</p>
+                <h2>Add an account</h2>
+                <p class="muted">Add another ISA, savings account or cash pot for Statistics and forecasting.</p>
+            </div>
+            <button class="button fm-icon-button" type="button" data-close-new-account aria-label="Close add account form">Close</button>
+        </div>
 
-    <div class="fm-reconciliation-grid">
+        <form asp-action="AddAccount" method="post" class="fm-add-account-form fm-account-editor-grid">
+            @Html.AntiForgeryToken()
+            <label class="fm-field-span-2">
+                <span>Account name</span>
+                <input name="name" placeholder="e.g. Cash ISA" required />
+            </label>
+            <label>
+                <span>Opening balance</span>
+                <input name="openingBalance" type="number" min="0" step="0.01" value="0.00" required />
+            </label>
+            <label>
+                <span>Interest rate (AER)</span>
+                <input name="interestRate" type="number" min="0" step="0.01" value="0.00" required />
+            </label>
+            <label>
+                <span>Monthly contribution</span>
+                <input name="monthlyContribution" type="number" min="0" step="0.01" value="0.00" required />
+            </label>
+            <label class="fm-account-toggle">
+                <input name="includeInGlobalGoal" type="checkbox" value="true" checked />
+                <span>Include in Statistics forecast</span>
+            </label>
+            <div class="fm-account-editor-actions fm-field-span-all">
+                <button class="primary" type="submit">Add account</button>
+                <button class="button" type="button" data-close-new-account>Cancel</button>
+            </div>
+        </form>
+    </section>
+}
+
+<section class="card fm-account-management-panel">
+    <div class="fm-section-heading">
+        <div>
+            <p class="eyebrow">Forecast accounts</p>
+            <h2>@Model.Accounts.Count recorded account@(Model.Accounts.Count == 1 ? string.Empty : "s")</h2>
+            <p class="muted">Expand an account only when you need to change its settings or check its current balance.</p>
+        </div>
+    </div>
+
+    <div class="fm-account-card-grid">
         @foreach (var account in Model.Accounts)
         {
-            <article class="fm-reconciliation-card">
-                <div>
-                    <h3>@account.AccountName</h3>
-                    <p class="muted">Recorded balance</p>
-                    <strong class="fm-reconciliation-balance">@account.RecordedBalance.ToString("C", gb)</strong>
-                    <small>Balance updated @account.BalanceUpdatedAt.ToString("dd MMM yyyy")</small>
-                    <small>Last reconciled: @(account.LastReconciledAt?.ToString("dd MMM yyyy") ?? "Never")</small>
+            var panelId = $"account-panel-{account.SourceKey.Replace(':', '-').Replace(' ', '-')}";
+            <article class="fm-account-summary-card" data-account-card>
+                <div class="fm-account-summary-topline">
+                    <div>
+                        <h3>@account.AccountName</h3>
+                        <p class="fm-account-primary-balance">@account.RecordedBalance.ToString("C", gb)</p>
+                    </div>
+                    <span class="fm-account-forecast-state @(account.IncludeInForecast ? "is-included" : "")">
+                        @(account.IncludeInForecast ? "Included in forecast" : "Excluded")
+                    </span>
                 </div>
+
+                <div class="fm-account-summary-meta">
+                    <span>@account.InterestRate.ToString("0.##")% AER</span>
+                    <span>@account.MonthlyContribution.ToString("C", gb) monthly</span>
+                </div>
+
+                <div class="fm-account-summary-dates">
+                    <span>Updated @account.BalanceUpdatedAt.ToString("dd MMM yyyy")</span>
+                    <span>Last balance check: @(account.LastReconciledAt?.ToString("dd MMM yyyy") ?? "Never")</span>
+                </div>
+
                 @if (canEdit)
                 {
-                    <form asp-action="UpdateBalance" method="post" class="account-form">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="sourceKey" value="@account.SourceKey" />
-                        <label>Actual balance today
-                            <input name="actualBalance" type="number" min="0" step="0.01" value="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" required />
-                        </label>
-                        <button class="primary" type="submit">Update recorded balance</button>
-                    </form>
+                    <div class="fm-account-card-actions">
+                        <button class="button" type="button" data-account-panel-trigger="settings" aria-controls="@panelId-settings" aria-expanded="false">Edit account</button>
+                        <button class="primary" type="button" data-account-panel-trigger="balance" aria-controls="@panelId-balance" aria-expanded="false">Update balance</button>
+                    </div>
+
+                    <div class="fm-account-expand-panel" id="@panelId-settings" data-account-panel="settings" hidden>
+                        <div class="fm-account-panel-heading">
+                            <div>
+                                <p class="eyebrow">Account settings</p>
+                                <h4>Edit @account.AccountName</h4>
+                            </div>
+                            <button class="button fm-panel-close" type="button" data-account-panel-close>Close</button>
+                        </div>
+
+                        <form asp-action="SaveAccount" method="post" class="fm-account-editor-grid">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@account.AccountId" />
+                            <label class="fm-field-span-2">
+                                <span>Account name</span>
+                                <input name="name" value="@account.AccountName" @(account.AccountId == 0 ? "readonly" : "") required />
+                            </label>
+                            <label>
+                                <span>Interest rate (AER)</span>
+                                <input name="interestRate" type="number" min="0" step="0.01" value="@account.InterestRate.ToString("0.####", CultureInfo.InvariantCulture)" required />
+                            </label>
+                            <label>
+                                <span>Monthly contribution</span>
+                                <input name="monthlyContribution" type="number" min="0" step="0.01" value="@account.MonthlyContribution.ToString("0.00", CultureInfo.InvariantCulture)" required />
+                            </label>
+                            <label class="fm-account-toggle fm-field-span-2">
+                                <input name="includeInGlobalGoal" type="checkbox" value="true" checked="@account.IncludeInForecast" />
+                                <span>Include in Statistics forecast</span>
+                            </label>
+                            <div class="fm-account-editor-actions fm-field-span-all">
+                                <button class="primary" type="submit">Save changes</button>
+                                <button class="button" type="button" data-account-panel-close>Cancel</button>
+                                @if (account.AccountId > 0)
+                                {
+                                    <button class="danger-inline fm-delete-account-trigger" type="submit" form="delete-account-@account.AccountId">Delete account</button>
+                                }
+                            </div>
+                        </form>
+
+                        @if (account.AccountId > 0)
+                        {
+                            <form id="delete-account-@account.AccountId" asp-action="DeleteAccount" method="post" data-confirm="Delete @account.AccountName? This cannot be undone.">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@account.AccountId" />
+                            </form>
+                        }
+                    </div>
+
+                    <div class="fm-account-expand-panel" id="@panelId-balance" data-account-panel="balance" hidden>
+                        <div class="fm-account-panel-heading">
+                            <div>
+                                <p class="eyebrow">Balance check</p>
+                                <h4>Update @account.AccountName</h4>
+                            </div>
+                            <button class="button fm-panel-close" type="button" data-account-panel-close>Close</button>
+                        </div>
+
+                        <div class="fm-balance-context">
+                            <span>Recorded balance</span>
+                            <strong>@account.RecordedBalance.ToString("C", gb)</strong>
+                            <small>This only updates the account value. It does not create income or alter your monthly budget.</small>
+                        </div>
+
+                        <form asp-action="UpdateBalance" method="post" class="fm-balance-check-form" data-balance-confirm data-recorded-balance="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" data-account-name="@account.AccountName">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="sourceKey" value="@account.SourceKey" />
+                            <label>
+                                <span>Current account balance</span>
+                                <input name="actualBalance" type="number" min="0" step="0.01" value="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" required />
+                            </label>
+                            <button class="primary" type="submit">Save current balance</button>
+                        </form>
+                    </div>
                 }
             </article>
         }
     </div>
 </section>
+
+<script>
+(() => {
+    const newAccountPanel = document.querySelector('[data-new-account-panel]');
+    const newAccountTriggers = document.querySelectorAll('[data-toggle-new-account]');
+    const newAccountClosers = document.querySelectorAll('[data-close-new-account]');
+
+    const setNewAccountVisibility = visible => {
+        if (!newAccountPanel) return;
+        newAccountPanel.hidden = !visible;
+        if (visible) {
+            newAccountPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            newAccountPanel.querySelector('input[name="name"]')?.focus();
+        }
+    };
+
+    newAccountTriggers.forEach(button => button.addEventListener('click', () => setNewAccountVisibility(true)));
+    newAccountClosers.forEach(button => button.addEventListener('click', () => setNewAccountVisibility(false)));
+
+    const closeAllPanels = exceptPanel => {
+        document.querySelectorAll('[data-account-panel]').forEach(panel => {
+            if (panel !== exceptPanel) panel.hidden = true;
+        });
+        document.querySelectorAll('[data-account-panel-trigger]').forEach(trigger => {
+            const target = document.getElementById(trigger.getAttribute('aria-controls'));
+            trigger.setAttribute('aria-expanded', target && !target.hidden ? 'true' : 'false');
+        });
+    };
+
+    document.querySelectorAll('[data-account-panel-trigger]').forEach(trigger => {
+        trigger.addEventListener('click', () => {
+            const target = document.getElementById(trigger.getAttribute('aria-controls'));
+            if (!target) return;
+            const shouldOpen = target.hidden;
+            closeAllPanels(shouldOpen ? target : null);
+            target.hidden = !shouldOpen;
+            trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+    });
+
+    document.querySelectorAll('[data-account-panel-close]').forEach(button => {
+        button.addEventListener('click', () => {
+            const panel = button.closest('[data-account-panel]');
+            if (!panel) return;
+            panel.hidden = true;
+            const trigger = document.querySelector(`[aria-controls="${panel.id}"]`);
+            trigger?.setAttribute('aria-expanded', 'false');
+        });
+    });
+
+    document.querySelectorAll('[data-balance-confirm]').forEach(form => {
+        form.addEventListener('submit', event => {
+            const input = form.querySelector('input[name="actualBalance"]');
+            const next = Number.parseFloat(input?.value ?? '0');
+            const current = Number.parseFloat(form.dataset.recordedBalance ?? '0');
+            if (!Number.isFinite(next) || !Number.isFinite(current)) return;
+
+            const difference = next - current;
+            const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+            const direction = difference > 0 ? 'increase' : difference < 0 ? 'decrease' : 'leave';
+            const message = difference === 0
+                ? `This will confirm that ${form.dataset.accountName} remains at ${formatter.format(next)}. No income entry will be created.`
+                : `This will ${direction} the recorded balance for ${form.dataset.accountName} by ${formatter.format(Math.abs(difference))}, from ${formatter.format(current)} to ${formatter.format(next)}. No income entry will be created.`;
+
+            if (!window.confirm(message)) event.preventDefault();
+        });
+    });
+})();
+</script>

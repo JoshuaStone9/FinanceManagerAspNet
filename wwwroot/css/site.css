@@ -1024,3 +1024,169 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-reconciliation-card h3 { margin:0 0 10px; }
 .fm-reconciliation-card small { display:block; color:var(--muted); margin-top:5px; }
 .fm-reconciliation-balance { display:block; font-size:1.55rem; margin:4px 0 8px; }
+\n\n/* Phase 10.11 account management */
+.fm-account-hero { align-items:center; }
+.fm-account-hero-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.fm-account-management-panel, .fm-add-account-panel { padding:24px; }
+.fm-add-account-panel { margin-bottom:18px; }
+.fm-section-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; }
+.fm-section-heading h2 { margin:0 0 6px; }
+.fm-icon-button, .fm-panel-close { min-width:auto; }
+
+.fm-account-card-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+  margin-top:22px;
+}
+.fm-account-summary-card {
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:20px;
+  background:var(--surface-soft);
+  box-shadow:0 10px 30px rgba(0,0,0,.07);
+  min-width:0;
+}
+.fm-account-summary-topline {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+}
+.fm-account-summary-topline h3 { margin:0 0 7px; font-size:1.1rem; }
+.fm-account-primary-balance { margin:0; font-size:1.85rem; line-height:1; font-weight:850; }
+.fm-account-forecast-state {
+  border:1px solid var(--border);
+  border-radius:999px;
+  padding:7px 10px;
+  color:var(--muted);
+  font-size:.75rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+.fm-account-forecast-state.is-included {
+  color:var(--good);
+  border-color:color-mix(in srgb,var(--good) 42%,var(--border));
+  background:color-mix(in srgb,var(--good) 10%,transparent);
+}
+.fm-account-summary-meta {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:15px;
+  color:var(--muted);
+  font-size:.83rem;
+  font-weight:700;
+}
+.fm-account-summary-meta span:not(:last-child)::after { content:'·'; margin-left:8px; }
+.fm-account-summary-dates {
+  display:grid;
+  gap:4px;
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--border);
+  color:var(--muted);
+  font-size:.79rem;
+}
+.fm-account-card-actions { display:flex; gap:10px; margin-top:17px; }
+.fm-account-card-actions > * { flex:1; min-height:44px; white-space:nowrap; }
+
+.fm-account-expand-panel {
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid var(--border);
+}
+.fm-account-expand-panel[hidden] { display:none !important; }
+.fm-account-panel-heading {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+  margin-bottom:16px;
+}
+.fm-account-panel-heading h4 { margin:0; font-size:1.05rem; }
+.fm-account-editor-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  align-items:end;
+}
+.fm-account-editor-grid label, .fm-balance-check-form label {
+  display:grid;
+  gap:7px;
+  min-width:0;
+}
+.fm-account-editor-grid label > span, .fm-balance-check-form label > span {
+  font-size:.82rem;
+  font-weight:750;
+}
+.fm-account-editor-grid input, .fm-balance-check-form input {
+  width:100%;
+  min-height:48px;
+}
+.fm-field-span-2 { grid-column:span 2; }
+.fm-field-span-all { grid-column:1 / -1; }
+.fm-account-toggle {
+  display:flex !important;
+  align-items:center;
+  gap:10px !important;
+  min-height:48px;
+  padding:0 2px;
+}
+.fm-account-toggle input { width:18px !important; min-height:auto !important; }
+.fm-account-editor-actions {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+  padding-top:4px;
+}
+.fm-account-editor-actions button { min-height:44px; white-space:nowrap; }
+.fm-delete-account-trigger { margin-left:auto; }
+
+.fm-balance-context {
+  display:grid;
+  gap:4px;
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--surface);
+  margin-bottom:14px;
+}
+.fm-balance-context span { color:var(--muted); font-size:.78rem; }
+.fm-balance-context strong { font-size:1.35rem; }
+.fm-balance-context small { color:var(--muted); margin-top:3px; }
+.fm-balance-check-form {
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) auto;
+  gap:12px;
+  align-items:end;
+}
+.fm-balance-check-form button { min-width:190px; min-height:48px; white-space:nowrap; }
+
+.fm-add-account-form { margin-top:18px; }
+.fm-statistics-account-summary { margin-top:18px; }
+.fm-statistics-account-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:18px; }
+.fm-statistics-account-item { display:flex; justify-content:space-between; gap:18px; border:1px solid var(--border); border-radius:14px; padding:15px; background:var(--surface-soft); }
+.fm-statistics-account-item span { display:block; color:var(--muted); font-size:.78rem; margin-bottom:5px; }
+.fm-statistics-account-item > div:last-child { text-align:right; }
+
+@media (max-width:980px) {
+  .fm-account-card-grid { grid-template-columns:1fr; }
+}
+@media (max-width:760px) {
+  .fm-account-hero, .fm-section-heading, .fm-account-panel-heading { align-items:stretch; flex-direction:column; }
+  .fm-account-hero-actions { width:100%; }
+  .fm-account-hero-actions > * { flex:1; text-align:center; }
+  .fm-account-editor-grid, .fm-balance-check-form, .fm-statistics-account-grid { grid-template-columns:1fr; }
+  .fm-field-span-2, .fm-field-span-all { grid-column:auto; }
+  .fm-balance-check-form button { width:100%; min-width:0; }
+  .fm-statistics-account-item { flex-direction:column; }
+  .fm-statistics-account-item > div:last-child { text-align:left; }
+  .fm-delete-account-trigger { margin-left:0; }
+}
+@media (max-width:520px) {
+  .fm-account-summary-topline { flex-direction:column; }
+  .fm-account-card-actions { flex-direction:column; }
+  .fm-account-card-actions > * { width:100%; }
+}

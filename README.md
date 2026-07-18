@@ -388,3 +388,9 @@ Phase 10.8 adds Statistics interest separation so confirmed interest is excluded
 ## Phase 10.10 — Balance reconciliation
 
 Added an optional manual balance-check workspace. Confirmed interest remains monthly income only. The Income workspace no longer offers account-balance actions, and no warnings are created when balances are not reconciled. Users can occasionally enter an actual account balance, which updates the recorded balance and stores reconciliation history without creating duplicate income.
+
+
+## Phase 10.11 — Account Management
+Account editing is centralised in Account Management; Statistics is now read-only.
+
+- Phase 10.11 account cards now stay collapsed by default with separate edit and balance panels, a hidden add-account form, and responsive two-column layout.

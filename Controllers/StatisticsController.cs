@@ -258,22 +258,6 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
     }
 
     [HttpPost]
-    public async Task<IActionResult> SaveAccount(int id, string name, decimal amount, decimal interestRate, decimal monthlyContribution, bool includeInGlobalGoal = true)
-    {
-        if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
-        await repo.SaveAccountAsync(id, name, amount, interestRate, monthlyContribution, includeInGlobalGoal);
-        return RedirectToAction(nameof(Index));
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> DeleteAccount(int id)
-    {
-        if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
-        await repo.DeleteAccountAsync(id);
-        return RedirectToAction(nameof(Index));
-    }
-
-    [HttpPost]
     public async Task<IActionResult> SaveStocksCrypto(decimal amount, decimal interestRate, decimal monthlyContribution)
     {
         if (User.Identity?.IsAuthenticated != true) return RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });

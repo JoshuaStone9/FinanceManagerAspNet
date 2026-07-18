@@ -668,7 +668,15 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
                 : Convert.ToDateTime(lastReconciledValue);
 
             rows.Add(new AccountReconciliationRow(
-                sourceKey, account.Name, account.Amount, lastReconciled, account.UpdatedAt));
+                account.Id,
+                sourceKey,
+                account.Name,
+                account.Amount,
+                account.InterestRate,
+                account.MonthlyContribution,
+                account.IncludeInGlobalGoal,
+                lastReconciled,
+                account.UpdatedAt));
         }
 
         return new AccountReconciliationViewModel

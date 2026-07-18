@@ -6,8 +6,12 @@ public sealed class AccountReconciliationViewModel
 }
 
 public sealed record AccountReconciliationRow(
+    int AccountId,
     string SourceKey,
     string AccountName,
     decimal RecordedBalance,
+    decimal InterestRate,
+    decimal MonthlyContribution,
+    bool IncludeInForecast,
     DateTime? LastReconciledAt,
     DateTime BalanceUpdatedAt);
