@@ -1,0 +1,48 @@
+@model FinanceManagerAspNet.Models.MonthlyIncomeWorkspaceViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = $"Income - {Model.MonthStart:MMMM yyyy}";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+    var defaultDate = new DateTime(Model.Year, Model.Month, Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(Model.Year, Model.Month)));
+}
+<header class="fm-workspace-hero">
+    <div class="fm-workspace-heading"><div class="fm-workspace-icon"><i data-lucide="wallet-cards"></i></div><div><p class="eyebrow">Money coming in</p><h1>Income</h1><p>Record the money actually received this month so dashboard health and remaining money use real figures.</p></div></div>
+    <nav class="fm-dashboard-month" aria-label="Change income month">
+        <a class="fm-month-button" asp-action="Income" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month"><i data-lucide="chevron-left"></i></a>
+        <span class="fm-month-label">@Model.MonthStart.ToString("MMMM yyyy")</span>
+        <a class="fm-month-button" asp-action="Income" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month"><i data-lucide="chevron-right"></i></a>
+    </nav>
+</header>
+<nav class="fm-workspace-tabs" aria-label="Monthly money workspaces">
+    <a class="active" aria-current="page" asp-action="Income" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Income</a>
+    <a asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Essential bills</a>
+    <a asp-action="EverydaySpending" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Everyday spending</a>
+    <a asp-action="ExtraExpenses" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Extra expenses</a>
+    <a asp-action="Investments" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Investments</a>
+    <a asp-action="MoneyPots" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Money pots</a>
+</nav>
+<section class="fm-workspace-metrics" aria-label="Income summary">
+    <article class="fm-metric-card"><span>Total income</span><strong>@Model.Total.ToString("C", gb)</strong><small>@Model.MonthStart.ToString("MMMM yyyy")</small></article>
+    <article class="fm-metric-card"><span>Income sources</span><strong>@Model.Entries.Count</strong><small>Recorded this month</small></article>
+    <article class="fm-metric-card"><span>Average source</span><strong>@Model.Average.ToString("C", gb)</strong><small>Across recorded income</small></article>
+    <article class="fm-metric-card"><span>Recurring sources</span><strong>@Model.RecurringCount</strong><small>Available for next month</small></article>
+</section>
+@if (canEdit && Model.MissingRecurringEntries.Count > 0)
+{
+<section class="fm-month-setup-card">
+    <div class="fm-month-setup-head"><div><p class="eyebrow">Month setup</p><h2>Prepare income for @Model.MonthStart.ToString("MMMM yyyy")</h2><p class="muted">Bring forward recurring income sources from the immediately preceding month.</p></div><span class="fm-status-pill">@Model.MissingRecurringEntries.Count ready</span></div>
+    <form asp-action="SetupIncomeMonth" method="post" class="fm-month-setup-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/>
+        <div class="fm-month-setup-list">@foreach (var entry in Model.MissingRecurringEntries){<label class="fm-month-setup-row"><input type="checkbox" name="entryIds" value="@entry.Id" checked/><span class="fm-month-setup-copy"><strong>@entry.Name</strong><small>@(entry.Category ?? "Recurring income")</small></span><strong>@entry.Amount.ToString("C", gb)</strong></label>}</div>
+        <div class="fm-month-setup-actions"><button class="button primary" type="submit">Add selected income</button></div>
+    </form>
+</section>
+}
+<div class="fm-workspace-grid">
+<section class="fm-workspace-list" aria-labelledby="income-entries-title"><div class="fm-workspace-section-head"><div><p class="eyebrow">Selected month</p><h2 id="income-entries-title">Recorded income</h2></div><a class="button" asp-controller="Dashboard" asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Back to dashboard</a></div>
+@if(Model.Entries.Count==0){<div class="fm-workspace-empty"><i data-lucide="wallet"></i><strong>No income recorded</strong><span>Add salary, overtime, bonuses or other income for this month.</span></div>}
+else {<div class="fm-workspace-rows">@foreach(var entry in Model.Entries){<article class="fm-workspace-row" id="entry-@entry.Id"><div class="fm-workspace-row-icon"><i data-lucide="wallet-cards"></i></div><div class="fm-workspace-row-copy"><strong class="fm-workspace-row-name">@entry.Name</strong><span>@entry.Date.ToString("dd MMM yyyy") @if(!string.IsNullOrWhiteSpace(entry.Category)){<text> · @entry.Category</text>}</span><button type="button" class="fm-recurring-toggle @(entry.IsRecurring ? "is-recurring" : "is-one-off")" role="switch" aria-checked="@entry.IsRecurring.ToString().ToLowerInvariant()" data-income-toggle data-id="@entry.Id"><span class="fm-recurring-switch" aria-hidden="true"><span></span></span><span data-label>@(entry.IsRecurring ? "Repeats monthly" : "One-off")</span></button>@if(!string.IsNullOrWhiteSpace(entry.Notes)){<small>@entry.Notes</small>}</div><div class="fm-workspace-row-amount">@entry.Amount.ToString("C", gb)</div>@if(canEdit){<div class="fm-workspace-row-actions"><details class="fm-income-edit"><summary class="button">Edit</summary><form asp-action="UpdateIncome" method="post" class="fm-income-edit-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@entry.Id"/><input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Name<input name="name" value="@entry.Name" required/></label><label>Amount<input name="amount" type="number" min="0" step="0.01" value="@entry.Amount.ToString("0.00", CultureInfo.InvariantCulture)" required/></label><label>Date<input name="date" type="date" value="@entry.Date.ToString("yyyy-MM-dd")" required/></label><label>Type<input name="category" value="@entry.Category"/></label><label>Notes<textarea name="notes">@entry.Notes</textarea></label><input type="hidden" name="isRecurring" value="@entry.IsRecurring.ToString().ToLowerInvariant()"/><button class="button primary" type="submit">Save</button></form></details><form asp-action="DeleteIncome" method="post" onsubmit="return confirm('Delete this income entry?');">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@entry.Id"/><input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><button class="button danger-inline" type="submit">Delete</button></form></div>}</article>}</div>}
+</section>
+<aside class="fm-workspace-entry-card" aria-labelledby="add-income-title"><p class="eyebrow">Quick entry</p><h2 id="add-income-title">Add income</h2><p class="muted">Add each salary, bonus, overtime payment or other source separately.</p>@if(canEdit){<form asp-action="AddIncome" method="post" id="quick-entry-form" class="fm-workspace-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income source<input name="name" required autofocus placeholder="e.g. Salary 1"/></label><label>Amount<input name="amount" type="number" min="0" step="0.01" required inputmode="decimal"/></label><label>Date<input name="date" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required/></label><label>Income type<select name="category"><option>Salary</option><option>Overtime</option><option>Bonus</option><option>Benefits</option><option>Refund</option><option>Other income</option></select></label><label>Notes<textarea name="notes" rows="3"></textarea></label><label class="fm-checkbox-row"><input name="isRecurring" type="checkbox" value="true"/><span><strong>Repeats every month</strong><small>Offer this income source when preparing the next month.</small></span></label><button class="button primary" type="submit">Add income</button></form>}else{<p class="muted">Sign in to add income.</p>}</aside>
+</div>
+@section Scripts {<script>document.querySelectorAll('[data-income-toggle]').forEach(button=>button.addEventListener('click',async()=>{const active=button.getAttribute('aria-checked')==='true';const data=new FormData();data.append('__RequestVerificationToken',document.querySelector('input[name="__RequestVerificationToken"]')?.value??'');data.append('id',button.dataset.id);data.append('year','@Model.Year');data.append('month','@Model.Month');data.append('isRecurring',String(!active));button.disabled=true;try{const response=await fetch('@Url.Action("SetIncomeRecurring")',{method:'POST',body:data,headers:{'X-Requested-With':'XMLHttpRequest'}});if(!response.ok)throw new Error();const result=await response.json();button.setAttribute('aria-checked',String(result.isRecurring));button.classList.toggle('is-recurring',result.isRecurring);button.classList.toggle('is-one-off',!result.isRecurring);button.querySelector('[data-label]').textContent=result.isRecurring?'Repeats monthly':'One-off';}finally{button.disabled=false;}}));</script>}

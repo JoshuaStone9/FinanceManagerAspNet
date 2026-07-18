@@ -102,6 +102,22 @@ CREATE TABLE dbo.account_balance_history(history_id int IDENTITY(1,1) PRIMARY KE
 IF OBJECT_ID('dbo.monthly_income_stats','U') IS NULL
 CREATE TABLE dbo.monthly_income_stats(income_id int IDENTITY(1,1) PRIMARY KEY, [year] int NOT NULL, [month] int NOT NULL, amount decimal(18,2) NOT NULL, sick_days int NOT NULL DEFAULT 0, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT UQ_monthly_income_stats UNIQUE([year],[month]));
 
+IF OBJECT_ID('dbo.monthly_income_entries','U') IS NULL
+CREATE TABLE dbo.monthly_income_entries(
+    monthly_income_entry_id int IDENTITY(1,1) PRIMARY KEY,
+    [name] nvarchar(150) NOT NULL,
+    amount decimal(18,2) NOT NULL,
+    [date] date NOT NULL,
+    category nvarchar(80) NULL,
+    notes nvarchar(500) NULL,
+    is_recurring bit NOT NULL DEFAULT 0,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_monthly_income_entries_date' AND object_id=OBJECT_ID('dbo.monthly_income_entries'))
+CREATE INDEX IX_monthly_income_entries_date ON dbo.monthly_income_entries([date]);
+
 IF OBJECT_ID('dbo.monthly_carry_forward','U') IS NULL
 CREATE TABLE dbo.monthly_carry_forward(
     monthly_carry_forward_id int IDENTITY(1,1) PRIMARY KEY,
@@ -493,6 +509,142 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
         cmd.Parameters.AddWithValue("@year", year); cmd.Parameters.AddWithValue("@month", month);
         await using var r = await cmd.ExecuteReaderAsync();
         return await r.ReadAsync() ? new IncomeSnapshot(r.GetInt32(0), r.GetInt32(1), r.GetDecimal(2), r.GetInt32(3), r.GetDateTime(4)) : null;
+    }
+
+    public async Task<List<MonthlyIncomeEntry>> GetMonthlyIncomeEntriesAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var entries = new List<MonthlyIncomeEntry>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"SELECT monthly_income_entry_id,[name],amount,[date],category,notes,is_recurring
+FROM dbo.monthly_income_entries
+WHERE YEAR([date])=@year AND MONTH([date])=@month
+ORDER BY [date],[name]", con);
+        cmd.Parameters.AddWithValue("@year", year);
+        cmd.Parameters.AddWithValue("@month", month);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            entries.Add(new MonthlyIncomeEntry(
+                reader.GetInt32(0), reader.GetString(1), reader.GetDecimal(2), reader.GetDateTime(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetBoolean(6)));
+        }
+        return entries;
+    }
+
+    public async Task<decimal?> GetMonthlyIncomeEntriesTotalAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync(@"SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE SUM(amount) END
+FROM dbo.monthly_income_entries WHERE YEAR([date])=@year AND MONTH([date])=@month", ("@year", year), ("@month", month));
+        return value is null or DBNull ? null : Convert.ToDecimal(value);
+    }
+
+    public async Task<List<MonthlyIncomeEntry>> GetMissingRecurringIncomeEntriesAsync(int year, int month)
+    {
+        var previous = new DateTime(year, month, 1).AddMonths(-1);
+        await EnsureModernTablesAsync();
+        var entries = new List<MonthlyIncomeEntry>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"SELECT p.monthly_income_entry_id,p.[name],p.amount,p.[date],p.category,p.notes,p.is_recurring
+FROM dbo.monthly_income_entries p
+WHERE YEAR(p.[date])=@previousYear AND MONTH(p.[date])=@previousMonth
+  AND p.is_recurring=1
+  AND NOT EXISTS (
+      SELECT 1 FROM dbo.monthly_income_entries currentMonth
+      WHERE YEAR(currentMonth.[date])=@year AND MONTH(currentMonth.[date])=@month
+        AND LOWER(LTRIM(RTRIM(currentMonth.[name])))=LOWER(LTRIM(RTRIM(p.[name])))
+  )
+ORDER BY p.[name]", con);
+        cmd.Parameters.AddWithValue("@previousYear", previous.Year);
+        cmd.Parameters.AddWithValue("@previousMonth", previous.Month);
+        cmd.Parameters.AddWithValue("@year", year);
+        cmd.Parameters.AddWithValue("@month", month);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            entries.Add(new MonthlyIncomeEntry(reader.GetInt32(0), reader.GetString(1), reader.GetDecimal(2), reader.GetDateTime(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetBoolean(6)));
+        }
+        return entries;
+    }
+
+    public async Task AddMonthlyIncomeEntryAsync(string name, decimal amount, DateTime date, string? category, string? notes, bool isRecurring)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
+VALUES(@name,@amount,@date,@category,@notes,@isRecurring)",
+            ("@name", name.Trim()), ("@amount", amount), ("@date", date.Date), ("@category", DbValue(category)), ("@notes", DbValue(notes)), ("@isRecurring", isRecurring));
+        await SyncMonthlyIncomeTotalAsync(date.Year, date.Month);
+    }
+
+    public async Task UpdateMonthlyIncomeEntryAsync(int id, string name, decimal amount, DateTime date, string? category, string? notes, bool isRecurring)
+    {
+        await EnsureModernTablesAsync();
+        var oldDateValue = await ScalarAsync("SELECT [date] FROM dbo.monthly_income_entries WHERE monthly_income_entry_id=@id", ("@id", id));
+        await ExecuteAsync(@"UPDATE dbo.monthly_income_entries SET [name]=@name,amount=@amount,[date]=@date,category=@category,notes=@notes,is_recurring=@isRecurring,updated_at=SYSUTCDATETIME()
+WHERE monthly_income_entry_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date.Date), ("@category", DbValue(category)), ("@notes", DbValue(notes)), ("@isRecurring", isRecurring));
+        if (oldDateValue is not null and not DBNull)
+        {
+            var oldDate = Convert.ToDateTime(oldDateValue);
+            await SyncMonthlyIncomeTotalAsync(oldDate.Year, oldDate.Month);
+        }
+        await SyncMonthlyIncomeTotalAsync(date.Year, date.Month);
+    }
+
+    public async Task DeleteMonthlyIncomeEntryAsync(int id)
+    {
+        await EnsureModernTablesAsync();
+        var dateValue = await ScalarAsync("SELECT [date] FROM dbo.monthly_income_entries WHERE monthly_income_entry_id=@id", ("@id", id));
+        await ExecuteAsync("DELETE FROM dbo.monthly_income_entries WHERE monthly_income_entry_id=@id", ("@id", id));
+        if (dateValue is not null and not DBNull)
+        {
+            var date = Convert.ToDateTime(dateValue);
+            await SyncMonthlyIncomeTotalAsync(date.Year, date.Month);
+        }
+    }
+
+    public async Task SetMonthlyIncomeRecurringAsync(int id, bool isRecurring)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("UPDATE dbo.monthly_income_entries SET is_recurring=@isRecurring,updated_at=SYSUTCDATETIME() WHERE monthly_income_entry_id=@id", ("@id", id), ("@isRecurring", isRecurring));
+    }
+
+    public async Task<int> SetupRecurringIncomeAsync(int year, int month, IReadOnlyCollection<int> entryIds)
+    {
+        if (entryIds.Count == 0) return 0;
+        var previous = new DateTime(year, month, 1).AddMonths(-1);
+        var added = 0;
+        foreach (var id in entryIds.Distinct())
+        {
+            await using var con = new SqlConnection(ConnStr);
+            await con.OpenAsync();
+            await using var cmd = new SqlCommand(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
+SELECT p.[name],p.amount,@date,p.category,p.notes,1
+FROM dbo.monthly_income_entries p
+WHERE p.monthly_income_entry_id=@id AND p.is_recurring=1
+  AND YEAR(p.[date])=@previousYear AND MONTH(p.[date])=@previousMonth
+  AND NOT EXISTS (SELECT 1 FROM dbo.monthly_income_entries c WHERE YEAR(c.[date])=@year AND MONTH(c.[date])=@month AND LOWER(LTRIM(RTRIM(c.[name])))=LOWER(LTRIM(RTRIM(p.[name]))));
+SELECT @@ROWCOUNT;", con);
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.AddWithValue("@date", new DateTime(year, month, Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month))));
+            cmd.Parameters.AddWithValue("@previousYear", previous.Year);
+            cmd.Parameters.AddWithValue("@previousMonth", previous.Month);
+            cmd.Parameters.AddWithValue("@year", year);
+            cmd.Parameters.AddWithValue("@month", month);
+            added += Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+        await SyncMonthlyIncomeTotalAsync(year, month);
+        return added;
+    }
+
+    private async Task SyncMonthlyIncomeTotalAsync(int year, int month)
+    {
+        var total = await GetMonthlyIncomeEntriesTotalAsync(year, month) ?? 0m;
+        await SaveIncomeAsync(year, month, total, 0);
     }
 
     public async Task<List<AccountBalance>> GetAccountsAsync(decimal emergencyFund)

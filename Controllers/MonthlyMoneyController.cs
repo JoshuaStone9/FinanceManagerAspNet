@@ -6,6 +6,71 @@ namespace FinanceManagerAspNet.Controllers;
 
 public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
 {
+    public async Task<IActionResult> Income(int? year, int? month)
+    {
+        var today = DateTime.Today;
+        var selectedYear = year ?? today.Year;
+        var selectedMonth = month ?? today.Month;
+        if (selectedMonth is < 1 or > 12) return BadRequest("Month must be between 1 and 12.");
+
+        var model = new MonthlyIncomeWorkspaceViewModel
+        {
+            Year = selectedYear,
+            Month = selectedMonth,
+            Entries = await repo.GetMonthlyIncomeEntriesAsync(selectedYear, selectedMonth),
+            MissingRecurringEntries = await repo.GetMissingRecurringIncomeEntriesAsync(selectedYear, selectedMonth)
+        };
+        return View("Income", model);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddIncome(int year, int month, string name, decimal amount, DateTime date, string? category, string? notes, bool isRecurring = false)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        if (month is < 1 or > 12 || string.IsNullOrWhiteSpace(name) || amount < 0) return BadRequest("Enter a valid income source and amount.");
+        var selectedDate = date == default ? new DateTime(year, month, Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month))) : date;
+        await repo.AddMonthlyIncomeEntryAsync(name, amount, selectedDate, category, notes, isRecurring);
+        TempData["Success"] = $"{name.Trim()} income added.";
+        return RedirectToAction(nameof(Income), new { year, month, focus = "quick-entry" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateIncome(int id, int year, int month, string name, decimal amount, DateTime date, string? category, string? notes, bool isRecurring = false)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(name) || amount < 0) return BadRequest("Enter a valid income source and amount.");
+        await repo.UpdateMonthlyIncomeEntryAsync(id, name, amount, date, category, notes, isRecurring);
+        TempData["Success"] = $"{name.Trim()} income updated.";
+        var url = Url.Action(nameof(Income), new { year, month });
+
+        return Redirect($"{url}#entry-{id}");
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteIncome(int id, int year, int month)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        await repo.DeleteMonthlyIncomeEntryAsync(id);
+        TempData["Success"] = "Income entry deleted.";
+        return RedirectToAction(nameof(Income), new { year, month });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetIncomeRecurring(int id, int year, int month, bool isRecurring)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        await repo.SetMonthlyIncomeRecurringAsync(id, isRecurring);
+        return Json(new { success = true, isRecurring, message = isRecurring ? "Income now repeats monthly." : "Income is now one-off." });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetupIncomeMonth(int year, int month, List<int> entryIds)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        var added = await repo.SetupRecurringIncomeAsync(year, month, entryIds ?? []);
+        TempData["Success"] = added == 0 ? "No new recurring income was added." : $"{added} recurring income entr{(added == 1 ? "y" : "ies")} added.";
+        return RedirectToAction(nameof(Income), new { year, month });
+    }
     public Task<IActionResult> EssentialBills(int? year, int? month)
         => BuildWorkspaceAsync(
             "bills",
@@ -234,6 +299,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
     private static string GetWorkspaceAction(string source)
         => source switch
         {
+            "income" => nameof(Income),
             "bills" => nameof(EssentialBills),
             "everyday_spending" => nameof(EverydaySpending),
             "extra_expenses" => nameof(ExtraExpenses),

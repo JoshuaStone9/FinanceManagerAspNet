@@ -24,7 +24,8 @@ public sealed class DashboardController(
 
         var fallbackIncome = decimal.TryParse(config["FinanceSettings:DefaultMonthlyIncome"], out var defaultIncome) ? defaultIncome : 3600m;
         var income = await repo.GetIncomeAsync(y, m);
-        var monthlyIncome = income?.Amount ?? await repo.GetMonthlyAllowanceAsync(m, fallbackIncome);
+        var incomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(y, m);
+        var monthlyIncome = incomeEntriesTotal ?? income?.Amount ?? await repo.GetMonthlyAllowanceAsync(m, fallbackIncome);
         var carryForwardInfo = await repo.GetCarryForwardInfoAsync(y, m);
         var carryForward = carryForwardInfo.EffectiveAmount;
 
@@ -90,7 +91,8 @@ public sealed class DashboardController(
 
         var previousMonth = new DateTime(y, m, 1).AddMonths(-1);
         var previousIncomeRecord = await repo.GetIncomeAsync(previousMonth.Year, previousMonth.Month);
-        var previousIncome = previousIncomeRecord?.Amount
+        var previousIncomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(previousMonth.Year, previousMonth.Month);
+        var previousIncome = previousIncomeEntriesTotal ?? previousIncomeRecord?.Amount
             ?? await repo.GetMonthlyAllowanceAsync(previousMonth.Month, fallbackIncome);
         var previousCarryForward = (await repo.GetCarryForwardInfoAsync(previousMonth.Year, previousMonth.Month)).EffectiveAmount;
         var previousBills = await repo.GetRowsAsync("bills", previousMonth.Month, previousMonth.Year);
@@ -229,6 +231,7 @@ public sealed class DashboardController(
         ViewBag.Month = month;
         ViewBag.ReturnAction = source switch
         {
+            "income" => "Income",
             "bills" => "EssentialBills",
             "everyday_spending" => "EverydaySpending",
             "extra_expenses" => "ExtraExpenses",

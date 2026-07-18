@@ -1,6 +1,9 @@
 @model FinanceManagerAspNet.Models.MonthlyMoneyWorkspaceViewModel
 
 <nav class="fm-workspace-tabs" aria-label="Monthly money workspaces">
+    <a class="@(Model.ActionName == "Income" ? "active" : "")"
+       aria-current="@(Model.ActionName == "Income" ? "page" : null)"
+       asp-action="Income" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Income</a>
     <a class="@(Model.ActionName == "EssentialBills" ? "active" : "")"
        aria-current="@(Model.ActionName == "EssentialBills" ? "page" : null)"
        asp-action="EssentialBills" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Essential bills</a>

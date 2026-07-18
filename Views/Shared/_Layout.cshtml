@@ -147,6 +147,7 @@ else
 
         <div class="fm-nav-group">
           <p class="fm-nav-heading">Monthly money</p>
+          <a class="fm-nav-item @(controller == "MonthlyMoney" && action == "Income" ? "active" : "")" data-tooltip="Income" asp-controller="MonthlyMoney" asp-action="Income"><i data-lucide="wallet-cards"></i><span>Income</span></a>
           <a class="fm-nav-item @(controller == "MonthlyMoney" && action == "EssentialBills" ? "active" : "")" data-tooltip="Essential Bills" asp-controller="MonthlyMoney" asp-action="EssentialBills"><i data-lucide="receipt"></i><span>Essential Bills</span></a>
           <a class="fm-nav-item @(controller == "MonthlyMoney" && action == "EverydaySpending" ? "active" : "")" data-tooltip="Everyday Spending" asp-controller="MonthlyMoney" asp-action="EverydaySpending"><i data-lucide="shopping-basket"></i><span>Everyday Spending</span></a>
           <a class="fm-nav-item @(controller == "MonthlyMoney" && action == "ExtraExpenses" ? "active" : "")" data-tooltip="Extra Expenses" asp-controller="MonthlyMoney" asp-action="ExtraExpenses"><i data-lucide="circle-plus"></i><span>Extra Expenses</span></a>

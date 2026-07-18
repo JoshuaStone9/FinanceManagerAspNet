@@ -320,3 +320,8 @@ Month setup now offers only active recurring entries that existed in the immedia
 ## Phase 9.1 — Monthly Financial Health Summary
 
 The dashboard now includes a financial health section that interprets the selected month's income, spending and future allocations. It reports income committed, essential-bill pressure, monthly surplus or shortfall, comparisons with the previous month and plain-English insights. No database migration is required.
+
+
+## Phase 8.5 — Monthly Income Workspace
+
+Income is now the first Monthly Money workspace. Each month can contain multiple actual income sources, including salaries, overtime, bonuses, benefits and other income. Sources can repeat monthly or remain one-off, and the dashboard financial-health calculations now use the summed monthly entries instead of relying on a fixed configured income whenever actual entries exist.
