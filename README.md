@@ -347,3 +347,8 @@ The dashboard financial-health summary now uses an isolated, versioned styleshee
 ## Phase 9 — Settings & Application Configuration
 
 Settings is now a full application control centre covering finance configuration, the protected emergency-fund baseline, appearance, security, portable JSON backups, restore, CSV export, finance-data reset and system diagnostics. The £12,000 baseline is visible and editable under Settings → Finance and is used by the reserve summary shared across Dashboard, Money Pots and Forecast.
+
+
+### Phase 9.6 — Protected Reserve clarity
+
+The Money Pots page now explains the relationship between selected backing accounts, the protected emergency-fund baseline and pot allocations. It shows current reserve, protected reserve, shortfall or surplus, allocated pot money and the amount still genuinely available. Negative “unallocated money” has been replaced by a clearer zero-floor “Still available” figure plus an explicit warning when pot earmarks exceed money above the protected reserve.

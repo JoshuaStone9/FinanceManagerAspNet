@@ -23,7 +23,7 @@
     <article class="card"><p class="eyebrow">Saved in pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
     <article class="card"><p class="eyebrow">Active pots</p><h2>@Model.ActivePotCount</h2></article>
     <article class="card"><p class="eyebrow">Remaining to targets</p><h2>@Model.RemainingToTargets.ToString("C", gb)</h2></article>
-    <article class="card"><p class="eyebrow">Unallocated money</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">Still available</p><h2 class="@(Model.RemainingToAllocate > 0 ? "good" : Model.IsOverAllocated ? "bad" : "")">@Model.RemainingToAllocate.ToString("C", gb)</h2><p class="muted">Above the protected reserve and not already assigned.</p></article>
 </section>
 
 <section class="card" id="reserve-accounts">
@@ -44,6 +44,28 @@
     else
     {
         <div class="grid cards-4 compact-grid">@foreach (var account in Model.AccountSummary.SelectedAccounts) { <article><p class="eyebrow">@account.Name</p><strong>@account.Balance.ToString("C", gb)</strong><p class="muted">@account.InterestRate.ToString("0.##")% AER</p></article> }</div>
+
+        <div class="grid cards-4 compact-grid reserve-position-grid">
+            <article><p class="eyebrow">Current reserve</p><strong>@Model.CurrentReserve.ToString("C", gb)</strong><p class="muted">Total held across the selected backing accounts.</p></article>
+            <article><p class="eyebrow">Protected reserve</p><strong>@Model.ProtectedReserve.ToString("C", gb)</strong><p class="muted">Controlled from Settings → Finance.</p></article>
+            <article><p class="eyebrow">@(Model.ReserveShortfall > 0 ? "Reserve shortfall" : "Available above reserve")</p><strong class="@(Model.ReserveShortfall > 0 ? "bad" : "good")">@((Model.ReserveShortfall > 0 ? Model.ReserveShortfall : Model.AvailableAboveProtectedReserve).ToString("C", gb))</strong><p class="muted">@(Model.ReserveShortfall > 0 ? "Still needed before the protected reserve is fully covered." : "Can be assigned without using the protected reserve.")</p></article>
+            <article><p class="eyebrow">Allocated to pots</p><strong>@Model.TotalAllocated.ToString("C", gb)</strong><p class="muted">Money already earmarked for active Money Pots.</p></article>
+        </div>
+
+        @if (Model.IsOverAllocated)
+        {
+            <div class="notice warning reserve-position-warning">
+                <strong>@Model.AllocatedBeyondAvailable.ToString("C", gb) is allocated beyond the freely available reserve.</strong>
+                <span>Your Money Pots are valid earmarks, but the selected accounts have not yet covered the protected reserve plus those allocations.</span>
+            </div>
+        }
+        else if (Model.RemainingToAllocate > 0)
+        {
+            <div class="notice success reserve-position-warning">
+                <strong>@Model.RemainingToAllocate.ToString("C", gb) remains available.</strong>
+                <span>This is above the protected reserve and has not yet been assigned to a Money Pot.</span>
+            </div>
+        }
     }
 </section>
 

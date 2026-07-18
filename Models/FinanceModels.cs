@@ -767,11 +767,16 @@ public sealed class HouseholdReserveViewModel
     public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => Math.Max(0m, p.AllocatedAmount));
     public int ActivePotCount => Pots.Count(p => p.IsActive);
     public decimal RemainingToTargets => Pots.Where(p => p.IsActive && p.TargetAmount.HasValue).Sum(p => Math.Max(0m, p.TargetAmount!.Value - Math.Max(0m, p.AllocatedAmount)));
-    public decimal UnallocatedBalance => AccountSummary.SurplusAboveBaseline - TotalAllocated;
+    public decimal CurrentReserve => AccountSummary.TotalBalance;
+    public decimal ProtectedReserve => AccountSummary.Baseline;
+    public decimal ReserveShortfall => AccountSummary.BaselineShortfall;
+    public decimal AvailableAboveProtectedReserve => AccountSummary.SurplusAboveBaseline;
+    public decimal UnallocatedBalance => AvailableAboveProtectedReserve - TotalAllocated;
     public decimal RemainingToAllocate => Math.Max(0m, UnallocatedBalance);
+    public decimal AllocatedBeyondAvailable => Math.Max(0m, TotalAllocated - AvailableAboveProtectedReserve);
     public decimal TotalDefaultMonthlyContributions => Pots.Where(p => p.IsActive).Sum(p => p.DefaultMonthlyContribution);
     public decimal EstimatedMonthlyInterest => Math.Round(Reserve.Balance * (Reserve.InterestRate / 100m) / 12m, 2);
-    public bool IsOverAllocated => UnallocatedBalance < 0;
+    public bool IsOverAllocated => AllocatedBeyondAvailable > 0m;
 }
 
 
