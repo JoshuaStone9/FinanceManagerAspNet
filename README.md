@@ -325,3 +325,11 @@ The dashboard now includes a financial health section that interprets the select
 ## Phase 8.5 — Monthly Income Workspace
 
 Income is now the first Monthly Money workspace. Each month can contain multiple actual income sources, including salaries, overtime, bonuses, benefits and other income. Sources can repeat monthly or remain one-off, and the dashboard financial-health calculations now use the summed monthly entries instead of relying on a fixed configured income whenever actual entries exist.
+
+### Phase 8.5.1 — Income workspace consistency
+
+Income records now use the same recorded-entry row layout and two-state recurring control as the other Monthly Money workspaces. The income recurring switch saves asynchronously, exposes the same accessible state, and uses the shared spacing and action alignment. Income edits also return to the edited row.
+
+
+## Phase 8.6 — Money Pots & Monthly Entry Simplification
+Monthly entry forms now use workspace-specific types and support either month-count or end-date durations. Money Pot creation and editing have been reduced to name, optional target, optional date needed by and notes. Forecasts now use real contribution history, while explicit Pause/Resume actions replace legacy priority and carry-forward controls.

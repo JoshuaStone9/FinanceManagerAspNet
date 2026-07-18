@@ -41,9 +41,12 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
         if (string.IsNullOrWhiteSpace(name) || amount < 0) return BadRequest("Enter a valid income source and amount.");
         await repo.UpdateMonthlyIncomeEntryAsync(id, name, amount, date, category, notes, isRecurring);
         TempData["Success"] = $"{name.Trim()} income updated.";
+
         var url = Url.Action(nameof(Income), new { year, month });
 
-        return Redirect($"{url}#entry-{id}");
+        return url is null
+            ? RedirectToAction(nameof(Income), new { year, month })
+            : Redirect($"{url}#entry-{id}");
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -87,6 +90,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             "Description",
             supportsType: true,
             supportsLength: true,
+            typeOptions: ["Mortgage", "Council Tax", "Utilities", "Insurance", "Subscription", "Loan", "Other"],
             isCarryOverEligible: true,
             year: year,
             month: month);
@@ -108,6 +112,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             supportsCategory: true,
             supportsType: true,
             supportsLength: true,
+            typeOptions: ["Food", "Fuel", "Travel", "Personal", "Entertainment", "Household", "Other"],
             isCarryOverEligible: true,
             year: year,
             month: month);
@@ -128,6 +133,8 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             "Reason or notes",
             supportsCategory: true,
             supportsType: true,
+            supportsLength: true,
+            typeOptions: ["Purchase", "Repair", "Health", "Travel", "Gift", "Other"],
             isCarryOverEligible: false,
             year: year,
             month: month);
@@ -147,7 +154,9 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             "Investment name",
             "Provider or notes",
             supportsCategory: true,
+            supportsType: true,
             supportsLength: true,
+            typeOptions: ["ETF", "Fund", "Stock", "Pension", "Crypto", "Bond", "Other"],
             isCarryOverEligible: true,
             year: year,
             month: month);
@@ -166,6 +175,8 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             "Choose a money pot",
             "Money pot",
             "Contribution notes",
+            supportsType: true,
+            typeOptions: ["Regular contribution", "One-off top-up", "Transfer", "Refund", "Other"],
             isCarryOverEligible: true,
             isMoneyPots: true,
             year: year,
@@ -324,6 +335,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
         bool supportsCategory = false,
         bool supportsType = false,
         bool supportsLength = false,
+        IReadOnlyList<string>? typeOptions = null,
         bool isCarryOverEligible = false,
         bool isMoneyPots = false,
         int? year = null,
@@ -364,6 +376,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             SupportsCategory = supportsCategory,
             SupportsType = supportsType,
             SupportsLength = supportsLength,
+            TypeOptions = typeOptions ?? [],
             IsCarryOverEligible = isCarryOverEligible,
             IsMoneyPots = isMoneyPots,
             Rows = await repo.GetRowsAsync(source, selectedMonth, selectedYear),

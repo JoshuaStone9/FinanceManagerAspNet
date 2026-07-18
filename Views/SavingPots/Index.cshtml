@@ -1,316 +1,133 @@
 @model FinanceManagerAspNet.Models.HouseholdReserveViewModel
 @using System.Globalization
-@{ ViewData["Title"] = "Money Pots"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentMonth = DateTime.Today.ToString("MMMM yyyy"); var applyAllOperationKey = Guid.NewGuid().ToString("N"); }
+@{
+    ViewData["Title"] = "Money Pots";
+    var gb = CultureInfo.GetCultureInfo("en-GB");
+    var canEdit = User.Identity?.IsAuthenticated == true;
+}
+
 <section class="hero card money-pots-hero">
-<div>
-<p class="eyebrow">Your savings, organised clearly</p>
-<h1>Money Pots</h1>
-<p class="money-pots-total">@Model.TotalAllocated.ToString("C", gb) saved across @Model.ActivePotCount active pot@(Model.ActivePotCount == 1 ? "" : "s")</p>
-<p class="muted">Manage savings goals, monitor progress and keep every pound working towards the future.</p>
-</div>
-<div class="button-row"><a class="fm-action-button fm-action-primary" href="#new-allocation">Create money pot</a><a class="fm-action-button fm-action-secondary" asp-controller="Events" asp-action="Index">View activity</a></div>
+    <div>
+        <p class="eyebrow">Your savings, organised clearly</p>
+        <h1>Money Pots</h1>
+        <p class="money-pots-total">@Model.TotalAllocated.ToString("C", gb) saved across @Model.ActivePotCount active pot@(Model.ActivePotCount == 1 ? "" : "s")</p>
+        <p class="muted">Set optional goals, record real contributions and let Finance Manager calculate when each target could be reached.</p>
+    </div>
+    <div class="button-row">
+        @if (canEdit) { <a class="fm-action-button fm-action-primary" href="#new-allocation">Create money pot</a> }
+        <a class="fm-action-button fm-action-secondary" asp-controller="MonthlyMoney" asp-action="MoneyPots">Add contribution</a>
+    </div>
 </section>
+
 <section class="grid cards-4">
-<article class="card"><p class="eyebrow">Total money available</p><h2>@Model.AccountSummary.TotalBalance.ToString("C", gb)</h2><p class="muted">Across the accounts backing your money pots.</p></article>
-<article class="card"><p class="eyebrow">Protected emergency baseline</p><h2>@Model.AccountSummary.Baseline.ToString("C", gb)</h2><p class="@(Model.AccountSummary.BaselineShortfall > 0 ? "bad" : "good")">@(Model.AccountSummary.BaselineShortfall > 0 ? $"{Model.AccountSummary.BaselineShortfall.ToString("C", gb)} still needed" : "Baseline covered")</p></article>
-<article class="card"><p class="eyebrow">Available for pots</p><h2>@Model.AccountSummary.SurplusAboveBaseline.ToString("C", gb)</h2><p class="muted">Available after protecting your baseline.</p></article>
-<article class="card"><p class="eyebrow">Saved in money pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
-<article class="card"><p class="eyebrow">Remaining to goals</p><h2>@Model.RemainingToTargets.ToString("C", gb)</h2><p class="muted">Across active pots with a target.</p></article>
-<article class="card"><p class="eyebrow">Unallocated money</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2><p class="muted">Available to assign to a new or existing pot.</p></article>
+    <article class="card"><p class="eyebrow">Saved in pots</p><h2>@Model.TotalAllocated.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">Active pots</p><h2>@Model.ActivePotCount</h2></article>
+    <article class="card"><p class="eyebrow">Remaining to targets</p><h2>@Model.RemainingToTargets.ToString("C", gb)</h2></article>
+    <article class="card"><p class="eyebrow">Unallocated money</p><h2 class="@(Model.IsOverAllocated ? "bad" : "good")">@Model.UnallocatedBalance.ToString("C", gb)</h2></article>
 </section>
 
 <section class="card" id="reserve-accounts">
-<div class="section-head"><div><p class="eyebrow">Backing accounts</p><h2>Accounts holding your money pots</h2></div>
-@if (!Model.ShowAccountSelector && canEdit){<a class="secondary button" asp-action="Index" asp-route-reselect="true" asp-fragment="reserve-accounts">Reselect backing accounts</a>}
-</div>
-@if (Model.ShowAccountSelector)
-{
-<form asp-action="SaveReserveAccountSelection" method="post" class="account-form">@Html.AntiForgeryToken()
-<div class="grid cards-4 compact-grid">
-@foreach (var account in Model.AccountSummary.AvailableAccounts)
-{
-<label class="reserve-account-option"><input type="checkbox" name="selectedAccountIds" value="@account.Id" checked="@account.IsSelected"/><span><strong>@account.Name</strong><small>@account.Balance.ToString("C", gb) · @account.InterestRate.ToString("0.##")% AER</small></span></label>
-}
-</div><button class="primary">Save backing accounts</button></form>
-}
-else
-{
-<div class="grid cards-4 compact-grid">@foreach(var account in Model.AccountSummary.SelectedAccounts){<article><p class="eyebrow">@account.Name</p><strong>@account.Balance.ToString("C", gb)</strong><p class="muted">@account.InterestRate.ToString("0.##")% AER</p></article>}</div>
-}
+    <div class="section-head"><div><p class="eyebrow">Backing accounts</p><h2>Accounts holding your Money Pots</h2></div>
+        @if (!Model.ShowAccountSelector && canEdit) { <a class="button secondary" asp-action="Index" asp-route-reselect="true" asp-fragment="reserve-accounts">Change accounts</a> }
+    </div>
+    @if (Model.ShowAccountSelector)
+    {
+        <form asp-action="SaveReserveAccountSelection" method="post" class="account-form">@Html.AntiForgeryToken()
+            <div class="grid cards-4 compact-grid">
+                @foreach (var account in Model.AccountSummary.AvailableAccounts)
+                {
+                    <label class="reserve-account-option"><input type="checkbox" name="selectedAccountIds" value="@account.Id" checked="@account.IsSelected"/><span><strong>@account.Name</strong><small>@account.Balance.ToString("C", gb) · @account.InterestRate.ToString("0.##")% AER</small></span></label>
+                }
+            </div><button class="primary">Save backing accounts</button>
+        </form>
+    }
+    else
+    {
+        <div class="grid cards-4 compact-grid">@foreach (var account in Model.AccountSummary.SelectedAccounts) { <article><p class="eyebrow">@account.Name</p><strong>@account.Balance.ToString("C", gb)</strong><p class="muted">@account.InterestRate.ToString("0.##")% AER</p></article> }</div>
+    }
 </section>
 
-<section class="card" id="interest-forecast">
-<div class="section-head">
-<div><p class="eyebrow">Interest forecast</p><h2>Project the value of your money pots</h2><p class="muted">Uses each selected account's own AER. This forecast is informational and does not change live balances.</p></div>
-</div>
-<form asp-action="Index" method="get" class="account-form">
-<label>Forecast date
-<input name="forecastDate" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")" value="@Model.InterestForecast.ForecastDate.ToString("yyyy-MM-dd")"/>
-</label>
-<label class="reserve-account-option">
-<input name="includeFutureContributions" type="checkbox" value="true" checked="@Model.InterestForecast.IncludeFutureContributions"/>
-<span><strong>Include future monthly contributions</strong><small>Uses the monthly contribution configured on each selected account.</small></span>
-</label>
-<button class="primary" type="submit">Update forecast</button>
-</form>
-
-<div class="grid cards-4 compact-grid">
-<article><p class="eyebrow">Current selected balance</p><strong>@Model.InterestForecast.CurrentTotal.ToString("C", gb)</strong></article>
-<article><p class="eyebrow">Forecast date</p><strong>@Model.InterestForecast.ForecastDate.ToString("dd MMM yyyy")</strong><p class="muted">@Model.InterestForecast.ForecastDays days</p></article>
-<article><p class="eyebrow">Future contributions</p><strong>@Model.InterestForecast.FutureContributions.ToString("C", gb)</strong></article>
-<article><p class="eyebrow">Estimated interest</p><strong class="good">@Model.InterestForecast.EstimatedInterest.ToString("C", gb)</strong></article>
-<article><p class="eyebrow">Projected total</p><strong>@Model.InterestForecast.ProjectedTotal.ToString("C", gb)</strong></article>
-</div>
-
-@if (Model.InterestForecast.Accounts.Count > 0)
-{
-<div class="table-wrap">
-<table>
-<thead><tr><th>Account</th><th>Current</th><th>AER</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead>
-<tbody>
-@foreach (var account in Model.InterestForecast.Accounts)
-{
-<tr>
-<td><strong>@account.AccountName</strong>@if (Model.InterestForecast.IncludeFutureContributions && account.MonthlyContribution > 0){<small class="muted">@account.MonthlyContribution.ToString("C", gb) monthly</small>}</td>
-<td>@account.OpeningBalance.ToString("C", gb)</td>
-<td>@account.AnnualInterestRate.ToString("0.##")%</td>
-<td>@account.ContributionsAdded.ToString("C", gb)</td>
-<td class="good">@account.EstimatedInterest.ToString("C", gb)</td>
-<td><strong>@account.ProjectedBalance.ToString("C", gb)</strong></td>
-</tr>
-}
-</tbody>
-</table>
-</div>
-}
-else
-{
-<p class="muted">Select backing accounts before calculating an interest forecast.</p>
-}
-</section>
-
-@{ var activeSummaries = Model.Pots.Where(x => x.IsActive).Select(x => Model.FundingSummaries.GetValueOrDefault(x.Id)).Where(x => x is not null).ToList(); var attention = activeSummaries.Count(x => x!.CurrentStatus is "Overdrawn" or "Overdue" or "Missed" or "Partially funded"); var expectedThisMonth = activeSummaries.Sum(x => x!.CurrentMonthExpected); var actualThisMonth = activeSummaries.Sum(x => x!.CurrentMonthEffectiveFunding); }
-<section class="card" id="monthly-checklist"><div class="section-head"><div><p class="eyebrow">Monthly funding checklist</p><h2>@currentMonth</h2><p class="muted">@attention pot@(attention == 1 ? "" : "s") need attention. @actualThisMonth.ToString("C", gb) of @expectedThisMonth.ToString("C", gb) funded.</p></div></div>
-<div class="grid cards-4 compact-grid">
-@foreach (var pot in Model.Pots.Where(x => x.IsActive))
-{
-    var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id);
-    if (summary is null) continue;
-    <article class="monthly-review-card"><p class="eyebrow">@pot.Name</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) / @summary.CurrentMonthExpected.ToString("C", gb) this month</p><a class="fm-action-button fm-action-primary fm-action-small" href="#pot-@pot.Id">Review</a></article>
-}
-</div></section>
-
-@if (Model.DueReminders.Count > 0)
-{
-<section class="card"><div class="section-head"><div><p class="eyebrow">Reminders</p><h2>@Model.DueReminders.Count due reminder@(Model.DueReminders.Count == 1 ? "" : "s")</h2><p class="muted">Funding issues and approaching target dates are tracked automatically.</p></div><a class="secondary button" asp-controller="Reminders" asp-action="Index">Review reminders</a></div>
-<div class="grid cards-4 compact-grid">@foreach(var reminder in Model.DueReminders.Take(4)){<article><p class="eyebrow">@(reminder.PotName ?? "General")</p><strong>@reminder.Title</strong><p class="muted">Due @reminder.EffectiveDueDate.ToString("dd MMM yyyy")</p></article>}</div></section>
-}
-
-@if (Model.RecoveryRecommendations.Count > 0)
-{
-<section class="card" id="recommendations">
-<div class="section-head"><div><p class="eyebrow">Recommended recovery allocation</p><h2>Use available excess to catch up</h2><p class="muted">Recommendations use unallocated money, priority and outstanding recovery. Money is only reassigned after you confirm it.</p></div>
-@if (canEdit)
-{
-<form asp-action="ApplyAllRecommendations" method="post" data-confirm="Apply every current recovery recommendation in priority order?">@Html.AntiForgeryToken()<input type="hidden" name="operationKey" value="@applyAllOperationKey"/><button class="primary">Apply all recommendations</button></form>
-}
-</div>
-<div class="grid cards-4 compact-grid">
-@foreach (var item in Model.RecoveryRecommendations)
-{
-    var itemOperationKey = Guid.NewGuid().ToString("N");
-    var confirmText = $"Apply {item.RecommendedAmount.ToString("C", gb)} of unallocated money to {item.PotName}?";
-<article><p class="eyebrow">Priority @item.Priority · @item.PotName</p><strong>@item.RecommendedAmount.ToString("C", gb)</strong><p class="muted">Of @item.OutstandingRecovery.ToString("C", gb) outstanding@(item.IsNegativeBalanceRecommendation ? " · negative balance recovery prioritised" : "")</p>
-@if (item.RemainingAfterRecommendation > 0){<p class="bad">@item.RemainingAfterRecommendation.ToString("C", gb) would remain</p>}else{<p class="good">Recovery cleared</p>}
-<div class="button-row"><a class="secondary button" href="#pot-@item.PotId">Review pot</a>
-@if (canEdit)
-{
-<form asp-action="ApplyRecommendation" method="post" data-confirm="@confirmText">@Html.AntiForgeryToken()<input type="hidden" name="potId" value="@item.PotId"/><input type="hidden" name="amount" value="@item.RecommendedAmount"/><input type="hidden" name="operationKey" value="@itemOperationKey"/><button class="primary">Apply recommendation</button></form>
-}
-</div></article>
-}
-</div></section>
-}
-
-@if (canEdit)
-{
-<details class="card" id="reserve-account"><summary><strong>Legacy account settings</strong></summary><p class="muted">Kept for compatibility with older calculations.</p><form asp-action="SaveReserve" method="post" class="account-form">@Html.AntiForgeryToken()<label>Balance<input name="balance" type="number" min="0" step="0.01" value="@Model.Reserve.Balance"/></label><label>Interest rate %<input name="interestRate" type="number" min="0" step="0.01" value="@Model.Reserve.InterestRate"/></label><label>Provider<input name="provider" value="@Model.Reserve.Provider"/></label><button class="primary">Save account settings</button></form></details>
-}
-
-<div id="allocations"></div>
 @if (Model.Pots.Count == 0)
 {
-<section class="card money-pots-empty">
-<i data-lucide="piggy-bank"></i>
-<h2>No money pots yet</h2>
-<p class="muted">Create your first pot for an emergency fund, house deposit, wedding, holiday or any other goal.</p>
-@if (canEdit){<a class="fm-action-button fm-action-primary" href="#new-allocation">Create first money pot</a>}
-</section>
+    <section class="card money-pots-empty"><i data-lucide="piggy-bank"></i><h2>No Money Pots yet</h2><p class="muted">Create a pot, then add contributions from the monthly Money Pots workspace.</p></section>
 }
 else
 {
-@foreach (var pot in Model.Pots)
-{
-    var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id) ?? new FinanceManagerAspNet.Models.ReservePotFundingSummary { PotId = pot.Id };
-<details class="card pot-disclosure" id="pot-@pot.Id">
-<summary class="pot-title-row"><span><strong>@pot.Name</strong><small>@pot.AllocatedAmount.ToString("C", gb)@(pot.TargetAmount.HasValue ? $" of {pot.TargetAmount.Value.ToString("C", gb)}" : "")</small></span><span class="@summary.StatusCssClass">@summary.CurrentStatus</span></summary>
-<div class="pot-expanded"><div class="section-head"><div><p class="eyebrow">Money pot</p><h2>@pot.Name</h2><p class="muted">@pot.Notes</p></div></div>
-@if (pot.IsOverdrawn)
-{
-<div class="alert error negative-pot-warning">
-<strong>This pot is overdrawn by @pot.NegativeBalanceRecoveryRequired.ToString("C", gb).</strong>
-<p>Normal monthly contributions remain unchanged. Add an extra recovery contribution to return the pot to £0 sooner.</p>
-</div>
-}
-<section class="grid cards-4 compact-grid">
-<article><p class="eyebrow">Allocated</p><strong class="@(pot.IsOverdrawn ? "bad" : "")">@pot.AllocatedAmount.ToString("C", gb)</strong>@if (pot.IsOverdrawn){<p class="muted">@pot.NegativeBalanceRecoveryRequired.ToString("C", gb) required to return to £0.</p>}</article>
-<article><p class="eyebrow">Pot status</p><strong class="@summary.StatusCssClass">@summary.CurrentStatus</strong><p class="muted">Monthly funding: @summary.CurrentMonthStatus</p><p class="muted">@summary.CurrentMonthEffectiveFunding.ToString("C", gb) of @summary.CurrentMonthExpected.ToString("C", gb) this month.</p><p class="muted">Net funding after withdrawals: @summary.CurrentMonthActual.ToString("C", gb)</p></article>
-<article><p class="eyebrow">Outstanding recovery</p><strong class="@(summary.OutstandingRecovery > 0 ? "bad" : "good")">@summary.OutstandingRecovery.ToString("C", gb)</strong><p class="muted">Later excess funding automatically reduces this.</p></article>
-<article><p class="eyebrow">Carried excess available</p><strong class="@(summary.AvailableCarriedExcess > 0 ? "good" : "")">@summary.AvailableCarriedExcess.ToString("C", gb)</strong><p class="muted">Credit available for future months when enabled.</p></article>
-<article><p class="eyebrow">This month allocation</p><strong>@summary.CurrentMonthAppliedToRecovery.ToString("C", gb) recovery</strong><p class="muted">@summary.CurrentMonthCarriedExcessUsed.ToString("C", gb) prior credit used · @summary.CurrentMonthCarriedExcessCreated.ToString("C", gb) new credit · @summary.CurrentMonthGenuineExcess.ToString("C", gb) genuine excess</p></article>
-<article><p class="eyebrow">Expected balance today</p><strong>@summary.ExpectedBalanceToday.ToString("C", gb)</strong><p class="muted">Actual balance: @pot.AllocatedAmount.ToString("C", gb)</p></article>
-<article><p class="eyebrow">Intended funding</p><strong>@pot.IntendedMonthlyContribution.ToString("C", gb)</strong><p class="muted">Flexible monthly funding · add money at any time</p></article>
-<article><p class="eyebrow">Missed / partial months</p><strong>@summary.MissedMonths / @summary.PartiallyFundedMonths</strong><p class="muted">Tracked since @pot.FundingPlanStartDate.ToString("dd MMM yyyy").</p></article>
-<article><p class="eyebrow">Target</p><strong>@(pot.TargetAmount?.ToString("C", gb) ?? "None")</strong></article>
-<article><p class="eyebrow">Due</p><strong>@(pot.DueDate?.ToString("MMM yyyy") ?? "None")</strong></article>
-@if (pot.TargetAmount.HasValue && pot.DueDate.HasValue)
-{
-<article><p class="eyebrow">Projected by due date</p><strong>@summary.ProjectedBalanceByDueDate.ToString("C", gb)</strong><p class="muted">Using intended funding.</p></article>
-<article><p class="eyebrow">Projected shortfall</p><strong class="@((summary.ProjectedShortfall ?? 0) > 0 ? "bad" : "good")">@((summary.ProjectedShortfall ?? 0).ToString("C", gb))</strong></article>
-<article><p class="eyebrow">Required monthly</p><strong>@(summary.RequiredMonthlyContribution?.ToString("C", gb) ?? "—")</strong></article>
-<article><p class="eyebrow">Additional monthly needed</p><strong class="@((summary.AdditionalMonthlyContributionRequired ?? 0) > 0 ? "bad" : "good")">@(summary.AdditionalMonthlyContributionRequired?.ToString("C", gb) ?? "—")</strong></article>
-}
-</section>
+    <section class="fm-pot-grid" id="allocations">
+    @foreach (var pot in Model.Pots.OrderByDescending(x => x.IsActive).ThenBy(x => x.Name))
+    {
+        var summary = Model.FundingSummaries.GetValueOrDefault(pot.Id) ?? new FinanceManagerAspNet.Models.ReservePotFundingSummary { PotId = pot.Id };
+        var progress = pot.TargetAmount.HasValue && pot.TargetAmount.Value > 0 ? Math.Min(100m, Math.Max(0m, pot.AllocatedAmount / pot.TargetAmount.Value * 100m)) : 0m;
+        <article class="card fm-pot-card @(pot.IsActive ? "" : "is-paused")" id="pot-@pot.Id">
+            <div class="fm-pot-card-head">
+                <div><p class="eyebrow">@(pot.IsActive ? "Money pot" : "Paused pot")</p><h2>@pot.Name</h2></div>
+                <span class="fm-status-pill @(pot.IsActive ? "good" : "warn")">@(pot.IsActive ? summary.CurrentStatus : "Paused")</span>
+            </div>
 
-@if (canEdit)
-{
-<div class="pot-action-row">
-@if (pot.IsOverdrawn)
-{
-<form asp-action="RestoreNegativeBalance" method="post" class="inline-recovery-form" data-confirm="Apply this extra contribution to restore the negative pot balance?">
-@Html.AntiForgeryToken()
-<input type="hidden" name="potId" value="@pot.Id"/>
-<input type="hidden" name="operationKey" value="@(Guid.NewGuid().ToString("N"))"/>
-<label>Extra recovery contribution
-<input name="amount" type="number" min="0.01" max="@pot.NegativeBalanceRecoveryRequired" step="0.01" value="@pot.NegativeBalanceRecoveryRequired" required/>
-</label>
-<button class="pot-action-button pot-action-primary" type="submit">Restore pot</button>
-</form>
-}
-@if (pot.TargetAmount.HasValue && pot.AllocatedAmount < pot.TargetAmount.Value && !pot.IsOverdrawn)
-{
-<form asp-action="PayPotInFull" method="post" data-confirm="Pay this pot in full using available reserve surplus?">
-@Html.AntiForgeryToken()
-<input type="hidden" name="potId" value="@pot.Id"/>
-<input type="hidden" name="operationKey" value="@(Guid.NewGuid().ToString("N"))"/>
-<button class="pot-action-button pot-action-success" type="submit">Pay this pot in full now</button>
-</form>
-}
-<a class="pot-action-button pot-action-danger" asp-action="Withdraw" asp-route-id="@pot.Id">Withdraw from pot</a>
-<a class="pot-action-button pot-action-secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">View events</a>
-</div>
+            <div class="fm-pot-balance"><span>Current balance</span><strong>@pot.AllocatedAmount.ToString("C", gb)</strong></div>
+            @if (pot.TargetAmount.HasValue)
+            {
+                <div class="fm-pot-progress" role="progressbar" aria-valuenow="@progress.ToString("0")" aria-valuemin="0" aria-valuemax="100"><span style="width:@progress.ToString("0.##", CultureInfo.InvariantCulture)%"></span></div>
+                <p class="muted">@progress.ToString("0")% of @pot.TargetAmount.Value.ToString("C", gb)</p>
+            }
+
+            <div class="grid cards-4 compact-grid fm-pot-stats">
+                <article><p class="eyebrow">Target</p><strong>@(pot.TargetAmount?.ToString("C", gb) ?? "No target")</strong></article>
+                <article><p class="eyebrow">Recent monthly average</p><strong>@summary.RecentMonthlyContribution.ToString("C", gb)</strong><p class="muted">Calculated from real contribution history.</p></article>
+                <article><p class="eyebrow">Estimated completion</p><strong>@(summary.EstimatedCompletionDate?.ToString("MMM yyyy") ?? (pot.TargetAmount.HasValue ? "Not enough history" : "No target"))</strong></article>
+                <article><p class="eyebrow">Date needed by</p><strong>@(pot.DueDate?.ToString("dd MMM yyyy") ?? "Not set")</strong></article>
+            </div>
+
+            @if (pot.TargetAmount.HasValue)
+            {
+                <div class="fm-pot-forecast @(pot.DueDate.HasValue && summary.EstimatedCompletionDate.HasValue && summary.EstimatedCompletionDate.Value > pot.DueDate.Value ? "is-behind" : "is-on-track")">
+                    <i data-lucide="calendar-clock"></i>
+                    <div><strong>@pot.GoalTimingLabel</strong><span>Forecast updates automatically whenever contributions change.</span></div>
+                </div>
+            }
+
+            <div class="pot-action-row">
+                <a class="pot-action-button pot-action-primary" asp-controller="MonthlyMoney" asp-action="MoneyPots">Add contribution</a>
+                @if (canEdit)
+                {
+                    <form asp-action="TogglePause" method="post">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="pot-action-button @(pot.IsActive ? "pot-action-pause" : "pot-action-success")" type="submit">@(pot.IsActive ? "Pause pot" : "Resume pot")</button></form>
+                    <a class="pot-action-button pot-action-danger" asp-action="Withdraw" asp-route-id="@pot.Id">Withdraw</a>
+                }
+                <a class="pot-action-button pot-action-secondary" asp-controller="Events" asp-action="Index" asp-route-potId="@pot.Id">View activity</a>
+            </div>
+
+            @if (canEdit)
+            {
+                <details class="edit-panel"><summary>Edit pot details</summary>
+                    <form asp-action="SavePot" method="post" class="account-form fm-pot-simple-form">@Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@pot.Id"/>
+                        <label>Name<input name="name" value="@pot.Name" required/></label>
+                        <label>Target <span class="muted">(optional)</span><input name="targetAmount" type="number" min="0" step="0.01" value="@pot.TargetAmount"/></label>
+                        <label>Date needed by <span class="muted">(optional)</span><input name="dueDate" type="date" value="@pot.DueDate?.ToString("yyyy-MM-dd")"/></label>
+                        <label class="field full">Notes<textarea name="notes" rows="3">@pot.Notes</textarea></label>
+                        <p class="muted field full">Current balance and contribution averages are calculated automatically. Estimated completion is based on your real contribution history.</p>
+                        <button class="primary">Save Money Pot</button>
+                    </form>
+                </details>
+                <form asp-action="DeletePot" method="post" data-confirm="Delete this Money Pot?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete pot</button></form>
+            }
+        </article>
+    }
+    </section>
 }
 
-@if (canEdit)
-{
-<form asp-action="SavePot" method="post" class="account-form edit-panel">
-@Html.AntiForgeryToken()
-<input type="hidden" name="id" value="@pot.Id"/>
-<input type="hidden" name="fundingFrequency" value="Monthly"/>
-<input type="hidden" name="expectedFundingDay" value=""/>
-<input type="hidden" name="notes" value="@pot.Notes"/>
-<label>Name<input name="name" value="@pot.Name" required/></label>
-<label>Current Balance<input name="allocatedAmount" type="number" step="0.01" value="@pot.AllocatedAmount" readonly/><span class="muted">Updated automatically from allocations, contributions and withdrawals.</span></label>
-<label>Average monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="@pot.DefaultMonthlyContribution" readonly/><span class="muted">Calculated automatically from contribution history.</span></label>
-<label>Intended contribution<input name="intendedMonthlyContribution" type="number" min="0" step="0.01" value="@pot.IntendedMonthlyContribution" readonly/><span class="muted">Read-only for now and will be managed through future planning tools.</span></label>
-<label>Funding plan start date<input name="fundingPlanStartDate" type="date" value="@pot.FundingPlanStartDate.ToString("yyyy-MM-dd")"/><span class="muted">Existing pots use their first contribution, falling back to 1 January 2026.</span></label>
-<label class="checkbox-inline"><input name="carryForwardShortfalls" type="checkbox" value="true" checked="@pot.CarryForwardShortfalls"/> Carry missed funding forward</label>
-<label class="checkbox-inline"><input name="carryExcessForward" type="checkbox" value="true" checked="@pot.CarryExcessForward"/> Carry genuine excess into future months</label>
-<p class="muted">Fund this pot at any point during the month. The system assesses the total contributed for the month.</p>
-@if (pot.IsFundingPaused)
-{
-    <div class="field full">
-        <span class="eyebrow">Funding paused</span>
-        <strong>@pot.FundingPausedFrom?.ToString("dd MMM yyyy") – @pot.FundingPausedUntil?.ToString("dd MMM yyyy")</strong>
-        @if (!string.IsNullOrWhiteSpace(pot.FundingPauseReason))
-        {
-            <span class="muted">@pot.FundingPauseReason</span>
-        }
-    </div>
-    <input type="hidden" name="fundingPausedFrom" value="@pot.FundingPausedFrom?.ToString("yyyy-MM-dd")"/>
-    <input type="hidden" name="fundingPausedUntil" value="@pot.FundingPausedUntil?.ToString("yyyy-MM-dd")"/>
-    <input type="hidden" name="fundingPauseReason" value="@pot.FundingPauseReason"/>
-}
-else
-{
-    <input type="hidden" name="fundingPausedFrom" value=""/>
-    <input type="hidden" name="fundingPausedUntil" value=""/>
-    <input type="hidden" name="fundingPauseReason" value=""/>
-}
-<label>Optional target<input name="targetAmount" type="number" min="0" step="0.01" value="@pot.TargetAmount"/></label>
-<label>Optional due date<input name="dueDate" type="date" value="@pot.DueDate?.ToString("yyyy-MM-dd")"/></label>
-<label>Priority<input name="priority" type="number" min="1" value="@pot.Priority"/></label>
-<label class="checkbox-inline"><input name="isActive" type="checkbox" value="true" checked="@pot.IsActive"/> Active allocation</label>
-<p class="muted">Untick only when this pot is stopped or archived.</p>
-<button class="primary">Save money pot</button>
-</form>
-<details class="edit-panel"><summary>Recalculate funding history</summary><form asp-action="RebuildHistory" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><label>Start from<select name="startMode"><option value="FirstContribution">Current imported baseline</option><option value="January2026">1 January 2026</option><option value="Custom">Custom date</option></select></label><label>Custom date<input name="customStartDate" type="date" value="@pot.FundingPlanStartDate.ToString("yyyy-MM-dd")"/></label><button class="secondary">Rebuild history</button></form></details>
-<form asp-action="DeletePot" method="post" data-confirm="Delete this money pot?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@pot.Id"/><button class="danger-inline">Delete</button></form>
-}
-<details class="edit-panel" open><summary>Funding timeline</summary>
-<div class="funding-timeline">
-@foreach (var month in summary.Months.Take(12))
-{
-    var timelineClass = month.Status is "Funded" or "Overfunded" or "Funded from carried excess" ? "good" : month.Status is "Missed" or "Partially funded" or "Overdue" ? "bad" : "warn";
-    <article class="timeline-item"><span class="@timelineClass">●</span><div><strong>@month.MonthLabel</strong><p class="muted">@month.Status · @month.EffectiveCurrentMonthFunding.ToString("C", gb) of @month.ExpectedAmount.ToString("C", gb)</p></div></article>
-}
-</div></details>
-<details class="edit-panel" open><summary>Monthly funding records</summary><div class="table-wrap"><table><thead><tr><th>Month</th><th>Status</th><th>Expected</th><th>Net funding</th><th>Applied this month</th><th>Recovery</th><th>Credit used</th><th>Credit created</th><th>Shortfall</th><th>Excess</th><th>Recovery balance</th></tr></thead><tbody>@foreach (var month in summary.Months){<tr><td>@month.MonthLabel</td><td>@month.Status</td><td>@month.ExpectedAmount.ToString("C", gb)</td><td>@month.ActualAmount.ToString("C", gb)</td><td>@month.AppliedToCurrentMonth.ToString("C", gb)</td><td>@month.AppliedToRecovery.ToString("C", gb)</td><td>@month.CarriedExcessUsed.ToString("C", gb)</td><td>@month.CarriedExcessCreated.ToString("C", gb)</td><td class="@(month.ShortfallAmount > 0 ? "bad" : "")">@month.ShortfallAmount.ToString("C", gb)</td><td class="@(month.GenuineExcess > 0 ? "good" : "")">@month.GenuineExcess.ToString("C", gb)</td><td class="@(month.RecoveryBalance > 0 ? "bad" : "good")">@month.RecoveryBalance.ToString("C", gb)</td></tr>}</tbody></table></div></details>
-<details class="edit-panel" open><summary>Recovery history</summary>
-@if (summary.RecoveryAllocations.Count == 0)
-{
-    <p class="muted">No later contributions have been applied to earlier missed months.</p>
-}
-else
-{
-<div class="table-wrap"><table><thead><tr><th>Recovery paid in</th><th>Missed month cleared</th><th>Amount</th></tr></thead><tbody>
-@foreach (var recovery in summary.RecoveryAllocations)
-{
-<tr><td>@recovery.SourceMonthLabel</td><td>@recovery.TargetMonthLabel</td><td class="good">@recovery.Amount.ToString("C", gb)</td></tr>
-}
-</tbody></table></div>
-}
-</details>
-</div>
-</details>
-}
-}
 @if (canEdit)
 {
 <section class="card" id="new-allocation">
-<p class="eyebrow">New money pot</p><h2>Create a money pot</h2>
-<form asp-action="SavePot" method="post" class="account-form">
-@Html.AntiForgeryToken()
-<input type="hidden" name="id" value="0"/>
-<input type="hidden" name="fundingFrequency" value="Monthly"/>
-<input type="hidden" name="expectedFundingDay" value=""/>
-<input type="hidden" name="fundingPausedFrom" value=""/>
-<input type="hidden" name="fundingPausedUntil" value=""/>
-<input type="hidden" name="fundingPauseReason" value=""/>
-<input type="hidden" name="notes" value=""/>
-<label>Name<input name="name" required placeholder="e.g. Car insurance"/></label>
-<label>Current Balance<input name="allocatedAmount" type="number" step="0.01" value="0" readonly/><span class="muted">Starts at £0 and changes through contributions and withdrawals.</span></label>
-<label>Average monthly contribution<input name="defaultMonthlyContribution" type="number" min="0" step="0.01" value="0" readonly/></label>
-<label>Intended contribution<input name="intendedMonthlyContribution" type="number" min="0" step="0.01" value="0" readonly/><span class="muted">Will be managed through future planning tools.</span></label>
-<label>Funding plan start date<input name="fundingPlanStartDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")"/></label>
-<label class="checkbox-inline"><input name="carryForwardShortfalls" type="checkbox" value="true" checked/> Carry missed funding forward</label>
-<label class="checkbox-inline"><input name="carryExcessForward" type="checkbox" value="true"/> Carry genuine excess into future months</label>
-<p class="muted">You can fund this pot whenever you choose during the month.</p>
-<label>Optional target<input name="targetAmount" type="number" min="0" step="0.01"/></label>
-<label>Optional due date<input name="dueDate" type="date"/></label>
-<label>Priority<input name="priority" type="number" min="1" value="10"/></label>
-<input type="hidden" name="isActive" value="true"/>
-<button class="primary">Create money pot</button>
-</form>
+    <p class="eyebrow">New Money Pot</p><h2>Create a Money Pot</h2>
+    <p class="muted">Start at £0, add an optional goal and record contributions whenever you choose.</p>
+    <form asp-action="SavePot" method="post" class="account-form fm-pot-simple-form">@Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="0"/>
+        <label>Name<input name="name" required placeholder="e.g. Florida holiday"/></label>
+        <label>Target <span class="muted">(optional)</span><input name="targetAmount" type="number" min="0" step="0.01"/></label>
+        <label>Date needed by <span class="muted">(optional)</span><input name="dueDate" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")"/></label>
+        <label class="field full">Notes<textarea name="notes" rows="3"></textarea></label>
+        <button class="primary">Create Money Pot</button>
+    </form>
 </section>
 }

@@ -145,15 +145,34 @@ public sealed class SavingPotsController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SavePot(int id, string name, decimal allocatedAmount, decimal defaultMonthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedFrom, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
+    public async Task<IActionResult> SavePot(int id, string name, decimal? targetAmount, DateTime? dueDate, string? notes)
     {
         if (!CanEdit()) return LoginRedirect();
 
+        var existing = id > 0 ? await repo.GetReservePotByIdAsync(id) : null;
         var returnAnchor = id > 0 ? $"pot-{id}" : "new-allocation";
         try
         {
-            var savedId = await repo.SaveReservePotAsync(id, name, allocatedAmount, defaultMonthlyContribution, intendedMonthlyContribution, fundingFrequency, expectedFundingDay, carryForwardShortfalls, carryExcessForward, fundingPausedFrom, fundingPausedUntil, fundingPauseReason, fundingPlanStartDate, targetAmount, dueDate, priority, isActive, notes);
-            TempData["Success"] = id > 0 ? "Virtual pot updated." : "Virtual pot added.";
+            var savedId = await repo.SaveReservePotAsync(
+                id,
+                name,
+                existing?.AllocatedAmount ?? 0m,
+                existing?.DefaultMonthlyContribution ?? 0m,
+                0m,
+                "Monthly",
+                null,
+                false,
+                false,
+                existing?.FundingPausedFrom,
+                existing?.FundingPausedUntil,
+                existing?.FundingPauseReason,
+                existing?.FundingPlanStartDate ?? DateTime.Today,
+                targetAmount,
+                dueDate,
+                10,
+                existing?.IsActive ?? true,
+                notes);
+            TempData["Success"] = id > 0 ? "Money pot updated." : "Money pot created.";
             return Redirect($"{Url.Action(nameof(Index))}#pot-{savedId}");
         }
         catch (ArgumentException ex)
@@ -161,6 +180,24 @@ public sealed class SavingPotsController(
             TempData["Error"] = ex.Message;
             return Redirect($"{Url.Action(nameof(Index))}#{returnAnchor}");
         }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TogglePause(int id)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        var pot = await repo.GetReservePotByIdAsync(id);
+        if (pot is null) return NotFound();
+
+        var isResuming = !pot.IsActive;
+        await repo.SaveReservePotAsync(
+            pot.Id, pot.Name, pot.AllocatedAmount, pot.DefaultMonthlyContribution, 0m, "Monthly", null,
+            false, false, null, null, null, pot.FundingPlanStartDate, pot.TargetAmount, pot.DueDate, 10,
+            isResuming, pot.Notes);
+
+        TempData["Success"] = isResuming ? $"{pot.Name} resumed." : $"{pot.Name} paused.";
+        return Redirect($"{Url.Action(nameof(Index))}#pot-{id}");
     }
 
     [HttpPost]

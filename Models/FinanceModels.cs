@@ -575,6 +575,35 @@ public sealed record ReservePot(
             return Math.Round(Math.Max(0, SuggestedMonthlyContribution.Value - DefaultMonthlyContribution), 2);
         }
     }
+
+    public decimal RecentMonthlyContribution => Math.Max(0m, DefaultMonthlyContribution);
+
+    public DateTime? EstimatedCompletionDate
+    {
+        get
+        {
+            if (!TargetAmount.HasValue || RemainingToTarget <= 0m) return TargetAmount.HasValue ? DateTime.Today : null;
+            if (RecentMonthlyContribution <= 0m) return null;
+            var months = (int)Math.Ceiling(RemainingToTarget / RecentMonthlyContribution);
+            return new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(Math.Max(1, months));
+        }
+    }
+
+    public string GoalTimingLabel
+    {
+        get
+        {
+            if (!DueDate.HasValue) return EstimatedCompletionDate.HasValue ? $"Estimated {EstimatedCompletionDate.Value:MMM yyyy}" : "Add contributions to calculate";
+            if (!EstimatedCompletionDate.HasValue) return $"Needed by {DueDate.Value:MMM yyyy} · forecast unavailable";
+            var monthDifference = ((DueDate.Value.Year - EstimatedCompletionDate.Value.Year) * 12) + DueDate.Value.Month - EstimatedCompletionDate.Value.Month;
+            return monthDifference switch
+            {
+                > 0 => $"On track · estimated {monthDifference} month{(monthDifference == 1 ? string.Empty : "s")} early",
+                0 => "On track · estimated in the target month",
+                _ => $"Behind target · estimated {Math.Abs(monthDifference)} month{(Math.Abs(monthDifference) == 1 ? string.Empty : "s")} late"
+            };
+        }
+    }
 }
 
 
@@ -636,6 +665,8 @@ public sealed class ReservePotFundingSummary
     public decimal? ProjectedShortfall { get; set; }
     public decimal? RequiredMonthlyContribution { get; set; }
     public decimal? AdditionalMonthlyContributionRequired { get; set; }
+    public decimal RecentMonthlyContribution { get; set; }
+    public DateTime? EstimatedCompletionDate { get; set; }
     public List<ReservePotFundingMonth> Months { get; set; } = [];
     public List<ReservePotRecoveryAllocation> RecoveryAllocations { get; set; } = [];
 }

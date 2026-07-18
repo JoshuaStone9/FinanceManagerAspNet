@@ -19,6 +19,7 @@ public sealed class MonthlyMoneyWorkspaceViewModel
     public bool SupportsCategory { get; init; }
     public bool SupportsType { get; init; }
     public bool SupportsLength { get; init; }
+    public IReadOnlyList<string> TypeOptions { get; init; } = [];
     public bool IsCarryOverEligible { get; init; }
     public bool IsMoneyPots { get; init; }
     public IReadOnlyList<ReservePot> PotOptions { get; init; } = [];

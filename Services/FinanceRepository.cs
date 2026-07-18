@@ -31,7 +31,9 @@ IF OBJECT_ID('dbo.investments','U') IS NULL
 CREATE TABLE dbo.investments(investments_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, category nvarchar(100) NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
 
 IF OBJECT_ID('dbo.savings','U') IS NULL
-CREATE TABLE dbo.savings(savings_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
+CREATE TABLE dbo.savings(savings_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, [type] nvarchar(80) NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
+IF COL_LENGTH('dbo.savings','type') IS NULL ALTER TABLE dbo.savings ADD [type] nvarchar(80) NULL;
+IF COL_LENGTH('dbo.investments','type') IS NULL ALTER TABLE dbo.investments ADD [type] nvarchar(80) NULL;
 
 
 IF OBJECT_ID('dbo.monthly_entry_templates','U') IS NULL
@@ -446,8 +448,8 @@ IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INS
             "bills" => (Table: "dbo.bills", Id: "billid", Date: "[date]", Category: "NULL", Type: "type", Length: "length", Notes: "description"),
             "everyday_spending" => (Table: "dbo.everyday_spending", Id: "everyday_spending_id", Date: "[date]", Category: "category", Type: "type", Length: "length", Notes: "description"),
             "extra_expenses" => (Table: "dbo.extra_expenses", Id: "extra_expense_id", Date: "duedate", Category: "category", Type: "type", Length: "length", Notes: "description"),
-            "investments" => (Table: "dbo.investments", Id: "investments_id", Date: "[date]", Category: "category", Type: "NULL", Length: "length", Notes: "notes"),
-            "savings" => (Table: "dbo.savings", Id: "savings_id", Date: "[date]", Category: "NULL", Type: "NULL", Length: "length", Notes: "notes"),
+            "investments" => (Table: "dbo.investments", Id: "investments_id", Date: "[date]", Category: "category", Type: "type", Length: "length", Notes: "notes"),
+            "savings" => (Table: "dbo.savings", Id: "savings_id", Date: "[date]", Category: "NULL", Type: "type", Length: "length", Notes: "notes"),
             _ => throw new ArgumentOutOfRangeException(nameof(source))
         };
         var reservePotId = source == "savings" ? "p.reserve_pot_id" : "NULL";
@@ -831,12 +833,12 @@ SELECT @@ROWCOUNT;", con);
                     ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
                 break;
             case "investments":
-                await ExecuteAsync("INSERT INTO dbo.investments([name], amount, [date], category, [length], notes) VALUES(@name,@amount,@date,@category,@length,@notes)",
-                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("INSERT INTO dbo.investments([name], amount, [date], category, [type], [length], notes) VALUES(@name,@amount,@date,@category,@type,@length,@notes)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
                 break;
             case "savings":
-                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [length], notes, pot_name_snapshot) VALUES(@name,@amount,@date,@length,@notes,@snapshot)",
-                    ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
+                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [type], [length], notes, pot_name_snapshot) VALUES(@name,@amount,@date,@type,@length,@notes,@snapshot)",
+                    ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
@@ -1352,10 +1354,10 @@ OUTER APPLY (
                 await ExecuteAsync("UPDATE dbo.extra_expenses SET [name]=@name, amount=@amount, duedate=@date, category=@category, [type]=@type, [length]=@length, [description]=@notes WHERE extra_expense_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
                 break;
             case "investments":
-                await ExecuteAsync("UPDATE dbo.investments SET [name]=@name, amount=@amount, [date]=@date, category=@category, [length]=@length, notes=@notes WHERE investments_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("UPDATE dbo.investments SET [name]=@name, amount=@amount, [date]=@date, category=@category, [type]=@type, [length]=@length, notes=@notes WHERE investments_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
                 break;
             case "savings":
-                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [length]=@length, notes=@notes, pot_name_snapshot=COALESCE(pot_name_snapshot,@snapshot) WHERE savings_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
+                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [type]=@type, [length]=@length, notes=@notes, pot_name_snapshot=COALESCE(pot_name_snapshot,@snapshot) WHERE savings_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
@@ -2124,13 +2126,25 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
         var expectedBalanceToday = Math.Max(0m, pot.AllocatedAmount + outstanding);
         decimal? requiredMonthly = null, projectedShortfall = null, extraRequired = null;
         decimal projected = pot.AllocatedAmount;
+        DateTime? estimatedCompletion = null;
+        var recentMonthlyContribution = Math.Max(0m, pot.DefaultMonthlyContribution);
+        if (pot.TargetAmount.HasValue && pot.TargetAmount.Value > pot.AllocatedAmount && recentMonthlyContribution > 0m)
+        {
+            var monthsToTarget = (int)Math.Ceiling((pot.TargetAmount.Value - pot.AllocatedAmount) / recentMonthlyContribution);
+            estimatedCompletion = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(Math.Max(1, monthsToTarget));
+        }
+        else if (pot.TargetAmount.HasValue && pot.AllocatedAmount >= pot.TargetAmount.Value)
+        {
+            estimatedCompletion = DateTime.Today;
+        }
+
         if (pot.TargetAmount.HasValue && pot.DueDate.HasValue && pot.DueDate.Value.Date >= DateTime.Today)
         {
             var monthsRemaining = Math.Max(1, ((pot.DueDate.Value.Year - DateTime.Today.Year) * 12) + pot.DueDate.Value.Month - DateTime.Today.Month + 1);
             requiredMonthly = Math.Round(Math.Max(0m, pot.TargetAmount.Value - pot.AllocatedAmount) / monthsRemaining, 2);
-            projected = Math.Round(pot.AllocatedAmount + pot.IntendedMonthlyContribution * monthsRemaining, 2);
+            projected = Math.Round(pot.AllocatedAmount + recentMonthlyContribution * monthsRemaining, 2);
             projectedShortfall = Math.Max(0m, pot.TargetAmount.Value - projected);
-            extraRequired = Math.Max(0m, requiredMonthly.Value - pot.IntendedMonthlyContribution);
+            extraRequired = Math.Max(0m, requiredMonthly.Value - recentMonthlyContribution);
         }
 
         var currentMonthStatus = current?.Status ?? (pot.IsActive ? "Not configured" : "Inactive");
@@ -2174,6 +2188,8 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
             ProjectedShortfall = projectedShortfall,
             RequiredMonthlyContribution = requiredMonthly,
             AdditionalMonthlyContributionRequired = extraRequired,
+            RecentMonthlyContribution = recentMonthlyContribution,
+            EstimatedCompletionDate = estimatedCompletion,
             Months = months.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).ToList(),
             RecoveryAllocations = recoveryAllocations
         };

@@ -41,8 +41,161 @@
 <div class="fm-workspace-grid">
 <section class="fm-workspace-list" aria-labelledby="income-entries-title"><div class="fm-workspace-section-head"><div><p class="eyebrow">Selected month</p><h2 id="income-entries-title">Recorded income</h2></div><a class="button" asp-controller="Dashboard" asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Back to dashboard</a></div>
 @if(Model.Entries.Count==0){<div class="fm-workspace-empty"><i data-lucide="wallet"></i><strong>No income recorded</strong><span>Add salary, overtime, bonuses or other income for this month.</span></div>}
-else {<div class="fm-workspace-rows">@foreach(var entry in Model.Entries){<article class="fm-workspace-row" id="entry-@entry.Id"><div class="fm-workspace-row-icon"><i data-lucide="wallet-cards"></i></div><div class="fm-workspace-row-copy"><strong class="fm-workspace-row-name">@entry.Name</strong><span>@entry.Date.ToString("dd MMM yyyy") @if(!string.IsNullOrWhiteSpace(entry.Category)){<text> · @entry.Category</text>}</span><button type="button" class="fm-recurring-toggle @(entry.IsRecurring ? "is-recurring" : "is-one-off")" role="switch" aria-checked="@entry.IsRecurring.ToString().ToLowerInvariant()" data-income-toggle data-id="@entry.Id"><span class="fm-recurring-switch" aria-hidden="true"><span></span></span><span data-label>@(entry.IsRecurring ? "Repeats monthly" : "One-off")</span></button>@if(!string.IsNullOrWhiteSpace(entry.Notes)){<small>@entry.Notes</small>}</div><div class="fm-workspace-row-amount">@entry.Amount.ToString("C", gb)</div>@if(canEdit){<div class="fm-workspace-row-actions"><details class="fm-income-edit"><summary class="button">Edit</summary><form asp-action="UpdateIncome" method="post" class="fm-income-edit-form">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@entry.Id"/><input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Name<input name="name" value="@entry.Name" required/></label><label>Amount<input name="amount" type="number" min="0" step="0.01" value="@entry.Amount.ToString("0.00", CultureInfo.InvariantCulture)" required/></label><label>Date<input name="date" type="date" value="@entry.Date.ToString("yyyy-MM-dd")" required/></label><label>Type<input name="category" value="@entry.Category"/></label><label>Notes<textarea name="notes">@entry.Notes</textarea></label><input type="hidden" name="isRecurring" value="@entry.IsRecurring.ToString().ToLowerInvariant()"/><button class="button primary" type="submit">Save</button></form></details><form asp-action="DeleteIncome" method="post" onsubmit="return confirm('Delete this income entry?');">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@entry.Id"/><input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><button class="button danger-inline" type="submit">Delete</button></form></div>}</article>}</div>}
+else
+{
+    <div class="fm-workspace-rows">
+        @foreach (var entry in Model.Entries)
+        {
+            var recurringActionLabel = entry.IsRecurring
+                ? $"Stop repeating {entry.Name} each month"
+                : $"Repeat {entry.Name} each month";
+
+            <article class="fm-workspace-row" id="entry-@entry.Id">
+                <div class="fm-workspace-row-icon"><i data-lucide="wallet-cards"></i></div>
+                <div class="fm-workspace-row-copy">
+                    <strong class="fm-workspace-row-name" title="@entry.Name">@entry.Name</strong>
+                    <span>
+                        @entry.Date.ToString("dd MMM yyyy")
+                        @if (!string.IsNullOrWhiteSpace(entry.Category))
+                        {
+                            <text> · @entry.Category</text>
+                        }
+                    </span>
+
+                    @if (canEdit)
+                    {
+                        <form class="fm-recurring-state-form"
+                              asp-action="SetIncomeRecurring"
+                              method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@entry.Id" />
+                            <input type="hidden" name="year" value="@Model.Year" />
+                            <input type="hidden" name="month" value="@Model.Month" />
+                            <input class="fm-recurring-next-value"
+                                   type="hidden"
+                                   name="isRecurring"
+                                   value="@(!entry.IsRecurring)" />
+                            <button class="fm-recurring-state @(entry.IsRecurring ? "is-recurring" : "is-one-off")"
+                                    type="submit"
+                                    role="switch"
+                                    aria-checked="@entry.IsRecurring.ToString().ToLowerInvariant()"
+                                    aria-label="@recurringActionLabel"
+                                    title="@recurringActionLabel">
+                                <span class="fm-recurring-switch" aria-hidden="true"><span></span></span>
+                                <span class="fm-recurring-label">@(entry.IsRecurring ? "Repeats monthly" : "One-off")</span>
+                            </button>
+                            <span class="fm-recurring-feedback fm-visually-hidden" role="status" aria-live="polite"></span>
+                        </form>
+                    }
+                    else
+                    {
+                        <small class="fm-recurring-readonly">@(entry.IsRecurring ? "Repeats monthly" : "One-off")</small>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(entry.Notes))
+                    {
+                        <small>@entry.Notes</small>
+                    }
+                </div>
+
+                <div class="fm-workspace-row-amount">@entry.Amount.ToString("C", gb)</div>
+
+                @if (canEdit)
+                {
+                    <div class="fm-workspace-row-actions">
+                        <details class="fm-income-edit">
+                            <summary class="button" aria-label="Edit @entry.Name income">Edit</summary>
+                            <form asp-action="UpdateIncome" method="post" class="fm-income-edit-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@entry.Id" />
+                                <input type="hidden" name="year" value="@Model.Year" />
+                                <input type="hidden" name="month" value="@Model.Month" />
+                                <label>Name<input name="name" value="@entry.Name" required /></label>
+                                <label>Amount<input name="amount" type="number" min="0" step="0.01" value="@entry.Amount.ToString("0.00", CultureInfo.InvariantCulture)" required /></label>
+                                <label>Date<input name="date" type="date" value="@entry.Date.ToString("yyyy-MM-dd")" required /></label>
+                                <label>Type<input name="category" value="@entry.Category" /></label>
+                                <label>Notes<textarea name="notes">@entry.Notes</textarea></label>
+                                <input type="hidden" name="isRecurring" value="@entry.IsRecurring.ToString().ToLowerInvariant()" />
+                                <button class="button primary" type="submit">Save</button>
+                            </form>
+                        </details>
+                        <form asp-action="DeleteIncome" method="post" onsubmit="return confirm('Delete @entry.Name income?');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@entry.Id" />
+                            <input type="hidden" name="year" value="@Model.Year" />
+                            <input type="hidden" name="month" value="@Model.Month" />
+                            <button class="button danger-inline" type="submit" aria-label="Delete @entry.Name income">Delete</button>
+                        </form>
+                    </div>
+                }
+            </article>
+        }
+    </div>
+}
 </section>
 <aside class="fm-workspace-entry-card" aria-labelledby="add-income-title"><p class="eyebrow">Quick entry</p><h2 id="add-income-title">Add income</h2><p class="muted">Add each salary, bonus, overtime payment or other source separately.</p>@if(canEdit){<form asp-action="AddIncome" method="post" id="quick-entry-form" class="fm-workspace-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income source<input name="name" required autofocus placeholder="e.g. Salary 1"/></label><label>Amount<input name="amount" type="number" min="0" step="0.01" required inputmode="decimal"/></label><label>Date<input name="date" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required/></label><label>Income type<select name="category"><option>Salary</option><option>Overtime</option><option>Bonus</option><option>Benefits</option><option>Refund</option><option>Other income</option></select></label><label>Notes<textarea name="notes" rows="3"></textarea></label><label class="fm-checkbox-row"><input name="isRecurring" type="checkbox" value="true"/><span><strong>Repeats every month</strong><small>Offer this income source when preparing the next month.</small></span></label><button class="button primary" type="submit">Add income</button></form>}else{<p class="muted">Sign in to add income.</p>}</aside>
 </div>
-@section Scripts {<script>document.querySelectorAll('[data-income-toggle]').forEach(button=>button.addEventListener('click',async()=>{const active=button.getAttribute('aria-checked')==='true';const data=new FormData();data.append('__RequestVerificationToken',document.querySelector('input[name="__RequestVerificationToken"]')?.value??'');data.append('id',button.dataset.id);data.append('year','@Model.Year');data.append('month','@Model.Month');data.append('isRecurring',String(!active));button.disabled=true;try{const response=await fetch('@Url.Action("SetIncomeRecurring")',{method:'POST',body:data,headers:{'X-Requested-With':'XMLHttpRequest'}});if(!response.ok)throw new Error();const result=await response.json();button.setAttribute('aria-checked',String(result.isRecurring));button.classList.toggle('is-recurring',result.isRecurring);button.classList.toggle('is-one-off',!result.isRecurring);button.querySelector('[data-label]').textContent=result.isRecurring?'Repeats monthly':'One-off';}finally{button.disabled=false;}}));</script>}
+@section Scripts
+{
+    <script>
+        document.querySelectorAll('.fm-recurring-state-form').forEach(form => {
+            const button = form.querySelector('.fm-recurring-state');
+            const nextValue = form.querySelector('.fm-recurring-next-value');
+            const label = form.querySelector('.fm-recurring-label');
+            const feedback = form.querySelector('.fm-recurring-feedback');
+
+            if (!button || !nextValue || !label) {
+                return;
+            }
+
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+
+                if (button.disabled) {
+                    return;
+                }
+
+                button.disabled = true;
+                button.setAttribute('aria-busy', 'true');
+                if (feedback) feedback.textContent = 'Saving recurring status.';
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Unable to update recurring status (${response.status}).`);
+                    }
+
+                    const result = await response.json();
+                    const repeatsMonthly = result.isRecurring === true;
+
+                    button.classList.toggle('is-recurring', repeatsMonthly);
+                    button.classList.toggle('is-one-off', !repeatsMonthly);
+                    button.setAttribute('aria-checked', String(repeatsMonthly));
+                    button.setAttribute('aria-label', repeatsMonthly
+                        ? 'Stop repeating this income each month'
+                        : 'Repeat this income each month');
+                    button.title = repeatsMonthly
+                        ? 'Stop repeating this income each month'
+                        : 'Repeat this income each month';
+                    label.textContent = repeatsMonthly ? 'Repeats monthly' : 'One-off';
+                    nextValue.value = String(!repeatsMonthly);
+                    if (feedback) feedback.textContent = result.message || 'Recurring status updated.';
+                } catch (error) {
+                    if (feedback) {
+                        feedback.textContent = error instanceof Error
+                            ? error.message
+                            : 'Unable to update recurring status.';
+                    }
+                } finally {
+                    button.disabled = false;
+                    button.removeAttribute('aria-busy');
+                }
+            });
+        });
+    </script>
+}

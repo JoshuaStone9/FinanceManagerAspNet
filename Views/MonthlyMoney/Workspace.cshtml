@@ -293,7 +293,7 @@
                             }
                         </select>
                     </label>
-                    <p class="muted fm-workspace-form-hint">Create and configure pots from the main <a asp-controller="SavingPots" asp-action="Index">Money Pots page</a>.</p>
+                    <a class="fm-context-link" asp-controller="SavingPots" asp-action="Index"><span>Manage Money Pots</span><i data-lucide="arrow-up-right"></i></a>
                 }
                 else
                 {
@@ -351,17 +351,35 @@
                 @if (Model.SupportsType)
                 {
                     <label>
-                        Type
-                        <input class="payment-type" name="type" value="@draftType" autocomplete="off" />
+                        @Model.Title.TrimEnd('s') type
+                        <select class="payment-type" name="type">
+                            <option value="">Choose a type...</option>
+                            @foreach (var option in Model.TypeOptions)
+                            {
+                                <option value="@option" selected="@(draftType == option ? "selected" : null)">@option</option>
+                            }
+                        </select>
                     </label>
                 }
 
                 @if (Model.SupportsLength)
                 {
-                    <label>
-                        Length in months
-                        <input class="payment-length" name="length" type="number" min="1" step="1" value="@draftLength" />
-                    </label>
+                    <fieldset class="fm-duration-fields">
+                        <legend>How long does this run?</legend>
+                        <div class="fm-segmented-choice">
+                            <label><input type="radio" name="durationMode" value="months" checked /> Number of months</label>
+                            <label><input type="radio" name="durationMode" value="date" /> End date</label>
+                        </div>
+                        <label class="fm-duration-months">
+                            Length in months
+                            <input class="payment-length" name="length" type="number" min="1" step="1" value="@draftLength" />
+                        </label>
+                        <label class="fm-duration-date" hidden>
+                            End date
+                            <input class="payment-end-date" type="date" min="@entryDateValue" />
+                        </label>
+                        <p class="muted fm-duration-summary" aria-live="polite"></p>
+                    </fieldset>
                 }
 
                 <label>
@@ -595,5 +613,47 @@
             const updatedRow = document.querySelector(window.location.hash);
             updatedRow?.classList.add('fm-workspace-row-updated');
         }
+
+        document.querySelectorAll('.fm-duration-fields').forEach(fieldset => {
+            const form = fieldset.closest('form');
+            const start = form?.querySelector('.payment-date');
+            const months = fieldset.querySelector('.payment-length');
+            const endDate = fieldset.querySelector('.payment-end-date');
+            const monthsWrap = fieldset.querySelector('.fm-duration-months');
+            const dateWrap = fieldset.querySelector('.fm-duration-date');
+            const summary = fieldset.querySelector('.fm-duration-summary');
+            const radios = fieldset.querySelectorAll('input[name="durationMode"]');
+
+            const updateSummary = () => {
+                if (!start?.value || !months?.value) { summary.textContent = ''; return; }
+                const startDate = new Date(`${start.value}T00:00:00`);
+                const count = Number.parseInt(months.value, 10);
+                if (!Number.isFinite(count) || count < 1) { summary.textContent = ''; return; }
+                const finish = new Date(startDate);
+                finish.setMonth(finish.getMonth() + count);
+                summary.textContent = `Ends around ${finish.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })} · ${count} month${count === 1 ? '' : 's'}`;
+            };
+
+            const syncFromDate = () => {
+                if (!start?.value || !endDate?.value) return;
+                const from = new Date(`${start.value}T00:00:00`);
+                const to = new Date(`${endDate.value}T00:00:00`);
+                let count = (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth();
+                if (to.getDate() > from.getDate()) count += 1;
+                months.value = Math.max(1, count);
+                updateSummary();
+            };
+
+            radios.forEach(radio => radio.addEventListener('change', () => {
+                const byDate = radio.checked && radio.value === 'date';
+                monthsWrap.hidden = byDate;
+                dateWrap.hidden = !byDate;
+                if (byDate) syncFromDate(); else updateSummary();
+            }));
+            endDate?.addEventListener('change', syncFromDate);
+            months?.addEventListener('input', updateSummary);
+            start?.addEventListener('change', () => endDate?.value ? syncFromDate() : updateSummary());
+            updateSummary();
+        });
     </script>
 }
