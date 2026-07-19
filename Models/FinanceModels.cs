@@ -15,7 +15,8 @@ public sealed record AccountBalance(
     string HoldingType = "Cash",
     string TaxTreatment = "Tax Free",
     decimal TaxRate = 0m,
-    DateTime? TaxEffectiveFrom = null);
+    DateTime? TaxEffectiveFrom = null,
+    string InterestHandling = "Keep invested");
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);
 public sealed record IncomeSnapshot(int Year, int Month, decimal Amount, int SickDays, DateTime UpdatedAt);
 

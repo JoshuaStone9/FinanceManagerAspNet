@@ -68,7 +68,7 @@ IF OBJECT_ID('dbo.app_login','U') IS NULL
 CREATE TABLE dbo.app_login(app_login_id int NOT NULL CONSTRAINT PK_app_login PRIMARY KEY DEFAULT 1, password_hash nvarchar(500) NOT NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT CK_app_login_single_row CHECK (app_login_id = 1));
 
 IF OBJECT_ID('dbo.account_balances','U') IS NULL
-CREATE TABLE dbo.account_balances(account_balance_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, include_in_global_goal bit NOT NULL DEFAULT 1, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+CREATE TABLE dbo.account_balances(account_balance_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, include_in_global_goal bit NOT NULL DEFAULT 1, interest_handling nvarchar(40) NOT NULL DEFAULT 'Keep invested', updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
 IF COL_LENGTH('dbo.account_balances','include_in_savings_command') IS NULL ALTER TABLE dbo.account_balances ADD include_in_savings_command bit NOT NULL CONSTRAINT DF_account_balances_include_in_savings_command DEFAULT 0;
 IF COL_LENGTH('dbo.account_balances','starting_balance') IS NULL ALTER TABLE dbo.account_balances ADD starting_balance decimal(18,2) NULL;
@@ -78,6 +78,7 @@ IF COL_LENGTH('dbo.account_balances','holding_type') IS NULL ALTER TABLE dbo.acc
 IF COL_LENGTH('dbo.account_balances','tax_treatment') IS NULL ALTER TABLE dbo.account_balances ADD tax_treatment nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_tax_treatment DEFAULT 'Tax Free';
 IF COL_LENGTH('dbo.account_balances','tax_rate') IS NULL ALTER TABLE dbo.account_balances ADD tax_rate decimal(9,4) NOT NULL CONSTRAINT DF_account_balances_tax_rate DEFAULT 0;
 IF COL_LENGTH('dbo.account_balances','tax_effective_from') IS NULL ALTER TABLE dbo.account_balances ADD tax_effective_from date NULL;
+IF COL_LENGTH('dbo.account_balances','interest_handling') IS NULL ALTER TABLE dbo.account_balances ADD interest_handling nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_interest_handling DEFAULT 'Keep invested';
 UPDATE dbo.account_balances SET starting_balance=amount WHERE starting_balance IS NULL;
 ALTER TABLE dbo.account_balances ALTER COLUMN starting_balance decimal(18,2) NOT NULL;
 
@@ -144,6 +145,7 @@ CREATE TABLE dbo.passive_income_records(
     monthly_income_entry_id int NULL,
     notes nvarchar(500) NULL,
     balance_reconciled_at datetime2 NULL,
+    interest_handling nvarchar(40) NOT NULL DEFAULT 'Add to Monthly Income',
     created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
     updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT UQ_passive_income_records_source_month UNIQUE(source_key,[year],[month]),
@@ -153,6 +155,8 @@ CREATE TABLE dbo.passive_income_records(
 
 IF OBJECT_ID('dbo.passive_income_records','U') IS NOT NULL AND COL_LENGTH('dbo.passive_income_records','balance_reconciled_at') IS NULL
     ALTER TABLE dbo.passive_income_records ADD balance_reconciled_at datetime2 NULL;
+IF OBJECT_ID('dbo.passive_income_records','U') IS NOT NULL AND COL_LENGTH('dbo.passive_income_records','interest_handling') IS NULL
+    ALTER TABLE dbo.passive_income_records ADD interest_handling nvarchar(40) NOT NULL CONSTRAINT DF_passive_income_records_interest_handling DEFAULT 'Add to Monthly Income';
 
 IF OBJECT_ID('dbo.account_reconciliations','U') IS NULL
 CREATE TABLE dbo.account_reconciliations(
@@ -587,7 +591,8 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
                     actual?.ActualAmount,
                     actual?.ReceivedDate,
                     actual?.IncomeEntryId,
-                    actual?.IsBalanceReconciled ?? false);
+                    actual?.IsBalanceReconciled ?? false,
+                    actual?.InterestHandling ?? account.InterestHandling);
             })
             .OrderBy(x => x.SourceName)
             .ToList();
@@ -599,7 +604,7 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
         var records = new List<PassiveIncomeRecord>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes,balance_reconciled_at
+        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes,balance_reconciled_at,interest_handling
 FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY received_date,source_name", con);
         cmd.Parameters.AddWithValue("@year", year);
         cmd.Parameters.AddWithValue("@month", month);
@@ -611,7 +616,8 @@ FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY r
                 reader.GetInt32(4), reader.GetInt32(5), reader.GetDecimal(6), reader.GetDecimal(7),
                 reader.GetDateTime(8), reader.IsDBNull(9) ? null : reader.GetInt32(9),
                 reader.IsDBNull(10) ? null : reader.GetString(10),
-                !reader.IsDBNull(11)));
+                !reader.IsDBNull(11),
+                reader.GetString(12)));
         }
         return records;
     }
@@ -622,12 +628,15 @@ FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY r
         decimal estimatedAmount,
         decimal actualAmount,
         DateTime receivedDate,
-        string? notes)
+        string? notes,
+        string interestHandling)
     {
         if (string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(sourceName))
             throw new ArgumentException("A passive-income source is required.");
         if (actualAmount < 0m)
             throw new ArgumentOutOfRangeException(nameof(actualAmount));
+
+        interestHandling = NormalizeInterestHandling(interestHandling);
 
         await EnsureModernTablesAsync();
         await using var con = new SqlConnection(ConnStr);
@@ -644,16 +653,20 @@ WHERE source_key=@sourceKey AND [year]=@year AND [month]=@month", con, transacti
             if (existingCount > 0)
                 throw new InvalidOperationException($"{sourceName} interest has already been recorded for {receivedDate:MMMM yyyy}.");
 
-            await using var income = new SqlCommand(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
+            int? incomeEntryId = null;
+            if (interestHandling == "Add to Monthly Income")
+            {
+                await using var income = new SqlCommand(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
 VALUES(@name,@amount,@date,'Interest',@notes,0); SELECT CAST(SCOPE_IDENTITY() AS int);", con, transaction);
-            income.Parameters.AddWithValue("@name", $"{sourceName} interest");
-            income.Parameters.AddWithValue("@amount", actualAmount);
-            income.Parameters.AddWithValue("@date", receivedDate.Date);
-            income.Parameters.AddWithValue("@notes", DbValue(notes));
-            var incomeEntryId = Convert.ToInt32(await income.ExecuteScalarAsync());
+                income.Parameters.AddWithValue("@name", $"{sourceName} interest");
+                income.Parameters.AddWithValue("@amount", actualAmount);
+                income.Parameters.AddWithValue("@date", receivedDate.Date);
+                income.Parameters.AddWithValue("@notes", DbValue(notes));
+                incomeEntryId = Convert.ToInt32(await income.ExecuteScalarAsync());
+            }
 
-            await using var passive = new SqlCommand(@"INSERT INTO dbo.passive_income_records(source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes)
-VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@incomeEntryId,@notes)", con, transaction);
+            await using var passive = new SqlCommand(@"INSERT INTO dbo.passive_income_records(source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes,interest_handling)
+VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@incomeEntryId,@notes,@interestHandling)", con, transaction);
             passive.Parameters.AddWithValue("@sourceKey", sourceKey);
             passive.Parameters.AddWithValue("@sourceName", sourceName.Trim());
             passive.Parameters.AddWithValue("@year", receivedDate.Year);
@@ -661,8 +674,9 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
             passive.Parameters.AddWithValue("@estimated", estimatedAmount);
             passive.Parameters.AddWithValue("@actual", actualAmount);
             passive.Parameters.AddWithValue("@date", receivedDate.Date);
-            passive.Parameters.AddWithValue("@incomeEntryId", incomeEntryId);
+            passive.Parameters.AddWithValue("@incomeEntryId", incomeEntryId.HasValue ? incomeEntryId.Value : DBNull.Value);
             passive.Parameters.AddWithValue("@notes", DbValue(notes));
+            passive.Parameters.AddWithValue("@interestHandling", interestHandling);
             await passive.ExecuteNonQueryAsync();
             await transaction.CommitAsync();
         }
@@ -672,7 +686,14 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
             throw;
         }
 
-        await SyncMonthlyIncomeTotalAsync(receivedDate.Year, receivedDate.Month);
+        if (interestHandling == "Add to Monthly Income")
+            await SyncMonthlyIncomeTotalAsync(receivedDate.Year, receivedDate.Month);
+    }
+
+    private static string NormalizeInterestHandling(string? value)
+    {
+        if (string.Equals(value, "Add to Monthly Income", StringComparison.OrdinalIgnoreCase)) return "Add to Monthly Income";
+        return "Keep invested";
     }
 
     public async Task<AccountReconciliationViewModel> GetAccountReconciliationAsync()
@@ -724,7 +745,8 @@ WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at
                 lastReconciled,
                 account.UpdatedAt,
                 Math.Round(pendingInterest, 2),
-                pendingCount));
+                pendingCount,
+                account.InterestHandling));
         }
 
         return new AccountReconciliationViewModel
@@ -734,63 +756,7 @@ WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at
     }
 
 
-    public async Task<decimal> ApplyPendingInterestAsync(string sourceKey)
-    {
-        await EnsureModernTablesAsync();
-        await using var con = new SqlConnection(ConnStr);
-        await con.OpenAsync();
-        await using var tx = (SqlTransaction)await con.BeginTransactionAsync();
-        try
-        {
-            await using var pending = new SqlCommand(@"SELECT COALESCE(SUM(actual_amount),0)
-FROM dbo.passive_income_records
-WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at IS NULL", con, tx);
-            pending.Parameters.AddWithValue("@sourceKey", sourceKey);
-            var amount = Convert.ToDecimal(await pending.ExecuteScalarAsync());
-            if (amount <= 0m) throw new InvalidOperationException("There is no pending interest to apply for this account.");
-
-            decimal previousBalance;
-            string accountName;
-            if (sourceKey == "emergency-fund")
-            {
-                await using var get = new SqlCommand("SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC", con, tx);
-                var value = await get.ExecuteScalarAsync();
-                if (value is null or DBNull) throw new InvalidOperationException("The Emergency Fund balance could not be found.");
-                previousBalance = Convert.ToDecimal(value);
-                accountName = "Emergency Fund";
-                await using var update = new SqlCommand("UPDATE dbo.emergency_fund SET amount=amount+@amount, updated_at=SYSUTCDATETIME()", con, tx);
-                update.Parameters.AddWithValue("@amount", amount);
-                await update.ExecuteNonQueryAsync();
-            }
-            else if (sourceKey.StartsWith("account-", StringComparison.OrdinalIgnoreCase) && int.TryParse(sourceKey[8..], out var accountId))
-            {
-                await using var get = new SqlCommand("SELECT name,amount FROM dbo.account_balances WHERE account_balance_id=@id", con, tx);
-                get.Parameters.AddWithValue("@id", accountId);
-                await using var reader = await get.ExecuteReaderAsync();
-                if (!await reader.ReadAsync()) throw new InvalidOperationException("The account balance could not be found.");
-                accountName = reader.GetString(0); previousBalance = reader.GetDecimal(1); await reader.CloseAsync();
-                await using var update = new SqlCommand("UPDATE dbo.account_balances SET amount=amount+@amount, updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id", con, tx);
-                update.Parameters.AddWithValue("@amount", amount); update.Parameters.AddWithValue("@id", accountId);
-                await update.ExecuteNonQueryAsync();
-            }
-            else throw new InvalidOperationException("The selected account could not be found.");
-
-            await using var mark = new SqlCommand(@"UPDATE dbo.passive_income_records SET balance_reconciled_at=SYSUTCDATETIME(), updated_at=SYSUTCDATETIME()
-WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at IS NULL", con, tx);
-            mark.Parameters.AddWithValue("@sourceKey", sourceKey); await mark.ExecuteNonQueryAsync();
-
-            await using var log = new SqlCommand(@"INSERT INTO dbo.account_reconciliations(source_key,account_name,previous_balance,reconciled_interest,new_balance)
-VALUES(@sourceKey,@name,@previous,@interest,@new)", con, tx);
-            log.Parameters.AddWithValue("@sourceKey", sourceKey); log.Parameters.AddWithValue("@name", accountName);
-            log.Parameters.AddWithValue("@previous", previousBalance); log.Parameters.AddWithValue("@interest", amount);
-            log.Parameters.AddWithValue("@new", previousBalance + amount); await log.ExecuteNonQueryAsync();
-            await tx.CommitAsync();
-            return Math.Round(amount,2);
-        }
-        catch { await tx.RollbackAsync(); throw; }
-    }
-
-    public async Task UpdateReconciledAccountBalanceAsync(string sourceKey, decimal actualBalance)
+    public async Task<decimal> UpdateReconciledAccountBalanceAsync(string sourceKey, decimal actualBalance, bool reconcilePendingInterest)
     {
         await EnsureModernTablesAsync();
         await using var con = new SqlConnection(ConnStr);
@@ -843,17 +809,37 @@ VALUES(@sourceKey,@name,@previous,@interest,@new)", con, tx);
                 throw new InvalidOperationException("The selected account could not be found.");
             }
 
+            decimal reconciledInterest = 0m;
+            if (reconcilePendingInterest)
+            {
+                await using var pending = new SqlCommand(@"SELECT COALESCE(SUM(actual_amount),0)
+FROM dbo.passive_income_records
+WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at IS NULL", con, tx);
+                pending.Parameters.AddWithValue("@sourceKey", sourceKey);
+                reconciledInterest = Convert.ToDecimal(await pending.ExecuteScalarAsync());
+
+                if (reconciledInterest > 0m)
+                {
+                    await using var mark = new SqlCommand(@"UPDATE dbo.passive_income_records
+SET balance_reconciled_at=SYSUTCDATETIME(), updated_at=SYSUTCDATETIME()
+WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at IS NULL", con, tx);
+                    mark.Parameters.AddWithValue("@sourceKey", sourceKey);
+                    await mark.ExecuteNonQueryAsync();
+                }
+            }
+
             await using var log = new SqlCommand(@"INSERT INTO dbo.account_reconciliations
 (source_key, account_name, previous_balance, reconciled_interest, new_balance)
-VALUES(@sourceKey, @name, @previous, @difference, @new)", con, tx);
+VALUES(@sourceKey, @name, @previous, @interest, @new)", con, tx);
             log.Parameters.AddWithValue("@sourceKey", sourceKey);
             log.Parameters.AddWithValue("@name", accountName);
             log.Parameters.AddWithValue("@previous", previousBalance);
-            log.Parameters.AddWithValue("@difference", actualBalance - previousBalance);
+            log.Parameters.AddWithValue("@interest", reconciledInterest);
             log.Parameters.AddWithValue("@new", actualBalance);
             await log.ExecuteNonQueryAsync();
 
             await tx.CommitAsync();
+            return Math.Round(reconciledInterest, 2);
         }
         catch
         {
@@ -1051,13 +1037,14 @@ SELECT @@ROWCOUNT;", con);
         var emergencyTaxTreatment = await GetStringSettingAsync("EmergencyFundTaxTreatment", "Tax Free");
         var emergencyTaxRate = await GetDecimalSettingAsync("EmergencyFundTaxRate", 0m);
         var emergencyTaxEffectiveText = await GetStringSettingAsync("EmergencyFundTaxEffectiveFrom", string.Empty);
+        var emergencyInterestHandling = await GetStringSettingAsync("EmergencyFundInterestHandling", "Keep invested");
         DateTime? emergencyTaxEffectiveFrom = DateTime.TryParse(emergencyTaxEffectiveText, out var parsedTaxDate) ? parsedTaxDate.Date : null;
         var accounts = new List<AccountBalance>
         {
-            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency, emergencyStartingBalance, emergencyProvider, emergencyAccountType, emergencyHoldingType, emergencyTaxTreatment, emergencyTaxRate, emergencyTaxEffectiveFrom)
+            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency, emergencyStartingBalance, emergencyProvider, emergencyAccountType, emergencyHoldingType, emergencyTaxTreatment, emergencyTaxRate, emergencyTaxEffectiveFrom, emergencyInterestHandling)
         };
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from FROM dbo.account_balances ORDER BY [name]", con);
+        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling FROM dbo.account_balances ORDER BY [name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
         {
@@ -1076,7 +1063,8 @@ SELECT @@ROWCOUNT;", con);
                 r.GetString(11),
                 r.GetString(12),
                 r.GetDecimal(13),
-                r.IsDBNull(14) ? null : r.GetDateTime(14)));
+                r.IsDBNull(14) ? null : r.GetDateTime(14),
+                r.GetString(15)));
         }
         return accounts;
     }
@@ -1180,7 +1168,8 @@ SELECT @@ROWCOUNT;", con);
         string holdingType,
         string taxTreatment,
         decimal taxRate,
-        DateTime? taxEffectiveFrom)
+        DateTime? taxEffectiveFrom,
+        string interestHandling)
     {
         await EnsureModernTablesAsync();
         provider = string.IsNullOrWhiteSpace(provider) ? "Other" : provider.Trim();
@@ -1189,6 +1178,7 @@ SELECT @@ROWCOUNT;", con);
         taxTreatment = string.IsNullOrWhiteSpace(taxTreatment) ? "Tax Free" : taxTreatment.Trim();
         taxRate = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? Math.Clamp(taxRate, 0m, 100m) : 0m;
         taxEffectiveFrom = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? taxEffectiveFrom?.Date : null;
+        interestHandling = NormalizeInterestHandling(interestHandling);
 
         if (id == 0 && name == "Emergency Fund")
         {
@@ -1201,24 +1191,25 @@ SELECT @@ROWCOUNT;", con);
             await SaveStringSettingAsync("EmergencyFundTaxTreatment", taxTreatment);
             await SaveDecimalSettingAsync("EmergencyFundTaxRate", taxRate);
             await SaveStringSettingAsync("EmergencyFundTaxEffectiveFrom", taxEffectiveFrom?.ToString("yyyy-MM-dd") ?? string.Empty);
+            await SaveStringSettingAsync("EmergencyFundInterestHandling", interestHandling);
             return;
         }
 
         if (id == 0)
         {
-            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from)
-VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom)",
+            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling)
+VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom,@interestHandling)",
                 ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
                 ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
-                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value));
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling));
             id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE [name]=@name ORDER BY account_balance_id DESC", ("@name", name)));
         }
         else
         {
-            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
+            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,interest_handling=@interestHandling,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
                 ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
                 ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
-                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value));
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling));
         }
 
         await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)",

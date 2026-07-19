@@ -419,3 +419,12 @@ Financial reminders are now surfaced as a unified Financial Tasks inbox and Dash
 - Ordered investment journey stages for Money Pots.
 - Account tax treatment with future effective dates.
 - Gross, estimated tax and net interest forecasting.
+
+### Phase 11.6.1 — Interest reconciliation workflow refinement
+
+Interest is recorded once in Monthly Income. Account Management no longer provides a separate apply-interest workflow; pending interest is resolved while confirming the account's current balance, preventing a duplicate-looking balance action while preserving the original income history.
+
+
+## Phase 11.6.2 - Flexible Interest Handling
+
+Accounts can default interest to either remain invested or enter monthly income, with a per-payment override and an Ignore for now option. See `PHASE_11_6_2.md`.

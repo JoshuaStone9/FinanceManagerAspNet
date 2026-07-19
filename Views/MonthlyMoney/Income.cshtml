@@ -33,7 +33,7 @@
         <div>
             <p class="eyebrow">Passive income</p>
             <h2>Expected account interest</h2>
-            <p class="muted">Estimated from each account balance and its saved AER. Confirm the actual payment when it reaches the account. It is added to monthly income but does not change the recorded account balance unless you choose to reconcile it.</p>
+            <p class="muted">Estimated from each account balance and its saved AER. When interest arrives, choose whether to keep it invested or add it to this month's usable income. Either recorded choice remains available for account balance reconciliation.</p>
         </div>
         <div class="fm-passive-summary">
             <span class="fm-status-pill">Expected @Model.EstimatedPassiveIncome.ToString("C", gb)</span>
@@ -60,7 +60,7 @@
                         <small>@estimate.Balance.ToString("C", gb) at @estimate.AnnualInterestRate.ToString("0.##")% AER</small>
                         @if (estimate.IsReceived)
                         {
-                            <small>Received @estimate.ReceivedDate?.ToString("d MMM yyyy") · estimated @estimate.EstimatedAmount.ToString("C", gb)</small>
+                            <small>Received @estimate.ReceivedDate?.ToString("d MMM yyyy") · estimated @estimate.EstimatedAmount.ToString("C", gb) · @estimate.InterestHandling</small>
                         }
                         else
                         {
@@ -71,7 +71,7 @@
                     <div class="fm-workspace-row-actions">
                         @if (estimate.IsReceived)
                         {
-                            <span class="fm-status-pill">Received</span>
+                            <span class="fm-status-pill">@(estimate.InterestHandling == "Add to Monthly Income" ? "Added to income" : "Kept invested")</span>
                         }
                         else if (canEdit)
                         {
@@ -86,8 +86,17 @@
                                     <input type="hidden" name="estimatedAmount" value="@estimate.EstimatedAmount.ToString("0.00", CultureInfo.InvariantCulture)" />
                                     <label>Actual interest received<input name="actualAmount" type="number" min="0" step="0.01" value="@estimate.EstimatedAmount.ToString("0.00", CultureInfo.InvariantCulture)" required /></label>
                                     <label>Date received<input name="receivedDate" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required /></label>
+                                    <label>
+                                        How should this interest be handled?
+                                        <select name="interestHandling">
+                                            <option value="Keep invested" selected="@(estimate.InterestHandling == "Keep invested")">Keep invested</option>
+                                            <option value="Add to Monthly Income" selected="@(estimate.InterestHandling == "Add to Monthly Income")">Add to Monthly Income</option>
+                                            <option value="Ignore for now">Ignore for now</option>
+                                        </select>
+                                        <small>Keep invested records the payment without increasing this month's available income. Ignore for now leaves it unconfirmed.</small>
+                                    </label>
                                     <label>Notes<textarea name="notes" rows="2" placeholder="Optional statement reference"></textarea></label>
-                                    <button class="button primary" type="submit">Add to income</button>
+                                    <button class="button primary" type="submit">Confirm interest</button>
                                 </form>
                             </details>
                         }

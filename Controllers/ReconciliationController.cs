@@ -21,6 +21,7 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         string? taxTreatment,
         decimal taxRate,
         DateTime? taxEffectiveFrom,
+        string? interestHandling,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -53,7 +54,8 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             holdingType ?? "Cash",
             taxTreatment ?? "Tax Free",
             taxRate,
-            taxEffectiveFrom);
+            taxEffectiveFrom,
+            interestHandling ?? "Keep invested");
 
         TempData["Success"] = $"{safeName} settings updated.";
         return RedirectToAction(nameof(Index));
@@ -71,6 +73,7 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         string? taxTreatment,
         decimal taxRate,
         DateTime? taxEffectiveFrom,
+        string? interestHandling,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -93,7 +96,8 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             holdingType ?? "Cash",
             taxTreatment ?? "Tax Free",
             taxRate,
-            taxEffectiveFrom);
+            taxEffectiveFrom,
+            interestHandling ?? "Keep invested");
 
         TempData["Success"] = $"{name.Trim()} added.";
         return RedirectToAction(nameof(Index));
@@ -116,23 +120,7 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
 
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ApplyPendingInterest(string sourceKey)
-    {
-        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
-        try
-        {
-            var amount = await repo.ApplyPendingInterestAsync(sourceKey);
-            TempData["Success"] = $"{amount:C} pending interest applied to the account balance.";
-        }
-        catch (InvalidOperationException ex)
-        {
-            TempData["Error"] = ex.Message;
-        }
-        return RedirectToAction(nameof(Index));
-    }
-
-    [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateBalance(string sourceKey, decimal actualBalance)
+    public async Task<IActionResult> UpdateBalance(string sourceKey, decimal actualBalance, bool reconcilePendingInterest = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
         if (string.IsNullOrWhiteSpace(sourceKey) || actualBalance < 0m)
@@ -143,8 +131,10 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
 
         try
         {
-            await repo.UpdateReconciledAccountBalanceAsync(sourceKey, actualBalance);
-            TempData["Success"] = "Current account balance saved. No income entry was created.";
+            var reconciledInterest = await repo.UpdateReconciledAccountBalanceAsync(sourceKey, actualBalance, reconcilePendingInterest);
+            TempData["Success"] = reconciledInterest > 0m
+                ? $"Current account balance saved and {reconciledInterest:C} pending interest marked as reconciled."
+                : "Current account balance saved. No income entry was created.";
         }
         catch (InvalidOperationException ex)
         {

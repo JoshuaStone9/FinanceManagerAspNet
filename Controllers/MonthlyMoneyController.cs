@@ -33,7 +33,8 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
         decimal estimatedAmount,
         decimal actualAmount,
         DateTime receivedDate,
-        string? notes)
+        string? notes,
+        string interestHandling)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
         if (month is < 1 or > 12 || string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(sourceName) || actualAmount < 0m)
@@ -46,10 +47,19 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
         if (date.Year != year || date.Month != month)
             return BadRequest("The received date must be inside the selected month.");
 
+        if (string.Equals(interestHandling, "Ignore for now", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["Success"] = $"{sourceName} interest left awaiting confirmation.";
+            var ignoredUrl = Url.Action(nameof(Income), new { year, month });
+            return ignoredUrl is null ? RedirectToAction(nameof(Income), new { year, month }) : Redirect($"{ignoredUrl}#passive-income");
+        }
+
         try
         {
-            await repo.RecordInterestIncomeAsync(sourceKey, sourceName, estimatedAmount, actualAmount, date, notes);
-            TempData["Success"] = $"{sourceName} interest added to this month's income. The source account balance was left unchanged.";
+            await repo.RecordInterestIncomeAsync(sourceKey, sourceName, estimatedAmount, actualAmount, date, notes, interestHandling);
+            TempData["Success"] = string.Equals(interestHandling, "Add to Monthly Income", StringComparison.OrdinalIgnoreCase)
+                ? $"{sourceName} interest added to this month's income and left ready for balance reconciliation."
+                : $"{sourceName} interest recorded as kept invested and left ready for balance reconciliation.";
         }
         catch (InvalidOperationException ex)
         {

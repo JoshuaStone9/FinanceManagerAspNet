@@ -30,7 +30,7 @@
         <div>
             <p class="eyebrow">Interest reconciliation</p>
             <h2>@Model.AccountsNeedingInterestReconciliation account@(Model.AccountsNeedingInterestReconciliation == 1 ? string.Empty : "s") need updating</h2>
-            <p class="muted">Interest remains here until it is applied, including amounts carried forward from earlier months.</p>
+            <p class="muted">Interest remains pending until you confirm the current balance, including amounts carried forward from earlier months.</p>
         </div>
         <strong>@Model.TotalPendingInterest.ToString("C", gb) pending</strong>
     </section>
@@ -89,6 +89,14 @@
                 <span>Monthly contribution</span>
                 <input name="monthlyContribution" type="number" min="0" step="0.01" value="0.00" required />
             </label>
+            <label>
+                <span>Default interest handling</span>
+                <select name="interestHandling">
+                    <option value="Keep invested" selected>Keep invested</option>
+                    <option value="Add to Monthly Income">Add to Monthly Income</option>
+                </select>
+                <small>You can override this choice for an individual payment each month.</small>
+            </label>
             <label class="fm-account-toggle">
                 <input name="includeInGlobalGoal" type="checkbox" value="true" checked />
                 <span>Include in Statistics forecast</span>
@@ -131,29 +139,13 @@
                     <span>@account.HoldingType</span><span>@(account.TaxTreatment == "Taxable" ? $"Taxable at {account.TaxRate:0.##}%" : "Tax free")</span>
                     <span>@account.InterestRate.ToString("0.##")% AER</span>
                     <span>@account.MonthlyContribution.ToString("C", gb) monthly</span>
+                    <span>Interest: @account.InterestHandling</span>
                 </div>
 
                 <div class="fm-account-summary-dates">
                     <span>Updated @account.BalanceUpdatedAt.ToString("dd MMM yyyy")</span>
                     <span>Last balance check: @(account.LastReconciledAt?.ToString("dd MMM yyyy") ?? "Never")</span>
                 </div>
-
-                @if (account.PendingInterestCount > 0)
-                {
-                    <div class="fm-pending-interest-panel">
-                        <div><span>Recorded balance</span><strong>@account.RecordedBalance.ToString("C", gb)</strong></div>
-                        <div><span>Unapplied interest (@account.PendingInterestCount)</span><strong>+@account.PendingInterest.ToString("C", gb)</strong></div>
-                        <div><span>Suggested balance</span><strong>@account.SuggestedBalance.ToString("C", gb)</strong></div>
-                        @if (canEdit)
-                        {
-                            <form asp-action="ApplyPendingInterest" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="sourceKey" value="@account.SourceKey" />
-                                <button class="primary" type="submit">Apply pending interest</button>
-                            </form>
-                        }
-                    </div>
-                }
 
                 @if (canEdit)
                 {
@@ -216,6 +208,16 @@
                             <label><span>Tax treatment</span><select name="taxTreatment">@foreach (var option in new[] { "Tax Free", "Taxable" }) { <option value="@option" selected="@(account.TaxTreatment == option)">@option</option> }</select></label>
                             <label><span>Tax rate</span><input name="taxRate" type="number" min="0" max="100" step="0.01" value="@account.TaxRate.ToString("0.##", CultureInfo.InvariantCulture)"/><small>For example, 22 for a 22% deduction.</small></label>
                             <label><span>Tax starts</span><input name="taxEffectiveFrom" type="date" value="@account.TaxEffectiveFrom?.ToString("yyyy-MM-dd")"/><small>Useful for a future rule change such as April 2027.</small></label>
+                            <label>
+                                <span>Default interest handling</span>
+                                <select name="interestHandling">
+                                    @foreach (var option in new[] { "Keep invested", "Add to Monthly Income" })
+                                    {
+                                        <option value="@option" selected="@(account.InterestHandling == option)">@option</option>
+                                    }
+                                </select>
+                                <small>Used as the pre-selected choice when monthly interest is confirmed.</small>
+                            </label>
                             <label class="fm-account-toggle fm-field-span-2">
                                 <input name="includeInGlobalGoal" type="checkbox" value="true" checked="@account.IncludeInForecast" />
                                 <span>Include in Statistics forecast</span>
@@ -251,16 +253,30 @@
                         <div class="fm-balance-context">
                             <span>Recorded balance</span>
                             <strong>@account.RecordedBalance.ToString("C", gb)</strong>
-                            <small>This only updates the account value. It does not create income or alter your monthly budget.</small>
+                            @if (account.PendingInterestCount > 0)
+                            {
+                                <span>Interest already recorded as income</span>
+                                <strong>+@account.PendingInterest.ToString("C", gb)</strong>
+                                <span>Suggested current balance</span>
+                                <strong>@account.SuggestedBalance.ToString("C", gb)</strong>
+                            }
+                            <small>Saving here only updates the account value. It does not create another income entry or alter your monthly budget.</small>
                         </div>
 
-                        <form asp-action="UpdateBalance" method="post" class="fm-balance-check-form" data-balance-confirm data-recorded-balance="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" data-account-name="@account.AccountName">
+                        <form asp-action="UpdateBalance" method="post" class="fm-balance-check-form" data-balance-confirm data-recorded-balance="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" data-pending-interest="@account.PendingInterest.ToString("0.00", CultureInfo.InvariantCulture)" data-account-name="@account.AccountName">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="sourceKey" value="@account.SourceKey" />
                             <label>
                                 <span>Current account balance</span>
-                                <input name="actualBalance" type="number" min="0" step="0.01" value="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" required />
+                                <input name="actualBalance" type="number" min="0" step="0.01" value="@(account.PendingInterestCount > 0 ? account.SuggestedBalance : account.RecordedBalance).ToString("0.00", CultureInfo.InvariantCulture)" required />
                             </label>
+                            @if (account.PendingInterestCount > 0)
+                            {
+                                <label class="fm-account-toggle">
+                                    <input name="reconcilePendingInterest" type="checkbox" value="true" checked />
+                                    <span>Mark the @account.PendingInterestCount pending interest payment@(account.PendingInterestCount == 1 ? string.Empty : "s") as reconciled</span>
+                                </label>
+                            }
                             <button class="primary" type="submit">Save current balance</button>
                         </form>
                     </div>
@@ -330,9 +346,14 @@
             const difference = next - current;
             const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
             const direction = difference > 0 ? 'increase' : difference < 0 ? 'decrease' : 'leave';
+            const reconcile = form.querySelector('input[name="reconcilePendingInterest"]')?.checked === true;
+            const pending = Number.parseFloat(form.dataset.pendingInterest ?? '0');
+            const reconciliationText = reconcile && pending > 0
+                ? ` The existing ${formatter.format(pending)} interest income will be marked as reconciled; no second income entry will be created.`
+                : ' No income entry will be created.';
             const message = difference === 0
-                ? `This will confirm that ${form.dataset.accountName} remains at ${formatter.format(next)}. No income entry will be created.`
-                : `This will ${direction} the recorded balance for ${form.dataset.accountName} by ${formatter.format(Math.abs(difference))}, from ${formatter.format(current)} to ${formatter.format(next)}. No income entry will be created.`;
+                ? `This will confirm that ${form.dataset.accountName} remains at ${formatter.format(next)}.${reconciliationText}`
+                : `This will ${direction} the recorded balance for ${form.dataset.accountName} by ${formatter.format(Math.abs(difference))}, from ${formatter.format(current)} to ${formatter.format(next)}.${reconciliationText}`;
 
             if (!window.confirm(message)) event.preventDefault();
         });

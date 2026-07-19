@@ -25,7 +25,8 @@ public sealed record AccountReconciliationRow(
     DateTime? LastReconciledAt,
     DateTime BalanceUpdatedAt,
     decimal PendingInterest,
-    int PendingInterestCount)
+    int PendingInterestCount,
+    string InterestHandling)
 {
     public decimal SuggestedBalance => Math.Round(RecordedBalance + PendingInterest, 2);
     public bool NeedsInterestReconciliation => PendingInterestCount > 0 && PendingInterest > 0m;
