@@ -452,6 +452,8 @@ public sealed class StatisticsViewModel
     public decimal ExpectedInterestThisMonth { get; set; }
     public decimal InterestReceivedThisMonth { get; set; }
     public decimal ProjectedFutureInterest { get; set; }
+    public decimal ProjectedGrossInterest { get; set; }
+    public decimal ProjectedInterestTax { get; set; }
     public decimal ManualAverageIncome { get; set; }
     public decimal CalculatedSalaryEstimate { get; set; }
     public decimal AverageSavingPace { get; set; }

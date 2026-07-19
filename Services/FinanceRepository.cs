@@ -157,6 +157,13 @@ IF OBJECT_ID('dbo.passive_income_records','U') IS NOT NULL AND COL_LENGTH('dbo.p
     ALTER TABLE dbo.passive_income_records ADD balance_reconciled_at datetime2 NULL;
 IF OBJECT_ID('dbo.passive_income_records','U') IS NOT NULL AND COL_LENGTH('dbo.passive_income_records','interest_handling') IS NULL
     ALTER TABLE dbo.passive_income_records ADD interest_handling nvarchar(40) NOT NULL CONSTRAINT DF_passive_income_records_interest_handling DEFAULT 'Add to Monthly Income';
+IF OBJECT_ID('dbo.passive_income_records','U') IS NOT NULL AND COL_LENGTH('dbo.passive_income_records','estimated_gross_amount') IS NULL
+BEGIN
+    ALTER TABLE dbo.passive_income_records ADD estimated_gross_amount decimal(18,2) NULL, estimated_tax_amount decimal(18,2) NULL, actual_gross_amount decimal(18,2) NULL, actual_tax_amount decimal(18,2) NULL;
+    UPDATE dbo.passive_income_records
+    SET estimated_gross_amount=estimated_amount, estimated_tax_amount=0, actual_gross_amount=actual_amount, actual_tax_amount=0
+    WHERE estimated_gross_amount IS NULL;
+END;
 
 IF OBJECT_ID('dbo.account_reconciliations','U') IS NULL
 CREATE TABLE dbo.account_reconciliations(
@@ -573,6 +580,7 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
         var accounts = await GetAccountsAsync(emergencyFund);
         var recorded = await GetPassiveIncomeRecordsAsync(year, month);
         var recordedBySource = recorded.ToDictionary(x => x.SourceKey, StringComparer.OrdinalIgnoreCase);
+        var calculationDate = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 
         return accounts
             .Where(x => x.Amount > 0m && x.InterestRate > 0m)
@@ -581,15 +589,25 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
                 var sourceKey = account.Id == 0 ? "emergency-fund" : $"account-{account.Id}";
                 recordedBySource.TryGetValue(sourceKey, out var actual);
                 var monthlyRate = (decimal)(Math.Pow(1d + ((double)account.InterestRate / 100d), 1d / 12d) - 1d);
-                var estimate = Math.Round(account.Amount * monthlyRate, 2, MidpointRounding.AwayFromZero);
+                var grossEstimate = Math.Round(account.Amount * monthlyRate, 2, MidpointRounding.AwayFromZero);
+                var estimatedTax = CalculateInterestTax(account, grossEstimate, calculationDate);
+                var netEstimate = Math.Round(grossEstimate - estimatedTax, 2, MidpointRounding.AwayFromZero);
+
                 return new PassiveIncomeEstimate(
                     actual?.Id,
                     sourceKey,
                     account.Name,
                     account.Amount,
                     account.InterestRate,
-                    estimate,
+                    actual?.EstimatedGrossAmount ?? grossEstimate,
+                    actual?.EstimatedTaxAmount ?? estimatedTax,
+                    actual?.EstimatedAmount ?? netEstimate,
+                    actual?.ActualGrossAmount,
+                    actual?.ActualTaxAmount,
                     actual?.ActualAmount,
+                    account.TaxTreatment,
+                    account.TaxRate,
+                    account.TaxEffectiveFrom,
                     actual?.ReceivedDate,
                     actual?.IncomeEntryId,
                     actual?.IsBalanceReconciled ?? false,
@@ -599,13 +617,23 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
             .ToList();
     }
 
+    private static decimal CalculateInterestTax(AccountBalance account, decimal grossAmount, DateTime paymentDate)
+    {
+        var taxable = account.TaxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase)
+            && (!account.TaxEffectiveFrom.HasValue || paymentDate.Date >= account.TaxEffectiveFrom.Value.Date);
+        if (!taxable || grossAmount <= 0m) return 0m;
+        return Math.Round(grossAmount * (Math.Clamp(account.TaxRate, 0m, 100m) / 100m), 2, MidpointRounding.AwayFromZero);
+    }
+
     public async Task<List<PassiveIncomeRecord>> GetPassiveIncomeRecordsAsync(int year, int month)
     {
         await EnsureModernTablesAsync();
         var records = new List<PassiveIncomeRecord>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes,balance_reconciled_at,interest_handling
+        await using var cmd = new SqlCommand(@"SELECT passive_income_record_id,source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,
+COALESCE(estimated_gross_amount,estimated_amount),COALESCE(estimated_tax_amount,0),COALESCE(actual_gross_amount,actual_amount),COALESCE(actual_tax_amount,0),
+received_date,monthly_income_entry_id,notes,balance_reconciled_at,interest_handling
 FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY received_date,source_name", con);
         cmd.Parameters.AddWithValue("@year", year);
         cmd.Parameters.AddWithValue("@month", month);
@@ -615,10 +643,11 @@ FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY r
             records.Add(new PassiveIncomeRecord(
                 reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.GetInt32(4), reader.GetInt32(5), reader.GetDecimal(6), reader.GetDecimal(7),
-                reader.GetDateTime(8), reader.IsDBNull(9) ? null : reader.GetInt32(9),
-                reader.IsDBNull(10) ? null : reader.GetString(10),
-                !reader.IsDBNull(11),
-                reader.GetString(12)));
+                reader.GetDecimal(8), reader.GetDecimal(9), reader.GetDecimal(10), reader.GetDecimal(11),
+                reader.GetDateTime(12), reader.IsDBNull(13) ? null : reader.GetInt32(13),
+                reader.IsDBNull(14) ? null : reader.GetString(14),
+                !reader.IsDBNull(15),
+                reader.GetString(16)));
         }
         return records;
     }
@@ -626,20 +655,28 @@ FROM dbo.passive_income_records WHERE [year]=@year AND [month]=@month ORDER BY r
     public async Task RecordInterestIncomeAsync(
         string sourceKey,
         string sourceName,
-        decimal estimatedAmount,
-        decimal actualAmount,
+        decimal estimatedGrossAmount,
+        decimal actualGrossAmount,
         DateTime receivedDate,
         string? notes,
         string interestHandling)
     {
         if (string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(sourceName))
             throw new ArgumentException("A passive-income source is required.");
-        if (actualAmount < 0m)
-            throw new ArgumentOutOfRangeException(nameof(actualAmount));
+        if (actualGrossAmount < 0m)
+            throw new ArgumentOutOfRangeException(nameof(actualGrossAmount));
 
         interestHandling = NormalizeInterestHandling(interestHandling);
 
         await EnsureModernTablesAsync();
+        var emergencyFund = await GetEmergencyFundAsync();
+        var accounts = await GetAccountsAsync(emergencyFund);
+        var account = accounts.FirstOrDefault(x => (x.Id == 0 ? "emergency-fund" : $"account-{x.Id}").Equals(sourceKey, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("The interest account could not be found.");
+        var estimatedTaxAmount = CalculateInterestTax(account, estimatedGrossAmount, receivedDate);
+        var estimatedNetAmount = Math.Round(estimatedGrossAmount - estimatedTaxAmount, 2, MidpointRounding.AwayFromZero);
+        var actualTaxAmount = CalculateInterestTax(account, actualGrossAmount, receivedDate);
+        var actualNetAmount = Math.Round(actualGrossAmount - actualTaxAmount, 2, MidpointRounding.AwayFromZero);
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
         await using var transaction = (SqlTransaction)await con.BeginTransactionAsync();
@@ -660,20 +697,24 @@ WHERE source_key=@sourceKey AND [year]=@year AND [month]=@month", con, transacti
                 await using var income = new SqlCommand(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
 VALUES(@name,@amount,@date,'Interest',@notes,0); SELECT CAST(SCOPE_IDENTITY() AS int);", con, transaction);
                 income.Parameters.AddWithValue("@name", $"{sourceName} interest");
-                income.Parameters.AddWithValue("@amount", actualAmount);
+                income.Parameters.AddWithValue("@amount", actualNetAmount);
                 income.Parameters.AddWithValue("@date", receivedDate.Date);
                 income.Parameters.AddWithValue("@notes", DbValue(notes));
                 incomeEntryId = Convert.ToInt32(await income.ExecuteScalarAsync());
             }
 
-            await using var passive = new SqlCommand(@"INSERT INTO dbo.passive_income_records(source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,received_date,monthly_income_entry_id,notes,interest_handling)
-VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@incomeEntryId,@notes,@interestHandling)", con, transaction);
+            await using var passive = new SqlCommand(@"INSERT INTO dbo.passive_income_records(source_key,source_name,income_type,[year],[month],estimated_amount,actual_amount,estimated_gross_amount,estimated_tax_amount,actual_gross_amount,actual_tax_amount,received_date,monthly_income_entry_id,notes,interest_handling)
+VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimatedNet,@actualNet,@estimatedGross,@estimatedTax,@actualGross,@actualTax,@date,@incomeEntryId,@notes,@interestHandling)", con, transaction);
             passive.Parameters.AddWithValue("@sourceKey", sourceKey);
             passive.Parameters.AddWithValue("@sourceName", sourceName.Trim());
             passive.Parameters.AddWithValue("@year", receivedDate.Year);
             passive.Parameters.AddWithValue("@month", receivedDate.Month);
-            passive.Parameters.AddWithValue("@estimated", estimatedAmount);
-            passive.Parameters.AddWithValue("@actual", actualAmount);
+            passive.Parameters.AddWithValue("@estimatedNet", estimatedNetAmount);
+            passive.Parameters.AddWithValue("@actualNet", actualNetAmount);
+            passive.Parameters.AddWithValue("@estimatedGross", estimatedGrossAmount);
+            passive.Parameters.AddWithValue("@estimatedTax", estimatedTaxAmount);
+            passive.Parameters.AddWithValue("@actualGross", actualGrossAmount);
+            passive.Parameters.AddWithValue("@actualTax", actualTaxAmount);
             passive.Parameters.AddWithValue("@date", receivedDate.Date);
             passive.Parameters.AddWithValue("@incomeEntryId", incomeEntryId.HasValue ? incomeEntryId.Value : DBNull.Value);
             passive.Parameters.AddWithValue("@notes", DbValue(notes));
@@ -996,6 +1037,16 @@ WHERE YEAR([date])=@year AND MONTH([date])=@month
 FROM dbo.monthly_income_entries
 WHERE [date] >= @from AND [date] < @to
   AND LOWER(LTRIM(RTRIM(COALESCE(category, ''))))='interest'",
+            ("@from", fromInclusive.Date), ("@to", toExclusive.Date));
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value);
+    }
+
+    public async Task<decimal> GetPassiveInterestTotalAsync(DateTime fromInclusive, DateTime toExclusive)
+    {
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync(@"SELECT COALESCE(SUM(actual_amount), 0)
+FROM dbo.passive_income_records
+WHERE received_date >= @from AND received_date < @to AND income_type='Interest'",
             ("@from", fromInclusive.Date), ("@to", toExclusive.Date));
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }

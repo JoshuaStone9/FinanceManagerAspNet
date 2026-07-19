@@ -25,7 +25,8 @@ public sealed class DashboardController(
         var monthlyIncome = incomeEntriesTotal ?? 0m;
         var passiveRecords = await repo.GetPassiveIncomeRecordsAsync(y, m);
         var passiveIncome = passiveRecords.Sum(x => x.ActualAmount);
-        var operatingIncome = Math.Max(0m, monthlyIncome - passiveIncome);
+        var passiveIncomeIncludedInMonthlyIncome = passiveRecords.Where(x => x.IncomeEntryId.HasValue).Sum(x => x.ActualAmount);
+        var operatingIncome = Math.Max(0m, monthlyIncome - passiveIncomeIncludedInMonthlyIncome);
         var carryForwardInfo = await repo.GetCarryForwardInfoAsync(y, m);
         var carryForward = carryForwardInfo.EffectiveAmount;
 

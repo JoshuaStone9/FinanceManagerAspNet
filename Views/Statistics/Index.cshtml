@@ -52,12 +52,14 @@
         <summary>
             <span class="eyebrow">By goal date, with interest</span>
             <strong class="statistics-card-value good">@Model.ProjectedByAprilWithInterest.ToString("C", gb)</strong>
-            <span>Future interest from today: @Model.ProjectedFutureInterest.ToString("C", gb).</span>
+            <span>Future net interest from today: @Model.ProjectedFutureInterest.ToString("C", gb).</span>
         </summary>
         <div class="statistics-detail-content">
             <div class="statistics-breakdown-row"><span>Projection before interest</span><strong>@Model.ProjectedByAprilWithoutInterest.ToString("C", gb)</strong></div>
-            <div class="statistics-breakdown-row"><span>Future account interest</span><strong>@((Model.ProjectedFutureInterest - Model.ForecastContributionInterest).ToString("C", gb))</strong></div>
-            <div class="statistics-breakdown-row"><span>Future interest on operating surplus</span><strong>@Model.ForecastContributionInterest.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Projected gross interest</span><strong>@Model.ProjectedGrossInterest.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Estimated interest tax</span><strong>-@Model.ProjectedInterestTax.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Projected net interest</span><strong>@Model.ProjectedFutureInterest.ToString("C", gb)</strong></div>
+            <div class="statistics-breakdown-row"><span>Net interest on operating surplus</span><strong>@Model.ForecastContributionInterest.ToString("C", gb)</strong></div>
             <div class="statistics-breakdown-row"><span>Interest already received this year</span><strong>@Model.InterestReceivedThisYear.ToString("C", gb)</strong></div>
         </div>
     </details>
@@ -68,7 +70,7 @@
         <div>
             <p class="eyebrow">Forecast assumptions</p>
             <h2>How this projection is calculated</h2>
-            <p class="muted">The forecast uses completed monthly data, but removes confirmed interest before calculating your normal operating surplus. Future interest is then projected separately from current account balances and saved rates.</p>
+            <p class="muted">The forecast uses completed monthly data, but removes confirmed interest before calculating your normal operating surplus. Future interest is then projected separately from current account balances, saved rates and each account's tax rules. Only net interest is added to the goal-date total.</p>
         </div>
         <span class="status-pill @Model.ForecastConfidenceCssClass">@Model.ForecastConfidence</span>
     </div>
@@ -83,8 +85,10 @@
         <div class="statistics-assumption-item"><span>Interest received in sampled months</span><strong>@Model.InterestReceivedInForecastHistory.ToString("C", gb)</strong></div>
         <div class="statistics-assumption-item"><span>Interest received this month</span><strong>@Model.InterestReceivedThisMonth.ToString("C", gb)</strong></div>
         <div class="statistics-assumption-item"><span>Interest still expected this month</span><strong>@Model.ExpectedInterestThisMonth.ToString("C", gb)</strong></div>
-        <div class="statistics-assumption-item"><span>Projected future interest</span><strong>@Model.ProjectedFutureInterest.ToString("C", gb)</strong></div>
-        <div class="statistics-assumption-item"><span>Weighted forecast rate</span><strong>@Model.ForecastWeightedInterestRate.ToString("0.##")%</strong></div>
+        <div class="statistics-assumption-item"><span>Projected gross interest</span><strong>@Model.ProjectedGrossInterest.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Projected interest tax</span><strong>@Model.ProjectedInterestTax.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Projected net interest</span><strong>@Model.ProjectedFutureInterest.ToString("C", gb)</strong></div>
+        <div class="statistics-assumption-item"><span>Weighted after-tax forecast rate</span><strong>@Model.ForecastWeightedInterestRate.ToString("0.##")%</strong></div>
     </div>
 
     @if (Model.ForecastHistory.Count == 0)
@@ -166,7 +170,7 @@
     <p class="muted">Account-specific monthly contributions and future compounding through @Model.AprilTarget.ToString("dd MMM yyyy"). Confirmed interest is included in monthly income. It only becomes part of an account balance forecast when you explicitly reconcile it to that account.</p>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Name</th><th>Now</th><th>Rate</th><th>Monthly in</th><th>Contributions</th><th>Interest</th><th>Projected</th></tr></thead>
+            <thead><tr><th>Name</th><th>Now</th><th>Rate</th><th>Monthly in</th><th>Contributions</th><th>Net interest</th><th>Projected</th></tr></thead>
             <tbody>
                 @foreach (var p in Model.InterestProjections)
                 {

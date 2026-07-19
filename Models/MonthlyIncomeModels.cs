@@ -23,7 +23,11 @@ public sealed class MonthlyIncomeWorkspaceViewModel
     public int RecurringCount => Entries.Count(x => x.IsRecurring);
     public IReadOnlyList<PassiveIncomeEstimate> PassiveIncomeEstimates { get; init; } = [];
     public decimal EstimatedPassiveIncome => PassiveIncomeEstimates.Where(x => !x.IsReceived).Sum(x => x.EstimatedAmount);
+    public decimal EstimatedGrossPassiveIncome => PassiveIncomeEstimates.Where(x => !x.IsReceived).Sum(x => x.EstimatedGrossAmount);
+    public decimal EstimatedPassiveIncomeTax => PassiveIncomeEstimates.Where(x => !x.IsReceived).Sum(x => x.EstimatedTaxAmount);
     public decimal ReceivedPassiveIncome => PassiveIncomeEstimates.Where(x => x.IsReceived).Sum(x => x.ActualAmount ?? 0m);
+    public decimal ReceivedGrossPassiveIncome => PassiveIncomeEstimates.Where(x => x.IsReceived).Sum(x => x.ActualGrossAmount ?? 0m);
+    public decimal ReceivedPassiveIncomeTax => PassiveIncomeEstimates.Where(x => x.IsReceived).Sum(x => x.ActualTaxAmount ?? 0m);
 }
 
 
@@ -33,14 +37,22 @@ public sealed record PassiveIncomeEstimate(
     string SourceName,
     decimal Balance,
     decimal AnnualInterestRate,
+    decimal EstimatedGrossAmount,
+    decimal EstimatedTaxAmount,
     decimal EstimatedAmount,
+    decimal? ActualGrossAmount,
+    decimal? ActualTaxAmount,
     decimal? ActualAmount,
+    string TaxTreatment,
+    decimal TaxRate,
+    DateTime? TaxEffectiveFrom,
     DateTime? ReceivedDate,
     int? IncomeEntryId,
     bool IsBalanceReconciled,
     string InterestHandling)
 {
     public bool IsReceived => ActualAmount.HasValue;
+    public bool IsTaxed => EstimatedTaxAmount > 0m || (ActualTaxAmount ?? 0m) > 0m;
     public decimal Difference => IsReceived ? ActualAmount!.Value - EstimatedAmount : 0m;
     public bool IsHandlingLocked => IncomeEntryId.HasValue || IsBalanceReconciled;
     public string? HandlingLockReason => IncomeEntryId.HasValue
@@ -59,6 +71,10 @@ public sealed record PassiveIncomeRecord(
     int Month,
     decimal EstimatedAmount,
     decimal ActualAmount,
+    decimal EstimatedGrossAmount,
+    decimal EstimatedTaxAmount,
+    decimal ActualGrossAmount,
+    decimal ActualTaxAmount,
     DateTime ReceivedDate,
     int? IncomeEntryId,
     string? Notes,

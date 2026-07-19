@@ -6,7 +6,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class StatisticsController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config, AppDbContext vaultDb) : Controller
+public sealed class StatisticsController(
+    FinanceRepository repo,
+    FinanceCalculator calc,
+    IConfiguration config,
+    AppDbContext vaultDb,
+    IReserveInterestForecastService interestForecastService) : Controller
 {
     public async Task<IActionResult> Index(
         decimal? externalTotalValue,
@@ -41,18 +46,37 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var accountMonthlyContributions = included.Sum(x => x.MonthlyContribution);
         var forecast = await BuildForecastAssumptionAsync();
 
-        var projections = calc.ProjectAccountsDetailed(included, months);
-        var baseProjectionWithoutInterest = projections.Sum(x => x.CurrentBalance + x.ContributionsAdded);
-        var baseProjectionWithInterest = projections.Sum(x => x.ProjectedBalance);
-        var weightedRate = total <= 0
-            ? 0m
-            : included.Sum(x => x.Amount * x.InterestRate) / total;
+        var forecastAccounts = included.Select(x => new ReserveAccountOption(
+            x.Id,
+            x.Name,
+            x.Amount,
+            x.InterestRate,
+            x.MonthlyContribution,
+            true,
+            x.TaxTreatment,
+            x.TaxRate,
+            x.TaxEffectiveFrom)).ToList();
+        var taxAwareAccountForecast = interestForecastService.Build(forecastAccounts, target, includeFutureContributions: true);
+        var projections = taxAwareAccountForecast.Accounts.Select(x => new InterestProjection(
+            x.AccountName,
+            x.OpeningBalance,
+            x.AnnualInterestRate,
+            x.MonthlyContribution,
+            months,
+            x.ContributionsAdded,
+            x.NetInterest,
+            x.ProjectedBalance,
+            included.First(a => a.Id == x.AccountId).UpdatedAt)).ToList();
+        var baseProjectionWithoutInterest = total + taxAwareAccountForecast.FutureContributions;
+        var weightedRate = CalculateWeightedNetRate(included, target);
         var forecastContributionProjection = calc.CompoundMonthly(0m, weightedRate, forecast.MonthlyContribution, months);
         var forecastContributions = calc.ProjectSalarySavings(forecast.MonthlyContribution, months);
         var forecastContributionInterest = Math.Max(0m, forecastContributionProjection - forecastContributions);
+        var projectedGrossInterest = Math.Round(taxAwareAccountForecast.GrossInterest + forecastContributionInterest, 2);
+        var projectedInterestTax = Math.Round(taxAwareAccountForecast.EstimatedTax, 2);
+        var projectedFutureInterest = Math.Round(taxAwareAccountForecast.EstimatedInterest + forecastContributionInterest, 2);
         var projectedWithoutInterest = Math.Round(baseProjectionWithoutInterest + forecastContributions, 2);
-        var projectedWithInterest = Math.Round(baseProjectionWithInterest + forecastContributionProjection, 2);
-        var projectedFutureInterest = Math.Round(projectedWithInterest - projectedWithoutInterest, 2);
+        var projectedWithInterest = Math.Round(projectedWithoutInterest + projectedFutureInterest, 2);
 
         var currentMonthPassiveIncome = await repo.GetPassiveIncomeEstimatesAsync(DateTime.Today.Year, DateTime.Today.Month);
         var expectedInterestThisMonth = currentMonthPassiveIncome
@@ -61,11 +85,11 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var interestReceivedThisMonth = currentMonthPassiveIncome
             .Where(x => x.IsReceived)
             .Sum(x => x.ActualAmount ?? 0m);
-        var interestReceivedThisYear = await repo.GetInterestIncomeTotalAsync(
+        var interestReceivedThisYear = await repo.GetPassiveInterestTotalAsync(
             new DateTime(DateTime.Today.Year, 1, 1),
             new DateTime(DateTime.Today.Year + 1, 1, 1));
         var totalMonthlyForecastPace = accountMonthlyContributions + forecast.MonthlyContribution;
-        var monthsToGoalWithInterest = calc.MonthsToGoalWithInterest(included, goal, forecast.MonthlyContribution);
+        var monthsToGoalWithInterest = CalculateMonthsToGoalTaxAware(included, goal, forecast.MonthlyContribution, interestForecastService);
 
         var stocksCrypto = await repo.GetStocksCryptoAsync();
         var assetSummary = await repo.GetAssetSummaryAsync();
@@ -137,6 +161,8 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
             ExpectedInterestThisMonth = Math.Round(expectedInterestThisMonth, 2),
             InterestReceivedThisMonth = Math.Round(interestReceivedThisMonth, 2),
             ProjectedFutureInterest = projectedFutureInterest,
+            ProjectedGrossInterest = projectedGrossInterest,
+            ProjectedInterestTax = projectedInterestTax,
             AprilTarget = target,
             MonthsToApril = months,
             ProjectedSalarySavingsByApril = forecastContributions,
@@ -165,6 +191,46 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         };
 
         return View(vm);
+    }
+
+    private static decimal CalculateWeightedNetRate(IReadOnlyList<AccountBalance> accounts, DateTime forecastDate)
+    {
+        var total = accounts.Sum(x => Math.Max(0m, x.Amount));
+        if (total <= 0m) return 0m;
+
+        return accounts.Sum(account =>
+        {
+            var taxable = account.TaxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase)
+                && (!account.TaxEffectiveFrom.HasValue || forecastDate.Date >= account.TaxEffectiveFrom.Value.Date);
+            var netRate = taxable
+                ? account.InterestRate * (1m - (Math.Clamp(account.TaxRate, 0m, 100m) / 100m))
+                : account.InterestRate;
+            return Math.Max(0m, account.Amount) * Math.Max(0m, netRate);
+        }) / total;
+    }
+
+    private static int CalculateMonthsToGoalTaxAware(
+        IReadOnlyList<AccountBalance> accounts,
+        decimal goal,
+        decimal monthlySurplus,
+        IReserveInterestForecastService interestForecastService,
+        int maxMonths = 240)
+    {
+        if (accounts.Sum(x => x.Amount) >= goal) return 0;
+        var options = accounts.Select(x => new ReserveAccountOption(
+            x.Id, x.Name, x.Amount, x.InterestRate, x.MonthlyContribution, true,
+            x.TaxTreatment, x.TaxRate, x.TaxEffectiveFrom)).ToList();
+
+        for (var month = 1; month <= maxMonths; month++)
+        {
+            var date = DateTime.Today.AddMonths(month);
+            var accountProjection = interestForecastService.Build(options, date, includeFutureContributions: true).ProjectedTotal;
+            var netRate = CalculateWeightedNetRate(accounts, date);
+            var surplusProjection = new FinanceCalculator().CompoundMonthly(0m, netRate, monthlySurplus, month);
+            if (accountProjection + surplusProjection >= goal) return month;
+        }
+
+        return -1;
     }
 
     private async Task<StatisticsForecastAssumption> BuildForecastAssumptionAsync()

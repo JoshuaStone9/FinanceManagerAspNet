@@ -432,3 +432,7 @@ Accounts can default interest to either remain invested or enter monthly income,
 
 ### Phase 11.6.3
 Account Management now presents pending interest as a single notification summary. Review Accounts opens the oldest affected balance check, while detailed pending-interest information stays inside the Update Balance workflow.
+
+## Phase 11.7 — Tax-aware interest engine
+
+Interest tax settings now drive the full interest workflow. Monthly estimates calculate gross interest, configured tax and net interest. Confirmed payments store the breakdown, while Monthly Income and Account Management use only the net amount. Statistics forecasts now show projected gross interest, estimated tax and projected net interest, and only net interest is added to the goal-date total. A blank tax start date applies the configured tax immediately; a future date delays the deduction until that date.

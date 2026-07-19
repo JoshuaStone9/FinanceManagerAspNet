@@ -36,8 +36,8 @@
             <p class="muted">Estimated from each account balance and its saved AER. When interest arrives, choose whether to keep it invested or add it to this month's usable income. Either recorded choice remains available for account balance reconciliation.</p>
         </div>
         <div class="fm-passive-summary">
-            <span class="fm-status-pill">Expected @Model.EstimatedPassiveIncome.ToString("C", gb)</span>
-            <span class="fm-status-pill">Received @Model.ReceivedPassiveIncome.ToString("C", gb)</span>
+            <span class="fm-status-pill">Expected net @Model.EstimatedPassiveIncome.ToString("C", gb)</span>
+            <span class="fm-status-pill">Received net @Model.ReceivedPassiveIncome.ToString("C", gb)</span>
         </div>
     </div>
     @if (Model.PassiveIncomeEstimates.Count == 0)
@@ -60,14 +60,14 @@
                         <small>@estimate.Balance.ToString("C", gb) at @estimate.AnnualInterestRate.ToString("0.##")% AER</small>
                         @if (estimate.IsReceived)
                         {
-                            <small>Received @estimate.ReceivedDate?.ToString("d MMM yyyy") · estimated @estimate.EstimatedAmount.ToString("C", gb) · @estimate.InterestHandling</small>
+                            <small>Received @estimate.ReceivedDate?.ToString("d MMM yyyy") · gross @((estimate.ActualGrossAmount ?? 0m).ToString("C", gb)) − tax @((estimate.ActualTaxAmount ?? 0m).ToString("C", gb)) = net @((estimate.ActualAmount ?? 0m).ToString("C", gb)) · @estimate.InterestHandling</small>
                         }
                         else
                         {
-                            <small>Estimate uses the current recorded balance; your provider's daily calculation may differ slightly.</small>
+                            <small>Gross @estimate.EstimatedGrossAmount.ToString("C", gb) − estimated tax @estimate.EstimatedTaxAmount.ToString("C", gb) = net @estimate.EstimatedAmount.ToString("C", gb). @(estimate.TaxTreatment == "Taxable" ? $"Taxed at {estimate.TaxRate:0.##}%" : "Tax free").</small>
                         }
                     </div>
-                    <div class="fm-workspace-row-amount">@((estimate.ActualAmount ?? estimate.EstimatedAmount).ToString("C", gb))</div>
+                    <div class="fm-workspace-row-amount" title="Net interest after configured tax">@((estimate.ActualAmount ?? estimate.EstimatedAmount).ToString("C", gb))</div>
                     <div class="fm-workspace-row-actions">
                         @if (estimate.IsReceived)
                         {
@@ -109,8 +109,8 @@
                                     <input type="hidden" name="month" value="@Model.Month" />
                                     <input type="hidden" name="sourceKey" value="@estimate.SourceKey" />
                                     <input type="hidden" name="sourceName" value="@estimate.SourceName" />
-                                    <input type="hidden" name="estimatedAmount" value="@estimate.EstimatedAmount.ToString("0.00", CultureInfo.InvariantCulture)" />
-                                    <label>Actual interest received<input name="actualAmount" type="number" min="0" step="0.01" value="@estimate.EstimatedAmount.ToString("0.00", CultureInfo.InvariantCulture)" required /></label>
+                                    <input type="hidden" name="estimatedAmount" value="@estimate.EstimatedGrossAmount.ToString("0.00", CultureInfo.InvariantCulture)" />
+                                    <label>Gross interest received<input name="actualAmount" type="number" min="0" step="0.01" value="@estimate.EstimatedGrossAmount.ToString("0.00", CultureInfo.InvariantCulture)" required /><small>The app automatically deducts the configured tax and uses only the net amount for income and reconciliation.</small></label>
                                     <label>Date received<input name="receivedDate" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" required /></label>
                                     <label>
                                         How should this interest be handled?
