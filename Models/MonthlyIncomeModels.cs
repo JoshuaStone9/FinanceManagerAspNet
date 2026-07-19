@@ -28,6 +28,7 @@ public sealed class MonthlyIncomeWorkspaceViewModel
 
 
 public sealed record PassiveIncomeEstimate(
+    int? RecordId,
     string SourceKey,
     string SourceName,
     decimal Balance,
@@ -41,6 +42,12 @@ public sealed record PassiveIncomeEstimate(
 {
     public bool IsReceived => ActualAmount.HasValue;
     public decimal Difference => IsReceived ? ActualAmount!.Value - EstimatedAmount : 0m;
+    public bool IsHandlingLocked => IncomeEntryId.HasValue || IsBalanceReconciled;
+    public string? HandlingLockReason => IncomeEntryId.HasValue
+        ? "This interest has already been added to monthly income."
+        : IsBalanceReconciled
+            ? "This interest has already been applied during an account balance update."
+            : null;
 }
 
 public sealed record PassiveIncomeRecord(

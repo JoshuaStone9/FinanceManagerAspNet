@@ -72,6 +72,32 @@
                         @if (estimate.IsReceived)
                         {
                             <span class="fm-status-pill">@(estimate.InterestHandling == "Add to Monthly Income" ? "Added to income" : "Kept invested")</span>
+                            @if (canEdit && estimate.RecordId.HasValue && !estimate.IsHandlingLocked)
+                            {
+                                <details class="fm-income-edit">
+                                    <summary class="button">Edit handling</summary>
+                                    <form asp-action="UpdateInterestHandling" method="post" class="fm-income-edit-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@estimate.RecordId.Value" />
+                                        <input type="hidden" name="year" value="@Model.Year" />
+                                        <input type="hidden" name="month" value="@Model.Month" />
+                                        <label>
+                                            Where should this interest go?
+                                            <select name="interestHandling">
+                                                <option value="Keep invested" selected="@(estimate.InterestHandling == "Keep invested")">Keep invested</option>
+                                                <option value="Add to Monthly Income" selected="@(estimate.InterestHandling == "Add to Monthly Income")">Add to Monthly Income</option>
+                                            </select>
+                                            <small>Once added to income or included in an account balance update, this choice is locked.</small>
+                                        </label>
+                                        <button class="button primary" type="submit">Save handling</button>
+                                    </form>
+                                </details>
+                            }
+                            else if (estimate.IsHandlingLocked)
+                            {
+                                <span class="fm-status-pill" title="@estimate.HandlingLockReason">Locked</span>
+                                <small class="muted">@estimate.HandlingLockReason</small>
+                            }
                         }
                         else if (canEdit)
                         {

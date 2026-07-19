@@ -72,6 +72,29 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
 
 
     [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateInterestHandling(int id, int year, int month, string interestHandling)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        if (id <= 0 || month is < 1 or > 12) return BadRequest("Enter a valid interest payment.");
+
+        try
+        {
+            await repo.UpdatePendingInterestHandlingAsync(id, interestHandling);
+            TempData["Success"] = string.Equals(interestHandling, "Add to Monthly Income", StringComparison.OrdinalIgnoreCase)
+                ? "Interest added to monthly income. Its handling is now locked."
+                : "Interest handling updated.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+
+        var url = Url.Action(nameof(Income), new { year, month });
+        return url is null ? RedirectToAction(nameof(Income), new { year, month }) : Redirect($"{url}#passive-income");
+    }
+
+
+    [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AddIncome(int year, int month, string name, decimal amount, DateTime date, string? category, string? notes, bool isRecurring = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();

@@ -20,3 +20,7 @@
 - `EmergencyFundInterestHandling` finance setting
 
 Schema changes are applied by the existing automatic modern-table bootstrap.
+
+## Phase 11.6.4 refinement
+
+Pending interest handling can be corrected before it is finalised. The choice becomes locked after the payment is added to monthly income or reconciled into an account balance.

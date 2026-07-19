@@ -583,6 +583,7 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
                 var monthlyRate = (decimal)(Math.Pow(1d + ((double)account.InterestRate / 100d), 1d / 12d) - 1d);
                 var estimate = Math.Round(account.Amount * monthlyRate, 2, MidpointRounding.AwayFromZero);
                 return new PassiveIncomeEstimate(
+                    actual?.Id,
                     sourceKey,
                     account.Name,
                     account.Amount,
@@ -688,6 +689,91 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
 
         if (interestHandling == "Add to Monthly Income")
             await SyncMonthlyIncomeTotalAsync(receivedDate.Year, receivedDate.Month);
+    }
+
+    public async Task UpdatePendingInterestHandlingAsync(int recordId, string interestHandling)
+    {
+        interestHandling = NormalizeInterestHandling(interestHandling);
+
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var transaction = (SqlTransaction)await con.BeginTransactionAsync();
+
+        int year;
+        int month;
+        string sourceName;
+        decimal actualAmount;
+        DateTime receivedDate;
+        string? notes;
+        string currentHandling;
+        int? incomeEntryId;
+        bool isBalanceReconciled;
+
+        try
+        {
+            await using (var get = new SqlCommand(@"SELECT source_name,[year],[month],actual_amount,received_date,notes,interest_handling,monthly_income_entry_id,balance_reconciled_at
+FROM dbo.passive_income_records WHERE passive_income_record_id=@id", con, transaction))
+            {
+                get.Parameters.AddWithValue("@id", recordId);
+                await using var reader = await get.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                    throw new InvalidOperationException("The interest payment could not be found.");
+
+                sourceName = reader.GetString(0);
+                year = reader.GetInt32(1);
+                month = reader.GetInt32(2);
+                actualAmount = reader.GetDecimal(3);
+                receivedDate = reader.GetDateTime(4);
+                notes = reader.IsDBNull(5) ? null : reader.GetString(5);
+                currentHandling = reader.GetString(6);
+                incomeEntryId = reader.IsDBNull(7) ? null : reader.GetInt32(7);
+                isBalanceReconciled = !reader.IsDBNull(8);
+            }
+
+            if (incomeEntryId.HasValue)
+                throw new InvalidOperationException("This interest has already been added to monthly income and its handling can no longer be changed.");
+
+            if (isBalanceReconciled)
+                throw new InvalidOperationException("This interest has already been applied during an account balance update and its handling can no longer be changed.");
+
+            if (string.Equals(currentHandling, interestHandling, StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.CommitAsync();
+                return;
+            }
+
+            int? newIncomeEntryId = null;
+            if (interestHandling == "Add to Monthly Income")
+            {
+                await using var income = new SqlCommand(@"INSERT INTO dbo.monthly_income_entries([name],amount,[date],category,notes,is_recurring)
+VALUES(@name,@amount,@date,'Interest',@notes,0); SELECT CAST(SCOPE_IDENTITY() AS int);", con, transaction);
+                income.Parameters.AddWithValue("@name", $"{sourceName} interest");
+                income.Parameters.AddWithValue("@amount", actualAmount);
+                income.Parameters.AddWithValue("@date", receivedDate.Date);
+                income.Parameters.AddWithValue("@notes", DbValue(notes));
+                newIncomeEntryId = Convert.ToInt32(await income.ExecuteScalarAsync());
+            }
+
+            await using var update = new SqlCommand(@"UPDATE dbo.passive_income_records
+SET interest_handling=@interestHandling, monthly_income_entry_id=@incomeEntryId
+WHERE passive_income_record_id=@id AND monthly_income_entry_id IS NULL AND balance_reconciled_at IS NULL", con, transaction);
+            update.Parameters.AddWithValue("@interestHandling", interestHandling);
+            update.Parameters.AddWithValue("@incomeEntryId", newIncomeEntryId.HasValue ? newIncomeEntryId.Value : DBNull.Value);
+            update.Parameters.AddWithValue("@id", recordId);
+            if (await update.ExecuteNonQueryAsync() != 1)
+                throw new InvalidOperationException("The interest handling changed elsewhere and could not be updated safely.");
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        if (interestHandling == "Add to Monthly Income")
+            await SyncMonthlyIncomeTotalAsync(year, month);
     }
 
     private static string NormalizeInterestHandling(string? value)
