@@ -4,6 +4,11 @@
     ViewData["Title"] = "Account Management";
     var gb = CultureInfo.GetCultureInfo("en-GB");
     var canEdit = User.Identity?.IsAuthenticated == true;
+    var firstPendingAccount = Model.FirstAccountNeedingReconciliation;
+    var oldestPendingDate = Model.OldestPendingInterestDate;
+    var pendingAgeDays = oldestPendingDate.HasValue
+        ? Math.Max(0, (DateTime.Today - oldestPendingDate.Value.Date).Days)
+        : 0;
 }
 
 <header class="fm-dashboard-hero fm-account-hero">
@@ -26,13 +31,35 @@
 
 @if (Model.AccountsNeedingInterestReconciliation > 0)
 {
-    <section class="card fm-interest-reconciliation-summary">
-        <div>
+    <section class="card fm-interest-reconciliation-summary" aria-labelledby="interest-reconciliation-title">
+        <div class="fm-interest-reconciliation-copy">
             <p class="eyebrow">Interest reconciliation</p>
-            <h2>@Model.AccountsNeedingInterestReconciliation account@(Model.AccountsNeedingInterestReconciliation == 1 ? string.Empty : "s") need updating</h2>
-            <p class="muted">Interest remains pending until you confirm the current balance, including amounts carried forward from earlier months.</p>
+            <h2 id="interest-reconciliation-title">@Model.AccountsNeedingInterestReconciliation account@(Model.AccountsNeedingInterestReconciliation == 1 ? string.Empty : "s") require reconciliation</h2>
+            <p class="muted">Confirmed interest is waiting to be reflected in the relevant recorded balances. It remains carried forward until you complete a balance check.</p>
         </div>
-        <strong>@Model.TotalPendingInterest.ToString("C", gb) pending</strong>
+        <div class="fm-interest-reconciliation-stats">
+            <div>
+                <span>Accounts</span>
+                <strong>@Model.AccountsNeedingInterestReconciliation</strong>
+            </div>
+            <div>
+                <span>Pending</span>
+                <strong>@Model.TotalPendingInterest.ToString("C", gb)</strong>
+            </div>
+            <div>
+                <span>Oldest</span>
+                <strong>@(pendingAgeDays == 0 ? "Today" : pendingAgeDays == 1 ? "1 day" : $"{pendingAgeDays} days")</strong>
+                @if (oldestPendingDate.HasValue)
+                {
+                    <small>@oldestPendingDate.Value.ToString("dd MMM yyyy")</small>
+                }
+            </div>
+            @if (canEdit && firstPendingAccount is not null)
+            {
+                var firstPendingPanelId = $"account-panel-{firstPendingAccount.SourceKey.Replace(':', '-').Replace(' ', '-')}-balance";
+                <button class="primary" type="button" data-review-pending-accounts aria-controls="@firstPendingPanelId">Review accounts</button>
+            }
+        </div>
     </section>
 }
 
@@ -122,7 +149,7 @@
         @foreach (var account in Model.Accounts)
         {
             var panelId = $"account-panel-{account.SourceKey.Replace(':', '-').Replace(' ', '-')}";
-            <article class="fm-account-summary-card" data-account-card>
+            <article class="fm-account-summary-card" data-account-card data-needs-reconciliation="@account.NeedsInterestReconciliation.ToString().ToLowerInvariant()">
                 <div class="fm-account-summary-topline">
                     <div>
                         <h3>@account.AccountName</h3>
@@ -255,12 +282,12 @@
                             <strong>@account.RecordedBalance.ToString("C", gb)</strong>
                             @if (account.PendingInterestCount > 0)
                             {
-                                <span>Interest already recorded as income</span>
+                                <span>Confirmed interest not yet reflected</span>
                                 <strong>+@account.PendingInterest.ToString("C", gb)</strong>
                                 <span>Suggested current balance</span>
                                 <strong>@account.SuggestedBalance.ToString("C", gb)</strong>
                             }
-                            <small>Saving here only updates the account value. It does not create another income entry or alter your monthly budget.</small>
+                            <small>Saving here only updates the recorded account value. It never creates another income entry or changes your monthly budget.</small>
                         </div>
 
                         <form asp-action="UpdateBalance" method="post" class="fm-balance-check-form" data-balance-confirm data-recorded-balance="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" data-pending-interest="@account.PendingInterest.ToString("0.00", CultureInfo.InvariantCulture)" data-account-name="@account.AccountName">
@@ -274,7 +301,7 @@
                             {
                                 <label class="fm-account-toggle">
                                     <input name="reconcilePendingInterest" type="checkbox" value="true" checked />
-                                    <span>Mark the @account.PendingInterestCount pending interest payment@(account.PendingInterestCount == 1 ? string.Empty : "s") as reconciled</span>
+                                    <span>Mark the @account.PendingInterestCount pending interest payment@(account.PendingInterestCount == 1 ? string.Empty : "s") as reflected in this balance</span>
                                 </label>
                             }
                             <button class="primary" type="submit">Save current balance</button>
@@ -313,6 +340,19 @@
             trigger.setAttribute('aria-expanded', target && !target.hidden ? 'true' : 'false');
         });
     };
+
+    document.querySelector('[data-review-pending-accounts]')?.addEventListener('click', event => {
+        const targetId = event.currentTarget.getAttribute('aria-controls');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target) return;
+
+        closeAllPanels(target);
+        target.hidden = false;
+        const trigger = document.querySelector(`[aria-controls="${target.id}"]`);
+        trigger?.setAttribute('aria-expanded', 'true');
+        target.closest('[data-account-card]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.setTimeout(() => target.querySelector('input[name="actualBalance"]')?.focus(), 350);
+    });
 
     document.querySelectorAll('[data-account-panel-trigger]').forEach(trigger => {
         trigger.addEventListener('click', () => {

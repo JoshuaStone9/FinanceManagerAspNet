@@ -1220,3 +1220,16 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-pending-interest-panel{margin-top:1rem;padding:1rem;border:1px solid var(--border-color,#d8dee9);border-radius:14px;background:rgba(59,130,246,.06)}
 .fm-pending-interest-panel>div{display:grid;gap:.25rem}.fm-pending-interest-panel span{font-size:.82rem;color:var(--muted-color,#64748b)}
 .fm-pending-interest-panel strong{font-size:1.05rem}
+
+
+/* Phase 11.6.3 reconciliation notification refinement */
+.fm-interest-reconciliation-summary{padding:22px 24px}
+.fm-interest-reconciliation-copy{flex:1 1 420px}
+.fm-interest-reconciliation-copy h2{margin:0 0 8px}
+.fm-interest-reconciliation-stats{display:flex;align-items:stretch;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.fm-interest-reconciliation-stats>div{display:grid;align-content:center;gap:2px;min-width:105px;padding:10px 13px;border:1px solid var(--border);border-radius:13px;background:var(--surface-soft)}
+.fm-interest-reconciliation-stats span{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
+.fm-interest-reconciliation-stats strong{font-size:1.02rem}
+.fm-interest-reconciliation-stats small{color:var(--muted);font-size:.72rem}
+.fm-interest-reconciliation-stats button{min-height:54px;align-self:stretch;white-space:nowrap}
+@media(max-width:760px){.fm-interest-reconciliation-stats{width:100%;justify-content:stretch}.fm-interest-reconciliation-stats>div{flex:1;min-width:90px}.fm-interest-reconciliation-stats button{width:100%}}

@@ -717,7 +717,7 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
                 ? (DateTime?)null
                 : Convert.ToDateTime(lastReconciledValue);
 
-            await using var pendingCmd = new SqlCommand(@"SELECT COALESCE(SUM(actual_amount),0), COUNT(*)
+            await using var pendingCmd = new SqlCommand(@"SELECT COALESCE(SUM(actual_amount),0), COUNT(*), MIN(received_date)
 FROM dbo.passive_income_records
 WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at IS NULL", con);
             pendingCmd.Parameters.AddWithValue("@sourceKey", sourceKey);
@@ -725,6 +725,9 @@ WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at
             await pendingReader.ReadAsync();
             var pendingInterest = pendingReader.GetDecimal(0);
             var pendingCount = pendingReader.GetInt32(1);
+            var oldestPendingInterestDate = pendingReader.IsDBNull(2)
+                ? (DateTime?)null
+                : pendingReader.GetDateTime(2);
             await pendingReader.CloseAsync();
 
             rows.Add(new AccountReconciliationRow(
@@ -746,6 +749,7 @@ WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at
                 account.UpdatedAt,
                 Math.Round(pendingInterest, 2),
                 pendingCount,
+                oldestPendingInterestDate,
                 account.InterestHandling));
         }
 

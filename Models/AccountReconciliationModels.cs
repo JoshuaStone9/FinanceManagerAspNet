@@ -5,6 +5,15 @@ public sealed class AccountReconciliationViewModel
     public IReadOnlyList<AccountReconciliationRow> Accounts { get; init; } = [];
     public int AccountsNeedingInterestReconciliation => Accounts.Count(x => x.PendingInterestCount > 0);
     public decimal TotalPendingInterest => Accounts.Sum(x => x.PendingInterest);
+    public DateTime? OldestPendingInterestDate => Accounts
+        .Where(x => x.OldestPendingInterestDate.HasValue)
+        .Select(x => x.OldestPendingInterestDate)
+        .Min();
+    public AccountReconciliationRow? FirstAccountNeedingReconciliation => Accounts
+        .Where(x => x.NeedsInterestReconciliation)
+        .OrderBy(x => x.OldestPendingInterestDate ?? DateTime.MaxValue)
+        .ThenBy(x => x.AccountName)
+        .FirstOrDefault();
 }
 
 public sealed record AccountReconciliationRow(
@@ -26,6 +35,7 @@ public sealed record AccountReconciliationRow(
     DateTime BalanceUpdatedAt,
     decimal PendingInterest,
     int PendingInterestCount,
+    DateTime? OldestPendingInterestDate,
     string InterestHandling)
 {
     public decimal SuggestedBalance => Math.Round(RecordedBalance + PendingInterest, 2);

@@ -428,3 +428,7 @@ Interest is recorded once in Monthly Income. Account Management no longer provid
 ## Phase 11.6.2 - Flexible Interest Handling
 
 Accounts can default interest to either remain invested or enter monthly income, with a per-payment override and an Ignore for now option. See `PHASE_11_6_2.md`.
+
+
+### Phase 11.6.3
+Account Management now presents pending interest as a single notification summary. Review Accounts opens the oldest affected balance check, while detailed pending-interest information stays inside the Update Balance workflow.
