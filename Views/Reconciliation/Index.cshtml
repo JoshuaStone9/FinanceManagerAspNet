@@ -8,9 +8,9 @@
 
 <header class="fm-dashboard-hero fm-account-hero">
     <div>
-        <p class="eyebrow">Phase 10.11</p>
+        <p class="eyebrow">Phase 11.1</p>
         <h1>Account Management</h1>
-        <p>Keep balances and forecast assumptions organised in one place.</p>
+        <p>Manage where money is held, how each account is wrapped, and the balance it started with.</p>
     </div>
     <div class="fm-account-hero-actions">
         @if (canEdit)
@@ -31,7 +31,7 @@
             <div>
                 <p class="eyebrow">New account</p>
                 <h2>Add an account</h2>
-                <p class="muted">Add another ISA, savings account or cash pot for Statistics and forecasting.</p>
+                <p class="muted">Add an existing or new account, including its provider, wrapper, holding type and opening balance.</p>
             </div>
             <button class="button fm-icon-button" type="button" data-close-new-account aria-label="Close add account form">Close</button>
         </div>
@@ -43,8 +43,31 @@
                 <input name="name" placeholder="e.g. Cash ISA" required />
             </label>
             <label>
-                <span>Opening balance</span>
+                <span>Provider</span>
+                <input name="provider" placeholder="e.g. Trading 212" value="Other" required />
+            </label>
+            <label>
+                <span>Account wrapper</span>
+                <select name="accountType">
+                    <option>Savings</option>
+                    <option>Cash ISA</option>
+                    <option>Stocks &amp; Shares ISA</option>
+                    <option>General Investment Account</option>
+                </select>
+            </label>
+            <label>
+                <span>Holding type</span>
+                <select name="holdingType">
+                    <option>Cash</option>
+                    <option>Money Market Fund</option>
+                    <option>Stocks &amp; Shares</option>
+                    <option>Mixed</option>
+                </select>
+            </label>
+            <label>
+                <span>Starting balance</span>
                 <input name="openingBalance" type="number" min="0" step="0.01" value="0.00" required />
+                <small>Use the amount already held when bringing an existing account into Finance Manager.</small>
             </label>
             <label>
                 <span>Interest rate (AER)</span>
@@ -91,6 +114,9 @@
                 </div>
 
                 <div class="fm-account-summary-meta">
+                    <span>@account.Provider</span>
+                    <span>@account.AccountType</span>
+                    <span>@account.HoldingType</span>
                     <span>@account.InterestRate.ToString("0.##")% AER</span>
                     <span>@account.MonthlyContribution.ToString("C", gb) monthly</span>
                 </div>
@@ -122,6 +148,33 @@
                             <label class="fm-field-span-2">
                                 <span>Account name</span>
                                 <input name="name" value="@account.AccountName" @(account.AccountId == 0 ? "readonly" : "") required />
+                            </label>
+                            <label>
+                                <span>Provider</span>
+                                <input name="provider" value="@account.Provider" required />
+                            </label>
+                            <label>
+                                <span>Account wrapper</span>
+                                <select name="accountType">
+                                    @foreach (var option in new[] { "Savings", "Cash ISA", "Stocks & Shares ISA", "General Investment Account" })
+                                    {
+                                        <option value="@option" selected="@(account.AccountType == option)">@option</option>
+                                    }
+                                </select>
+                            </label>
+                            <label>
+                                <span>Holding type</span>
+                                <select name="holdingType">
+                                    @foreach (var option in new[] { "Cash", "Money Market Fund", "Stocks & Shares", "Mixed" })
+                                    {
+                                        <option value="@option" selected="@(account.HoldingType == option)">@option</option>
+                                    }
+                                </select>
+                            </label>
+                            <label>
+                                <span>Starting balance</span>
+                                <input name="startingBalance" type="number" min="0" step="0.01" value="@account.StartingBalance.ToString("0.00", CultureInfo.InvariantCulture)" required />
+                                <small>Changing this adjusts the recorded balance by the same difference, preserving later activity.</small>
                             </label>
                             <label>
                                 <span>Interest rate (AER)</span>

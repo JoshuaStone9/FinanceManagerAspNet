@@ -1,6 +1,18 @@
 namespace FinanceManagerAspNet.Models;
 
-public sealed record AccountBalance(int Id, string Name, decimal Amount, decimal InterestRate, decimal MonthlyContribution, bool IncludeInGlobalGoal, DateTime UpdatedAt, bool IncludeInSavingsCommand = false);
+public sealed record AccountBalance(
+    int Id,
+    string Name,
+    decimal Amount,
+    decimal InterestRate,
+    decimal MonthlyContribution,
+    bool IncludeInGlobalGoal,
+    DateTime UpdatedAt,
+    bool IncludeInSavingsCommand = false,
+    decimal StartingBalance = 0m,
+    string Provider = "Other",
+    string AccountType = "Savings",
+    string HoldingType = "Cash");
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);
 public sealed record IncomeSnapshot(int Year, int Month, decimal Amount, int SickDays, DateTime UpdatedAt);
 
@@ -549,6 +561,7 @@ public sealed record ReservePot(
     int Priority,
     bool IsActive,
     string? Notes,
+    decimal StartingAmount,
     DateTime UpdatedAt)
 {
     public bool IsFundingPaused => IsPausedFor(DateTime.Today);

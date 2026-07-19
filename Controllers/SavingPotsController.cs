@@ -145,18 +145,28 @@ public sealed class SavingPotsController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SavePot(int id, string name, decimal? targetAmount, DateTime? dueDate, string? notes)
+    public async Task<IActionResult> SavePot(int id, string name, decimal startingAmount, decimal? targetAmount, DateTime? dueDate, string? notes)
     {
         if (!CanEdit()) return LoginRedirect();
 
         var existing = id > 0 ? await repo.GetReservePotByIdAsync(id) : null;
+        if (startingAmount < 0m)
+        {
+            TempData["Error"] = "Starting amount cannot be negative.";
+            return Redirect($"{Url.Action(nameof(Index))}#{(id > 0 ? $"pot-{id}" : "new-allocation")}");
+        }
+
+        var currentBalance = existing is null
+            ? startingAmount
+            : existing.AllocatedAmount + (startingAmount - existing.StartingAmount);
         var returnAnchor = id > 0 ? $"pot-{id}" : "new-allocation";
         try
         {
             var savedId = await repo.SaveReservePotAsync(
                 id,
                 name,
-                existing?.AllocatedAmount ?? 0m,
+                currentBalance,
+                startingAmount,
                 existing?.DefaultMonthlyContribution ?? 0m,
                 0m,
                 "Monthly",
@@ -192,7 +202,7 @@ public sealed class SavingPotsController(
 
         var isResuming = !pot.IsActive;
         await repo.SaveReservePotAsync(
-            pot.Id, pot.Name, pot.AllocatedAmount, pot.DefaultMonthlyContribution, 0m, "Monthly", null,
+            pot.Id, pot.Name, pot.AllocatedAmount, pot.StartingAmount, pot.DefaultMonthlyContribution, 0m, "Monthly", null,
             false, false, null, null, null, pot.FundingPlanStartDate, pot.TargetAmount, pot.DueDate, 10,
             isResuming, pot.Notes);
 

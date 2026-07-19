@@ -87,6 +87,10 @@ else
             </div>
 
             <div class="fm-pot-balance"><span>Current balance</span><strong>@pot.AllocatedAmount.ToString("C", gb)</strong></div>
+            @if (pot.StartingAmount > 0m)
+            {
+                <p class="muted fm-pot-starting-balance">Started with @pot.StartingAmount.ToString("C", gb) when added to Finance Manager.</p>
+            }
             @if (pot.TargetAmount.HasValue)
             {
                 <div class="fm-pot-progress" role="progressbar" aria-valuenow="@progress.ToString("0")" aria-valuemin="0" aria-valuemax="100"><span style="width:@progress.ToString("0.##", CultureInfo.InvariantCulture)%"></span></div>
@@ -124,10 +128,11 @@ else
                     <form asp-action="SavePot" method="post" class="account-form fm-pot-simple-form">@Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@pot.Id"/>
                         <label>Name<input name="name" value="@pot.Name" required/></label>
+                        <label>Starting amount<input name="startingAmount" type="number" min="0" step="0.01" value="@pot.StartingAmount.ToString("0.00", CultureInfo.InvariantCulture)"/><small class="muted">For money already saved before this pot was created. Changing it adjusts the current balance by the same difference.</small></label>
                         <label>Target <span class="muted">(optional)</span><input name="targetAmount" type="number" min="0" step="0.01" value="@pot.TargetAmount"/></label>
                         <label>Date needed by <span class="muted">(optional)</span><input name="dueDate" type="date" value="@pot.DueDate?.ToString("yyyy-MM-dd")"/></label>
                         <label class="field full">Notes<textarea name="notes" rows="3">@pot.Notes</textarea></label>
-                        <p class="muted field full">Current balance and contribution averages are calculated automatically. Estimated completion is based on your real contribution history.</p>
+                        <p class="muted field full">Current balance includes the starting amount plus recorded contributions and withdrawals. Contribution averages are calculated automatically. Estimated completion is based on your real contribution history.</p>
                         <button class="primary">Save Money Pot</button>
                     </form>
                 </details>
@@ -142,10 +147,11 @@ else
 {
 <section class="card" id="new-allocation">
     <p class="eyebrow">New Money Pot</p><h2>Create a Money Pot</h2>
-    <p class="muted">Start at £0, add an optional goal and record contributions whenever you choose.</p>
+    <p class="muted">Start from £0 or bring across money you have already saved, then record future contributions normally.</p>
     <form asp-action="SavePot" method="post" class="account-form fm-pot-simple-form">@Html.AntiForgeryToken()
         <input type="hidden" name="id" value="0"/>
         <label>Name<input name="name" required placeholder="e.g. Florida holiday"/></label>
+        <label>Starting amount<input name="startingAmount" type="number" min="0" step="0.01" value="0.00"/><small class="muted">Enter an existing balance when moving a pre-existing pot into Finance Manager.</small></label>
         <label>Target <span class="muted">(optional)</span><input name="targetAmount" type="number" min="0" step="0.01"/></label>
         <label>Date needed by <span class="muted">(optional)</span><input name="dueDate" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")"/></label>
         <label class="field full">Notes<textarea name="notes" rows="3"></textarea></label>

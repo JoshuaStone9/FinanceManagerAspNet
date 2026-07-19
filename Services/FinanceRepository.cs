@@ -71,6 +71,12 @@ IF OBJECT_ID('dbo.account_balances','U') IS NULL
 CREATE TABLE dbo.account_balances(account_balance_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(120) NOT NULL, amount decimal(18,2) NOT NULL, interest_rate decimal(9,4) NOT NULL, monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, include_in_global_goal bit NOT NULL DEFAULT 1, updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
 IF COL_LENGTH('dbo.account_balances','include_in_savings_command') IS NULL ALTER TABLE dbo.account_balances ADD include_in_savings_command bit NOT NULL CONSTRAINT DF_account_balances_include_in_savings_command DEFAULT 0;
+IF COL_LENGTH('dbo.account_balances','starting_balance') IS NULL ALTER TABLE dbo.account_balances ADD starting_balance decimal(18,2) NULL;
+IF COL_LENGTH('dbo.account_balances','provider') IS NULL ALTER TABLE dbo.account_balances ADD provider nvarchar(120) NOT NULL CONSTRAINT DF_account_balances_provider DEFAULT 'Other';
+IF COL_LENGTH('dbo.account_balances','account_type') IS NULL ALTER TABLE dbo.account_balances ADD account_type nvarchar(80) NOT NULL CONSTRAINT DF_account_balances_account_type DEFAULT 'Savings';
+IF COL_LENGTH('dbo.account_balances','holding_type') IS NULL ALTER TABLE dbo.account_balances ADD holding_type nvarchar(80) NOT NULL CONSTRAINT DF_account_balances_holding_type DEFAULT 'Cash';
+UPDATE dbo.account_balances SET starting_balance=amount WHERE starting_balance IS NULL;
+ALTER TABLE dbo.account_balances ALTER COLUMN starting_balance decimal(18,2) NOT NULL;
 
 IF OBJECT_ID('dbo.reserved_funds','U') IS NULL
 CREATE TABLE dbo.reserved_funds(
@@ -183,8 +189,11 @@ INSERT INTO dbo.household_reserve(household_reserve_id,balance,interest_rate,pro
 SELECT 1, ISNULL((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0), 0, 'Money market fund';
 
 IF OBJECT_ID('dbo.reserve_pots','U') IS NULL
-CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, intended_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, funding_frequency nvarchar(30) NOT NULL DEFAULT 'Monthly', expected_funding_day int NULL, carry_forward_shortfalls bit NOT NULL DEFAULT 1, carry_excess_forward bit NOT NULL DEFAULT 0, funding_paused_from date NULL, funding_paused_until date NULL, funding_pause_reason nvarchar(300) NULL, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
+CREATE TABLE dbo.reserve_pots(reserve_pot_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(140) NOT NULL, allocated_amount decimal(18,2) NOT NULL DEFAULT 0, starting_amount decimal(18,2) NOT NULL DEFAULT 0, default_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, intended_monthly_contribution decimal(18,2) NOT NULL DEFAULT 0, funding_frequency nvarchar(30) NOT NULL DEFAULT 'Monthly', expected_funding_day int NULL, carry_forward_shortfalls bit NOT NULL DEFAULT 1, carry_excess_forward bit NOT NULL DEFAULT 0, funding_paused_from date NULL, funding_paused_until date NULL, funding_pause_reason nvarchar(300) NULL, target_amount decimal(18,2) NULL, due_date date NULL, priority int NOT NULL DEFAULT 1, is_active bit NOT NULL DEFAULT 1, notes nvarchar(500) NULL, created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(), updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME());
 
+IF COL_LENGTH('dbo.reserve_pots','starting_amount') IS NULL ALTER TABLE dbo.reserve_pots ADD starting_amount decimal(18,2) NULL;
+UPDATE dbo.reserve_pots SET starting_amount=allocated_amount WHERE starting_amount IS NULL;
+ALTER TABLE dbo.reserve_pots ALTER COLUMN starting_amount decimal(18,2) NOT NULL;
 IF COL_LENGTH('dbo.reserve_pots','intended_monthly_contribution') IS NULL ALTER TABLE dbo.reserve_pots ADD intended_monthly_contribution decimal(18,2) NOT NULL CONSTRAINT DF_reserve_pots_intended_monthly_contribution DEFAULT 0;
 IF COL_LENGTH('dbo.reserve_pots','funding_frequency') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_frequency nvarchar(30) NOT NULL CONSTRAINT DF_reserve_pots_funding_frequency DEFAULT 'Monthly';
 IF COL_LENGTH('dbo.reserve_pots','expected_funding_day') IS NULL ALTER TABLE dbo.reserve_pots ADD expected_funding_day int NULL;
@@ -675,6 +684,10 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
                 account.InterestRate,
                 account.MonthlyContribution,
                 account.IncludeInGlobalGoal,
+                account.StartingBalance,
+                account.Provider,
+                account.AccountType,
+                account.HoldingType,
                 lastReconciled,
                 account.UpdatedAt));
         }
@@ -939,12 +952,16 @@ SELECT @@ROWCOUNT;", con);
     {
         await EnsureModernTablesAsync();
         var includeEmergency = await GetDecimalSettingAsync("SavingsIncludeEmergencyFund", 1m) == 1m;
+        var emergencyStartingBalance = await GetDecimalSettingAsync("EmergencyFundStartingBalance", emergencyFund);
+        var emergencyProvider = await GetStringSettingAsync("EmergencyFundProvider", "Other");
+        var emergencyAccountType = await GetStringSettingAsync("EmergencyFundAccountType", "Savings");
+        var emergencyHoldingType = await GetStringSettingAsync("EmergencyFundHoldingType", "Cash");
         var accounts = new List<AccountBalance>
         {
-            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency)
+            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency, emergencyStartingBalance, emergencyProvider, emergencyAccountType, emergencyHoldingType)
         };
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command FROM dbo.account_balances ORDER BY [name]", con);
+        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type FROM dbo.account_balances ORDER BY [name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
         {
@@ -956,7 +973,11 @@ SELECT @@ROWCOUNT;", con);
                 r.GetDecimal(4),
                 r.GetBoolean(5),
                 r.GetDateTime(6),
-                r.GetBoolean(7)));
+                r.GetBoolean(7),
+                r.GetDecimal(8),
+                r.GetString(9),
+                r.GetString(10),
+                r.GetString(11)));
         }
         return accounts;
     }
@@ -1047,13 +1068,51 @@ SELECT @@ROWCOUNT;", con);
         await cmd.ExecuteNonQueryAsync();
     }
 
-    public async Task SaveAccountAsync(int id, string name, decimal amount, decimal rate, decimal monthly, bool include)
+    public async Task SaveAccountAsync(
+        int id,
+        string name,
+        decimal amount,
+        decimal rate,
+        decimal monthly,
+        bool include,
+        decimal startingBalance,
+        string provider,
+        string accountType,
+        string holdingType)
     {
         await EnsureModernTablesAsync();
-        if (id == 0 && name == "Emergency Fund") { await ExecuteAsync("IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount,updated_at=GETDATE() ELSE INSERT INTO dbo.emergency_fund(amount,updated_at) VALUES(@amount,GETDATE())", ("@amount", amount)); await ExecuteAsync("MERGE dbo.finance_settings AS t USING (SELECT @key AS [key]) AS s ON t.[key]=s.[key] WHEN MATCHED THEN UPDATE SET [value]=@value, updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT([key],[value]) VALUES(@key,@value);", ("@key", "EmergencyFundInterestRate"), ("@value", rate)); return; }
-        if (id == 0) await ExecuteAsync("INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal) VALUES(@name,@amount,@rate,@monthly,@include)", ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include));
-        else await ExecuteAsync("UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include));
-        await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)", ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly));
+        provider = string.IsNullOrWhiteSpace(provider) ? "Other" : provider.Trim();
+        accountType = string.IsNullOrWhiteSpace(accountType) ? "Savings" : accountType.Trim();
+        holdingType = string.IsNullOrWhiteSpace(holdingType) ? "Cash" : holdingType.Trim();
+
+        if (id == 0 && name == "Emergency Fund")
+        {
+            await ExecuteAsync("IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount,updated_at=GETDATE() ELSE INSERT INTO dbo.emergency_fund(amount,updated_at) VALUES(@amount,GETDATE())", ("@amount", amount));
+            await SaveDecimalSettingAsync("EmergencyFundInterestRate", rate);
+            await SaveDecimalSettingAsync("EmergencyFundStartingBalance", startingBalance);
+            await SaveStringSettingAsync("EmergencyFundProvider", provider);
+            await SaveStringSettingAsync("EmergencyFundAccountType", accountType);
+            await SaveStringSettingAsync("EmergencyFundHoldingType", holdingType);
+            return;
+        }
+
+        if (id == 0)
+        {
+            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type)
+VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType)",
+                ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
+                ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType));
+            id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE [name]=@name ORDER BY account_balance_id DESC", ("@name", name)));
+        }
+        else
+        {
+            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
+                ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
+                ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType));
+        }
+
+        await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)",
+            ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly));
     }
 
 
@@ -2189,14 +2248,14 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
         var list = new List<ReservePot>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_from,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
+        await using var cmd = new SqlCommand("SELECT reserve_pot_id,[name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_from,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes,starting_amount,updated_at FROM dbo.reserve_pots ORDER BY priority,[name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
-            list.Add(new ReservePot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetInt32(6), r.GetBoolean(7), r.GetBoolean(8), r.IsDBNull(9) ? null : r.GetDateTime(9), r.IsDBNull(10) ? null : r.GetDateTime(10), r.IsDBNull(11) ? null : r.GetString(11), r.GetDateTime(12), r.IsDBNull(13) ? null : r.GetDecimal(13), r.IsDBNull(14) ? null : r.GetDateTime(14), r.GetInt32(15), r.GetBoolean(16), r.IsDBNull(17) ? null : r.GetString(17), r.GetDateTime(18)));
+            list.Add(new ReservePot(r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetInt32(6), r.GetBoolean(7), r.GetBoolean(8), r.IsDBNull(9) ? null : r.GetDateTime(9), r.IsDBNull(10) ? null : r.GetDateTime(10), r.IsDBNull(11) ? null : r.GetString(11), r.GetDateTime(12), r.IsDBNull(13) ? null : r.GetDecimal(13), r.IsDBNull(14) ? null : r.GetDateTime(14), r.GetInt32(15), r.GetBoolean(16), r.IsDBNull(17) ? null : r.GetString(17), r.GetDecimal(18), r.GetDateTime(19)));
         return list;
     }
 
-    public async Task<int> SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal monthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedFrom, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
+    public async Task<int> SaveReservePotAsync(int id, string name, decimal allocatedAmount, decimal startingAmount, decimal monthlyContribution, decimal intendedMonthlyContribution, string fundingFrequency, int? expectedFundingDay, bool carryForwardShortfalls, bool carryExcessForward, DateTime? fundingPausedFrom, DateTime? fundingPausedUntil, string? fundingPauseReason, DateTime? fundingPlanStartDate, decimal? targetAmount, DateTime? dueDate, int priority, bool isActive, string? notes)
     {
         await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Pot name is required.", nameof(name));
@@ -2217,6 +2276,7 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
         {
             ("@name", name.Trim()),
             ("@allocated", Math.Max(0, allocatedAmount)),
+            ("@starting", Math.Max(0, startingAmount)),
             ("@monthly", Math.Max(0, monthlyContribution)),
             ("@intended", Math.Max(0, intendedMonthlyContribution)),
             ("@frequency", normalisedFrequency),
@@ -2236,14 +2296,14 @@ WHEN NOT MATCHED THEN INSERT(household_reserve_id,balance,interest_rate,provider
 
         if (id <= 0)
         {
-            await ExecuteAsync(@"INSERT INTO dbo.reserve_pots([name],allocated_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_from,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes)
-VALUES(@name,@allocated,@monthly,@intended,@frequency,@fundingDay,@carryForward,@carryExcess,@pausedFrom,@pausedUntil,@pauseReason,@planStart,@target,@due,@priority,@active,@notes)", parameters);
+            await ExecuteAsync(@"INSERT INTO dbo.reserve_pots([name],allocated_amount,starting_amount,default_monthly_contribution,intended_monthly_contribution,funding_frequency,expected_funding_day,carry_forward_shortfalls,carry_excess_forward,funding_paused_from,funding_paused_until,funding_pause_reason,funding_plan_start_date,target_amount,due_date,priority,is_active,notes)
+VALUES(@name,@allocated,@starting,@monthly,@intended,@frequency,@fundingDay,@carryForward,@carryExcess,@pausedFrom,@pausedUntil,@pauseReason,@planStart,@target,@due,@priority,@active,@notes)", parameters);
             id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 reserve_pot_id FROM dbo.reserve_pots WHERE [name]=@name ORDER BY reserve_pot_id DESC", ("@name", name.Trim())));
             await AddFinanceEventAsync("Household Reserve", "PotCreated", "ReservePot", id, $"{name.Trim()} created", "A new virtual allocation was created.", allocatedAmount, "User");
         }
         else
         {
-            await ExecuteAsync(@"UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,default_monthly_contribution=@monthly,intended_monthly_contribution=@intended,funding_frequency=@frequency,expected_funding_day=@fundingDay,carry_forward_shortfalls=@carryForward,carry_excess_forward=@carryExcess,funding_paused_from=@pausedFrom,funding_paused_until=@pausedUntil,funding_pause_reason=@pauseReason,funding_plan_start_date=@planStart,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", parameters.Append(("@id", (object)id)).ToArray());
+            await ExecuteAsync(@"UPDATE dbo.reserve_pots SET [name]=@name,allocated_amount=@allocated,starting_amount=@starting,default_monthly_contribution=@monthly,intended_monthly_contribution=@intended,funding_frequency=@frequency,expected_funding_day=@fundingDay,carry_forward_shortfalls=@carryForward,carry_excess_forward=@carryExcess,funding_paused_from=@pausedFrom,funding_paused_until=@pausedUntil,funding_pause_reason=@pauseReason,funding_plan_start_date=@planStart,target_amount=@target,due_date=@due,priority=@priority,is_active=@active,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_id=@id", parameters.Append(("@id", (object)id)).ToArray());
             await AddFinanceEventAsync("Household Reserve", "PotUpdated", "ReservePot", id, $"{name.Trim()} updated", "Funding settings or allocation details were changed.", allocatedAmount, "User");
         }
 

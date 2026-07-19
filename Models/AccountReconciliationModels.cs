@@ -13,5 +13,9 @@ public sealed record AccountReconciliationRow(
     decimal InterestRate,
     decimal MonthlyContribution,
     bool IncludeInForecast,
+    decimal StartingBalance,
+    string Provider,
+    string AccountType,
+    string HoldingType,
     DateTime? LastReconciledAt,
     DateTime BalanceUpdatedAt);

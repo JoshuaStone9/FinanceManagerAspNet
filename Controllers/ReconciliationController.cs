@@ -14,10 +14,14 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         string name,
         decimal interestRate,
         decimal monthlyContribution,
+        decimal startingBalance,
+        string? provider,
+        string? accountType,
+        string? holdingType,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
-        if (string.IsNullOrWhiteSpace(name) || interestRate < 0m || monthlyContribution < 0m)
+        if (string.IsNullOrWhiteSpace(name) || interestRate < 0m || monthlyContribution < 0m || startingBalance < 0m)
         {
             TempData["Error"] = "Enter valid account details.";
             return RedirectToAction(nameof(Index));
@@ -32,13 +36,18 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         }
 
         var safeName = id == 0 ? "Emergency Fund" : name.Trim();
+        var adjustedBalance = account.RecordedBalance + (startingBalance - account.StartingBalance);
         await repo.SaveAccountAsync(
             id,
             safeName,
-            account.RecordedBalance,
+            adjustedBalance,
             interestRate,
             monthlyContribution,
-            includeInGlobalGoal);
+            includeInGlobalGoal,
+            startingBalance,
+            provider ?? "Other",
+            accountType ?? "Savings",
+            holdingType ?? "Cash");
 
         TempData["Success"] = $"{safeName} settings updated.";
         return RedirectToAction(nameof(Index));
@@ -50,6 +59,9 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         decimal openingBalance,
         decimal interestRate,
         decimal monthlyContribution,
+        string? provider,
+        string? accountType,
+        string? holdingType,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -65,7 +77,11 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             openingBalance,
             interestRate,
             monthlyContribution,
-            includeInGlobalGoal);
+            includeInGlobalGoal,
+            openingBalance,
+            provider ?? "Other",
+            accountType ?? "Savings",
+            holdingType ?? "Cash");
 
         TempData["Success"] = $"{name.Trim()} added.";
         return RedirectToAction(nameof(Index));

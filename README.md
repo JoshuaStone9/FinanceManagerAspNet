@@ -405,3 +405,11 @@ Financial Trends now hides empty calendar months, calculates average surplus fro
 ## Phase 10.13 — Dashboard Financial Task Centre
 
 Financial reminders are now surfaced as a unified Financial Tasks inbox and Dashboard priority list, including live smart prompts for accounts, passive income and Money Pot deadlines.
+
+## Phase 11.1–11.2 — Account evolution and starting balances
+
+- Accounts now record a provider, account wrapper and holding type so cash, money-market and investment accounts are described independently of the platform holding them.
+- Account starting balances are preserved separately from current balances. Changing an imported starting balance adjusts the current recorded balance by the same difference without rewriting later activity.
+- Money Pots can now be created from an existing starting amount instead of always beginning at zero.
+- Existing Money Pot starting amounts can be corrected later while preserving contributions and withdrawals recorded after the pot entered Finance Manager.
+- Existing account and Money Pot records are migrated automatically by treating their current balance as their initial starting balance.
