@@ -750,12 +750,23 @@ public sealed record FinanceReminderRow(
     public bool IsOverdue => Status == "Open" && EffectiveDueDate < DateTime.Today;
 }
 
+public sealed record FinancialTaskItem(
+    string Title,
+    string Detail,
+    string Category,
+    string Priority,
+    string Url,
+    string Icon,
+    DateTime? DueDate = null);
+
 public sealed class FinanceRemindersViewModel
 {
     public string Status { get; set; } = "Open";
     public List<ReservePot> Pots { get; set; } = [];
     public List<FinanceReminderRow> Reminders { get; set; } = [];
+    public List<FinancialTaskItem> SmartTasks { get; set; } = [];
     public int DueCount => Reminders.Count(x => x.IsDue);
+    public int OpenCount => Reminders.Count(x => x.Status == "Open") + SmartTasks.Count;
 }
 
 public sealed record FinanceEventRow(

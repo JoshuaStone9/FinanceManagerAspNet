@@ -1,8 +1,10 @@
+@inject FinanceManagerAspNet.Services.FinanceRepository LayoutFinanceRepository
 @{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
     var action = ViewContext.RouteData.Values["action"]?.ToString();
     var isVault = controller == "Items" || controller == "Locations" || controller == "VaultSettings";
     var isLoggedIn = User.Identity?.IsAuthenticated == true;
+    var financialTaskDueCount = isVault ? 0 : await LayoutFinanceRepository.GetDueReminderCountAsync();
 }
 <!doctype html>
 <html lang="en" data-theme="dark">
@@ -170,7 +172,7 @@ else
           <a class="fm-nav-item @(controller == "Assets" ? "active" : "")" data-tooltip="Assets" asp-controller="Assets" asp-action="Index"><i data-lucide="landmark"></i><span>Assets</span></a>
           <a class="fm-nav-item @(controller == "SavingPots" ? "active" : "")" data-tooltip="Money Pots" asp-controller="SavingPots" asp-action="Index"><i data-lucide="piggy-bank"></i><span>Money Pots</span></a>
           <a class="fm-nav-item @(controller == "Events" ? "active" : "")" data-tooltip="Events" asp-controller="Events" asp-action="Index"><i data-lucide="calendar-days"></i><span>Events</span></a>
-          <a class="fm-nav-item @(controller == "Reminders" ? "active" : "")" data-tooltip="Reminders" asp-controller="Reminders" asp-action="Index"><i data-lucide="bell"></i><span>Reminders</span></a>
+          <a class="fm-nav-item @(controller == "Reminders" ? "active" : "")" data-tooltip="Financial Tasks" asp-controller="Reminders" asp-action="Index"><i data-lucide="list-checks"></i><span>Financial Tasks</span>@if (financialTaskDueCount > 0) { <span class="fm-nav-task-badge">@financialTaskDueCount</span> }</a>
         </div>
 
         <div class="fm-nav-group">

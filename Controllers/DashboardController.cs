@@ -89,6 +89,35 @@ public sealed class DashboardController(
 
         vm.Experience = dashboardExperienceService.Build(vm);
 
+        var smartDashboardTasks = vm.Experience.UpcomingActions.ToList();
+        var dashboardAccounts = await repo.GetAccountsAsync(reserve.Balance);
+        smartDashboardTasks.AddRange(dashboardAccounts
+            .Where(x => x.Amount > 0m && x.UpdatedAt.Date <= DateTime.Today.AddDays(-90))
+            .Select(x => new DashboardActionItem(
+                $"Check {x.Name} balance",
+                $"Last updated {x.UpdatedAt:dd MMM yyyy}",
+                "~/Reconciliation",
+                x.UpdatedAt.Date <= DateTime.Today.AddDays(-180) ? "danger" : "warning",
+                DateTime.Today)));
+
+        var expectedPassiveIncome = await repo.GetPassiveIncomeEstimatesAsync(y, m);
+        smartDashboardTasks.AddRange(expectedPassiveIncome
+            .Where(x => !x.IsReceived && x.EstimatedAmount > 0m)
+            .Select(x => new DashboardActionItem(
+                $"Confirm {x.SourceName} interest",
+                $"Approximately {x.EstimatedAmount:C} expected this month",
+                $"~/MonthlyMoney/Income?year={y}&month={m}",
+                "warning",
+                new DateTime(y, m, DateTime.DaysInMonth(y, m)))));
+
+        vm.Experience.UpcomingActions = smartDashboardTasks
+            .GroupBy(x => new { x.Title, x.Url })
+            .Select(x => x.First())
+            .OrderBy(x => x.Severity == "danger" ? 0 : x.Severity == "warning" ? 1 : 2)
+            .ThenBy(x => x.DueDate ?? DateTime.MaxValue)
+            .Take(6)
+            .ToList();
+
         var previousMonth = new DateTime(y, m, 1).AddMonths(-1);
         var previousIncomeEntriesTotal = await repo.GetMonthlyIncomeEntriesTotalAsync(previousMonth.Year, previousMonth.Month);
         var previousIncome = previousIncomeEntriesTotal ?? 0m;

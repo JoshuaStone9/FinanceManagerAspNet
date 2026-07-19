@@ -34,7 +34,7 @@ public sealed class DashboardExperienceService : IDashboardExperienceService
             new DashboardActionItem(
                 x.Title,
                 $"{x.PotName ?? "General"} · due {x.EffectiveDueDate:dd MMM yyyy}",
-                "/Reminders",
+                "~/Reminders",
                 x.EffectiveDueDate.Date < DateTime.Today ? "danger" : "warning",
                 x.EffectiveDueDate)));
 
@@ -42,7 +42,7 @@ public sealed class DashboardExperienceService : IDashboardExperienceService
             new DashboardActionItem(
                 x.PotName,
                 $"{x.RemainingAmount:C} remaining · target {x.DueDate:dd MMM yyyy}",
-                $"/SavingPots#pot-{x.PotId}",
+                $"~/SavingPots#pot-{x.PotId}",
                 x.DaysRemaining <= 30 ? "warning" : "neutral",
                 x.DueDate)));
 
@@ -51,7 +51,7 @@ public sealed class DashboardExperienceService : IDashboardExperienceService
             actions.Insert(0, new DashboardActionItem(
                 $"{dashboard.Intelligence.OverdueOrMissedCount} pot{(dashboard.Intelligence.OverdueOrMissedCount == 1 ? "" : "s")} need attention",
                 "Review overdue or missed funding",
-                "/SavingPots",
+                "~/SavingPots",
                 "danger"));
         }
 

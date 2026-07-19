@@ -400,3 +400,8 @@ Financial Trends now provides 3, 6 and 12 month cash-flow and passive-income ana
 
 ### Phase 10.12 accuracy and insight polish
 Financial Trends now hides empty calendar months, calculates average surplus from months with recorded income, provides month-on-month comparison badges, links each recorded month to its dashboard, and adds concise data-backed insights.
+
+
+## Phase 10.13 — Dashboard Financial Task Centre
+
+Financial reminders are now surfaced as a unified Financial Tasks inbox and Dashboard priority list, including live smart prompts for accounts, passive income and Money Pot deadlines.

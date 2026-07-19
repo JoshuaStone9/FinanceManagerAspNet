@@ -162,12 +162,12 @@
 </section>
 
 <section class="fm-dashboard-section" aria-labelledby="attention-title">
-    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Attention and activity</p><h2 id="attention-title">What happens next</h2></div></div>
+    <div class="fm-dashboard-section-head"><div><p class="eyebrow">Today's priorities</p><h2 id="attention-title">What needs your attention</h2></div><a class="button secondary" asp-controller="Reminders" asp-action="Index">View all tasks</a></div>
     <div class="fm-attention-grid">
         <article class="fm-list-card">
-            <div class="fm-card-heading"><div><span>Upcoming actions</span><h3>@Model.Experience.UpcomingActions.Count item@(Model.Experience.UpcomingActions.Count == 1 ? "" : "s")</h3></div><i data-lucide="list-checks"></i></div>
+            <div class="fm-card-heading"><div><span>Priority task list</span><h3>@Model.Experience.UpcomingActions.Count item@(Model.Experience.UpcomingActions.Count == 1 ? "" : "s")</h3></div><i data-lucide="list-checks"></i></div>
             @if (Model.Experience.UpcomingActions.Count == 0) { <div class="fm-empty-state"><i data-lucide="circle-check-big"></i><strong>Nothing needs attention</strong><span>Your current reminders and targets are clear.</span></div> }
-            else { <div class="fm-action-list">@foreach (var action in Model.Experience.UpcomingActions) { <a class="severity-@action.Severity" href="@action.Url"><span><strong>@action.Title</strong><small>@action.Detail</small></span><i data-lucide="chevron-right"></i></a> }</div> }
+            else { <div class="fm-action-list">@foreach (var action in Model.Experience.UpcomingActions) { <a class="severity-@action.Severity" href="@Url.Content(action.Url)"><span><strong>@action.Title</strong><small>@action.Detail</small></span><i data-lucide="chevron-right"></i></a> }</div> }
         </article>
         <article class="fm-list-card">
             <div class="fm-card-heading"><div><span>Recent activity</span><h3>Latest monthly entries</h3></div><i data-lucide="history"></i></div>

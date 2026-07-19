@@ -77,10 +77,17 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapControllers();
+
 app.MapControllerRoute(
     name: "vault",
     pattern: "PersonalVault/{action=Index}/{id?}",
     defaults: new { controller = "Items" });
+
+app.MapControllerRoute(
+    name: "financial-tasks",
+    pattern: "Reminders/{action=Index}/{id?}",
+    defaults: new { controller = "Reminders" });
 
 app.MapControllerRoute(
     name: "default",

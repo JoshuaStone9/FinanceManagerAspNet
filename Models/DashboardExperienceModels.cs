@@ -4,7 +4,7 @@ public sealed class DashboardExperience
 {
     public MonthlyMoneyJourney Journey { get; init; } = new();
     public IReadOnlyList<DashboardSectionSummary> MonthlySections { get; init; } = [];
-    public IReadOnlyList<DashboardActionItem> UpcomingActions { get; init; } = [];
+    public IReadOnlyList<DashboardActionItem> UpcomingActions { get; set; } = [];
     public IReadOnlyList<DashboardActivityItem> RecentActivity { get; init; } = [];
     public decimal AllocatedToFuture { get; init; }
     public int RecordedItemCount { get; init; }
