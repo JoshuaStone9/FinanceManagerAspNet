@@ -6,7 +6,7 @@
 
 <div class="page-header forecast-page-header">
     <div>
-        <p class="eyebrow">Phase 7 · Forecasting &amp; Planning</p>
+        <p class="eyebrow">Phase 11.5 · Intelligent Forecasting</p>
         <h1>Financial Forecast</h1>
         <p class="muted">Explore the likely future position of your money pots and savings goals without changing live data.</p>
     </div>
@@ -40,7 +40,9 @@
 <div class="forecast-summary-grid">
     <section class="card"><span>Current reserve</span><strong>@forecast.OpeningReserveBalance.ToString("C")</strong></section>
     <section class="card"><span>Projected reserve</span><strong>@forecast.ProjectedReserveBalance.ToString("C")</strong></section>
-    <section class="card"><span>Projected interest</span><strong>@forecast.ProjectedInterest.ToString("C")</strong></section>
+    <section class="card"><span>Net projected interest</span><strong>@forecast.ProjectedInterest.ToString("C")</strong></section>
+    <section class="card"><span>Gross interest</span><strong>@forecast.ProjectedGrossInterest.ToString("C")</strong></section>
+    <section class="card"><span>Estimated tax</span><strong>@forecast.ProjectedTax.ToString("C")</strong></section>
     <section class="card"><span>Future contributions</span><strong>@forecast.ProjectedAccountContributions.ToString("C")</strong></section>
     <section class="card"><span>Projected pot allocations</span><strong>@forecast.ProjectedAllocatedToPots.ToString("C")</strong></section>
     <section class="card"><span>Unallocated surplus</span><strong>@forecast.ProjectedUnallocatedSurplus.ToString("C")</strong></section>
@@ -99,6 +101,8 @@
                     <div><dt>Current balance</dt><dd>@pot.CurrentBalance.ToString("C")</dd></div>
                     <div><dt>Target</dt><dd>@(pot.TargetAmount?.ToString("C") ?? "Not set")</dd></div>
                     <div><dt>Projected balance</dt><dd>@pot.ProjectedBalance.ToString("C")</dd></div>
+                    <div><dt>Projected investment growth</dt><dd>@pot.ProjectedGrowth.ToString("C")</dd></div>
+                    <div><dt>Investment journey</dt><dd>@pot.InvestmentJourneySummary</dd></div>
                     <div><dt>Estimated completion</dt><dd>@(pot.ProjectedCompletionDate?.ToString("MMMM yyyy") ?? "Not enough history")</dd></div>
                     <div><dt>Recent monthly average</dt><dd>@pot.RecentMonthlyContribution.ToString("C") / month</dd></div>
                     <div><dt>Date needed by</dt><dd>@(pot.DueDate?.ToString("dd MMM yyyy") ?? "Not set")</dd></div>

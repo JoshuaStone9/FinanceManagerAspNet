@@ -67,13 +67,15 @@ public sealed class DashboardController(
         }
         else
         {
+            var investmentStages = await repo.GetReservePotInvestmentStagesAsync();
             twelveMonthForecast = financialForecastService.Build(new FinancialForecastRequest
             {
                 StartDate = DateTime.Today,
                 EndDate = DateTime.Today.AddMonths(12),
                 ProtectedReserveBaseline = accountSummary.Baseline,
                 Accounts = accountSummary.SelectedAccounts,
-                Pots = reservePots
+                Pots = reservePots,
+                InvestmentStages = investmentStages
             });
         }
 
@@ -99,6 +101,17 @@ public sealed class DashboardController(
                 "~/Reconciliation",
                 x.UpdatedAt.Date <= DateTime.Today.AddDays(-180) ? "danger" : "warning",
                 DateTime.Today)));
+
+        var reconciliation = await repo.GetAccountReconciliationAsync();
+        if (reconciliation.AccountsNeedingInterestReconciliation > 0)
+        {
+            smartDashboardTasks.Add(new DashboardActionItem(
+                "Apply pending account interest",
+                $"{reconciliation.TotalPendingInterest:C} across {reconciliation.AccountsNeedingInterestReconciliation} account{(reconciliation.AccountsNeedingInterestReconciliation == 1 ? string.Empty : "s")}",
+                "~/Reconciliation",
+                "warning",
+                DateTime.Today));
+        }
 
         var expectedPassiveIncome = await repo.GetPassiveIncomeEstimatesAsync(y, m);
         smartDashboardTasks.AddRange(expectedPassiveIncome

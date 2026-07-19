@@ -114,6 +114,23 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         return RedirectToAction(nameof(Index));
     }
 
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApplyPendingInterest(string sourceKey)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        try
+        {
+            var amount = await repo.ApplyPendingInterestAsync(sourceKey);
+            TempData["Success"] = $"{amount:C} pending interest applied to the account balance.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index));
+    }
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateBalance(string sourceKey, decimal actualBalance)
     {

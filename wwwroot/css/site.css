@@ -1213,3 +1213,10 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-journey-stage>div{display:grid;gap:.2rem}.fm-journey-stage span,.fm-journey-stage small{color:var(--muted,#9ca3af)}.fm-journey-number{display:grid;place-items:center;width:2rem;height:2rem;border-radius:999px;background:rgba(255,255,255,.08);font-weight:700}
 .fm-journey-form{margin-top:.75rem}.fm-tax-summary{margin-top:1rem}.fm-tax-summary .bad{font-weight:700}
 @media(max-width:720px){.fm-journey-stage{grid-template-columns:auto 1fr}.fm-journey-stage details{grid-column:1/-1}.fm-journey-form{grid-template-columns:1fr}}
+
+
+/* Phase 11.6 interest reconciliation */
+.fm-interest-reconciliation-summary,.fm-pending-interest-panel{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.fm-pending-interest-panel{margin-top:1rem;padding:1rem;border:1px solid var(--border-color,#d8dee9);border-radius:14px;background:rgba(59,130,246,.06)}
+.fm-pending-interest-panel>div{display:grid;gap:.25rem}.fm-pending-interest-panel span{font-size:.82rem;color:var(--muted-color,#64748b)}
+.fm-pending-interest-panel strong{font-size:1.05rem}

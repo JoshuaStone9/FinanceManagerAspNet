@@ -26,6 +26,8 @@ public sealed class FinancialForecastService : IFinancialForecastService
 
         var month = new DateTime(startDate.Year, startDate.Month, 1).AddMonths(1);
         var endMonth = new DateTime(endDate.Year, endDate.Month, 1);
+        decimal totalGrossInterest = 0m;
+        decimal totalTax = 0m;
         decimal totalInterest = 0m;
         decimal totalContributions = 0m;
         decimal totalExpenses = 0m;
@@ -41,10 +43,16 @@ public sealed class FinancialForecastService : IFinancialForecastService
                 var contribution = request.IncludeAccountContributions ? Math.Max(0m, account.MonthlyContribution) : 0m;
                 var rate = Math.Max(0m, account.InterestRate) / 100m / 12m;
                 var current = accountStates[account.Id] + contribution;
-                var interest = current * rate;
-                accountStates[account.Id] = current + interest;
+                var grossInterest = current * rate;
+                var taxable = account.TaxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase)
+                    && (!account.TaxEffectiveFrom.HasValue || month.Date >= account.TaxEffectiveFrom.Value.Date);
+                var tax = taxable ? grossInterest * (Math.Clamp(account.TaxRate, 0m, 100m) / 100m) : 0m;
+                var netInterest = grossInterest - tax;
+                accountStates[account.Id] = current + netInterest;
                 monthContributions += contribution;
-                monthInterest += interest;
+                monthInterest += netInterest;
+                totalGrossInterest += grossInterest;
+                totalTax += tax;
             }
 
             var monthExpense = IsSameMonth(request.FutureExpenseDate, month)
@@ -89,7 +97,8 @@ public sealed class FinancialForecastService : IFinancialForecastService
             startDate,
             endDate,
             GetOneOff(request, pot.Id),
-            GetMonthlyContribution(request, pot))).ToList();
+            GetMonthlyContribution(request, pot),
+            request.InvestmentStages.TryGetValue(pot.Id, out var stages) ? stages : [])).ToList();
         var projectedReserve = accountStates.Values.Sum();
         var projectedAllocated = potResults.Sum(x => Math.Max(0m, x.ProjectedBalance));
         var surplus = Math.Max(0m, projectedReserve - baseline);
@@ -102,6 +111,8 @@ public sealed class FinancialForecastService : IFinancialForecastService
             OpeningReserveBalance = Math.Round(openingReserve, 2),
             ProjectedReserveBalance = Math.Round(projectedReserve, 2),
             ProjectedInterest = Math.Round(totalInterest, 2),
+            ProjectedGrossInterest = Math.Round(totalGrossInterest, 2),
+            ProjectedTax = Math.Round(totalTax, 2),
             ProjectedAccountContributions = Math.Round(totalContributions, 2),
             ProjectedFutureExpenses = Math.Round(totalExpenses, 2),
             ProjectedAllocatedToPots = Math.Round(projectedAllocated, 2),
@@ -112,7 +123,8 @@ public sealed class FinancialForecastService : IFinancialForecastService
             Assumptions = new[]
             {
                 "The forecast starts from the balances currently held in the selected reserve accounts.",
-                "Interest is estimated monthly using each selected account's annual interest rate.",
+                "Account interest is estimated monthly using each selected account's annual rate and tax treatment.",
+                "Money Pot growth follows configured investment journey stages and changes expected return at each transition date.",
                 request.IncludeAccountContributions
                     ? "Configured monthly reserve-account contributions are included."
                     : "Future reserve-account contributions are excluded.",
@@ -132,25 +144,39 @@ public sealed class FinancialForecastService : IFinancialForecastService
         DateTime startDate,
         DateTime endDate,
         decimal oneOffContribution,
-        decimal monthlyContribution)
+        decimal monthlyContribution,
+        IReadOnlyList<ReservePotInvestmentStage> investmentStages)
     {
         var contribution = Math.Max(0m, monthlyContribution);
         var target = pot.TargetAmount;
         var current = pot.AllocatedAmount;
         var effectiveOpening = current + Math.Max(0m, oneOffContribution);
-        var monthsInForecast = Math.Max(0, MonthDifference(startDate, endDate));
-        var projected = effectiveOpening + (contribution * monthsInForecast);
-        if (target.HasValue) projected = Math.Min(projected, target.Value);
+        var projected = effectiveOpening;
+        var contributionsAdded = 0m;
+        DateTime? completionDate = target.HasValue && projected >= target.Value ? startDate : null;
+        var orderedStages = investmentStages.OrderBy(x => x.StageOrder).ThenBy(x => x.StartDate).ToList();
+        var cursor = new DateTime(startDate.Year, startDate.Month, 1).AddMonths(1);
+        var endMonth = new DateTime(endDate.Year, endDate.Month, 1);
 
-        DateTime? completionDate = null;
-        if (target.HasValue && effectiveOpening < target.Value && contribution > 0m)
+        while (cursor <= endMonth)
         {
-            var monthsRequired = (int)Math.Ceiling((target.Value - effectiveOpening) / contribution);
-            completionDate = new DateTime(startDate.Year, startDate.Month, 1).AddMonths(monthsRequired);
-        }
-        else if (target.HasValue && effectiveOpening >= target.Value)
-        {
-            completionDate = startDate;
+            if (!pot.IsPausedFor(cursor))
+            {
+                projected += contribution;
+                contributionsAdded += contribution;
+            }
+
+            var activeStage = orderedStages.LastOrDefault(x => x.StartDate.Date <= cursor.Date
+                && (!x.EndDate.HasValue || x.EndDate.Value.Date >= cursor.Date));
+            var annualReturn = Math.Max(0m, activeStage?.ExpectedAnnualReturn ?? 0m);
+            projected += projected * (annualReturn / 100m / 12m);
+
+            if (target.HasValue && projected >= target.Value)
+            {
+                projected = target.Value;
+                completionDate ??= cursor;
+            }
+            cursor = cursor.AddMonths(1);
         }
 
         decimal? required = null;
@@ -163,12 +189,13 @@ public sealed class FinancialForecastService : IFinancialForecastService
         }
 
         var status = DetermineStatus(pot, effectiveOpening, startDate, completionDate, contribution);
-        decimal? additional = required.HasValue
-            ? Math.Round(Math.Max(0m, required.Value - contribution), 2)
-            : null;
+        decimal? additional = required.HasValue ? Math.Round(Math.Max(0m, required.Value - contribution), 2) : null;
         int? monthsEarlyOrLate = completionDate.HasValue && pot.DueDate.HasValue
             ? SignedMonthDifference(pot.DueDate.Value, completionDate.Value)
             : null;
+        var journeySummary = orderedStages.Count == 0
+            ? "No investment journey configured"
+            : string.Join(" → ", orderedStages.Select(x => $"{x.InvestmentType} ({x.ExpectedAnnualReturn:0.##}%)"));
 
         return new PotForecastResult
         {
@@ -180,6 +207,8 @@ public sealed class FinancialForecastService : IFinancialForecastService
             IntendedMonthlyContribution = contribution,
             OneOffContribution = Math.Max(0m, oneOffContribution),
             ProjectedBalance = Math.Round(projected, 2),
+            ProjectedGrowth = Math.Round(Math.Max(0m, projected - effectiveOpening - contributionsAdded), 2),
+            InvestmentJourneySummary = journeySummary,
             ProjectedCompletionDate = completionDate,
             RequiredMonthlyContribution = required,
             AdditionalMonthlyContributionRequired = additional,

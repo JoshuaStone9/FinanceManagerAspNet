@@ -27,3 +27,7 @@ Status: ⏳ Planned
 - Added an optional balance check for manually comparing recorded and real account balances.
 - Manual updates store previous balance, new balance, difference and reconciliation date.
 - A balance update never creates or duplicates an income transaction.
+
+## Phase 11.5–11.6
+
+Implemented intelligent forecast calculations using investment journey returns and account tax treatment, plus accumulated interest reconciliation for account balances.

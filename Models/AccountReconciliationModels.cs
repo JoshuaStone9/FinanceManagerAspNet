@@ -3,6 +3,8 @@ namespace FinanceManagerAspNet.Models;
 public sealed class AccountReconciliationViewModel
 {
     public IReadOnlyList<AccountReconciliationRow> Accounts { get; init; } = [];
+    public int AccountsNeedingInterestReconciliation => Accounts.Count(x => x.PendingInterestCount > 0);
+    public decimal TotalPendingInterest => Accounts.Sum(x => x.PendingInterest);
 }
 
 public sealed record AccountReconciliationRow(
@@ -21,4 +23,10 @@ public sealed record AccountReconciliationRow(
     decimal TaxRate,
     DateTime? TaxEffectiveFrom,
     DateTime? LastReconciledAt,
-    DateTime BalanceUpdatedAt);
+    DateTime BalanceUpdatedAt,
+    decimal PendingInterest,
+    int PendingInterestCount)
+{
+    public decimal SuggestedBalance => Math.Round(RecordedBalance + PendingInterest, 2);
+    public bool NeedsInterestReconciliation => PendingInterestCount > 0 && PendingInterest > 0m;
+}

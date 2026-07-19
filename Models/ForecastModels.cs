@@ -24,6 +24,7 @@ public sealed class FinancialForecastRequest
     public IReadOnlyList<ReservePot> Pots { get; init; } = Array.Empty<ReservePot>();
     public IReadOnlyDictionary<int, decimal> PotOneOffContributions { get; init; } = new Dictionary<int, decimal>();
     public IReadOnlyDictionary<int, decimal> PotMonthlyContributions { get; init; } = new Dictionary<int, decimal>();
+    public IReadOnlyDictionary<int, List<ReservePotInvestmentStage>> InvestmentStages { get; init; } = new Dictionary<int, List<ReservePotInvestmentStage>>();
 }
 
 public sealed class FinancialForecastResult
@@ -34,6 +35,8 @@ public sealed class FinancialForecastResult
     public decimal OpeningReserveBalance { get; init; }
     public decimal ProjectedReserveBalance { get; init; }
     public decimal ProjectedInterest { get; init; }
+    public decimal ProjectedGrossInterest { get; init; }
+    public decimal ProjectedTax { get; init; }
     public decimal ProjectedAccountContributions { get; init; }
     public decimal ProjectedFutureExpenses { get; init; }
     public decimal ProjectedAllocatedToPots { get; init; }
@@ -71,6 +74,8 @@ public sealed class PotForecastResult
     public decimal RecentMonthlyContribution => IntendedMonthlyContribution;
     public decimal OneOffContribution { get; init; }
     public decimal ProjectedBalance { get; init; }
+    public decimal ProjectedGrowth { get; init; }
+    public string InvestmentJourneySummary { get; init; } = "No investment journey configured";
     public DateTime? ProjectedCompletionDate { get; init; }
     public decimal? RequiredMonthlyContribution { get; init; }
     public decimal? AdditionalMonthlyContributionRequired { get; init; }
