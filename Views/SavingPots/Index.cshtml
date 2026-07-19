@@ -69,6 +69,23 @@
     }
 </section>
 
+@if (Model.AccountSummary.HasSelection)
+{
+<section class="card fm-tax-summary" id="interest-tax-forecast">
+    <div class="section-head"><div><p class="eyebrow">Phase 11.4</p><h2>Interest after tax</h2><p class="muted">Forecast to @Model.InterestForecast.ForecastDate.ToString("dd MMM yyyy") using each account’s tax treatment and effective date.</p></div></div>
+    <div class="grid cards-4 compact-grid">
+        <article><p class="eyebrow">Gross interest</p><strong>@Model.InterestForecast.GrossInterest.ToString("C", gb)</strong></article>
+        <article><p class="eyebrow">Estimated tax</p><strong class="@(Model.InterestForecast.EstimatedTax > 0 ? "bad" : "")">@Model.InterestForecast.EstimatedTax.ToString("C", gb)</strong></article>
+        <article><p class="eyebrow">Net interest</p><strong class="good">@Model.InterestForecast.EstimatedInterest.ToString("C", gb)</strong></article>
+        <article><p class="eyebrow">Projected total</p><strong>@Model.InterestForecast.ProjectedTotal.ToString("C", gb)</strong></article>
+    </div>
+    @foreach (var account in Model.InterestForecast.Accounts)
+    {
+        <p class="muted"><strong>@account.AccountName:</strong> @account.GrossInterest.ToString("C", gb) gross − @account.EstimatedTax.ToString("C", gb) tax = @account.NetInterest.ToString("C", gb) net.</p>
+    }
+</section>
+}
+
 @if (Model.Pots.Count == 0)
 {
     <section class="card money-pots-empty"><i data-lucide="piggy-bank"></i><h2>No Money Pots yet</h2><p class="muted">Create a pot, then add contributions from the monthly Money Pots workspace.</p></section>
@@ -111,6 +128,55 @@ else
                     <div><strong>@pot.GoalTimingLabel</strong><span>Forecast updates automatically whenever contributions change.</span></div>
                 </div>
             }
+
+            @{ var stages = Model.InvestmentStages.GetValueOrDefault(pot.Id) ?? []; }
+            <section class="fm-investment-journey" id="journey-@pot.Id">
+                <div class="fm-section-heading"><div><p class="eyebrow">Phase 11.3</p><h3>Investment journey</h3><p class="muted">Plan how this pot is held now and how it will be de-risked later.</p></div></div>
+                @if (stages.Count > 0)
+                {
+                    <div class="fm-journey-timeline">
+                    @foreach (var stage in stages.OrderBy(x => x.StageOrder))
+                    {
+                        <article class="fm-journey-stage">
+                            <span class="fm-journey-number">@stage.StageOrder</span>
+                            <div><strong>@stage.InvestmentType</strong><span>@stage.Provider · @stage.ExpectedAnnualReturn.ToString("0.##")% expected return</span><small>@stage.DateRangeLabel</small></div>
+                            @if (canEdit)
+                            {
+                                <details><summary>Edit</summary>
+                                    <form asp-action="SaveInvestmentStage" method="post" class="account-form fm-journey-form">@Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@stage.Id"/><input type="hidden" name="potId" value="@pot.Id"/>
+                                        <label>Order<input name="stageOrder" type="number" min="1" value="@stage.StageOrder"/></label>
+                                        <label>Holding<select name="investmentType">@foreach (var option in new[] { "Cash", "Money Market Fund", "Stocks & Shares", "Mixed" }) { <option value="@option" selected="@(stage.InvestmentType == option)">@option</option> }</select></label>
+                                        <label>Provider<input name="provider" value="@stage.Provider"/></label>
+                                        <label>Expected annual return<input name="expectedAnnualReturn" type="number" min="-100" max="100" step="0.01" value="@stage.ExpectedAnnualReturn.ToString("0.##", CultureInfo.InvariantCulture)"/></label>
+                                        <label>Starts<input name="startDate" type="date" value="@stage.StartDate.ToString("yyyy-MM-dd")"/></label>
+                                        <label>Ends <span class="muted">(optional)</span><input name="endDate" type="date" value="@stage.EndDate?.ToString("yyyy-MM-dd")"/></label>
+                                        <label class="field full">Notes<textarea name="notes">@stage.Notes</textarea></label><button class="primary">Save stage</button>
+                                    </form>
+                                    <form asp-action="DeleteInvestmentStage" method="post" data-confirm="Delete this journey stage?">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@stage.Id"/><input type="hidden" name="potId" value="@pot.Id"/><button class="danger-inline">Delete stage</button></form>
+                                </details>
+                            }
+                        </article>
+                    }
+                    </div>
+                }
+                else { <p class="muted">No investment stages configured. This pot currently uses its normal balance forecast.</p> }
+                @if (canEdit)
+                {
+                    <details class="edit-panel"><summary>Add journey stage</summary>
+                        <form asp-action="SaveInvestmentStage" method="post" class="account-form fm-journey-form">@Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="0"/><input type="hidden" name="potId" value="@pot.Id"/>
+                            <label>Order<input name="stageOrder" type="number" min="1" value="@(stages.Count + 1)"/></label>
+                            <label>Holding<select name="investmentType"><option>Stocks & Shares</option><option>Money Market Fund</option><option>Cash</option><option>Mixed</option></select></label>
+                            <label>Provider<input name="provider" placeholder="e.g. Trading 212"/></label>
+                            <label>Expected annual return<input name="expectedAnnualReturn" type="number" min="-100" max="100" step="0.01" value="0"/></label>
+                            <label>Starts<input name="startDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")"/></label>
+                            <label>Ends <span class="muted">(optional)</span><input name="endDate" type="date"/></label>
+                            <label class="field full">Notes<textarea name="notes"></textarea></label><button class="primary">Add stage</button>
+                        </form>
+                    </details>
+                }
+            </section>
 
             <div class="pot-action-row">
                 <a class="pot-action-button pot-action-primary" asp-controller="MonthlyMoney" asp-action="MoneyPots">Add contribution</a>

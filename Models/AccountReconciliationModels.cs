@@ -17,5 +17,8 @@ public sealed record AccountReconciliationRow(
     string Provider,
     string AccountType,
     string HoldingType,
+    string TaxTreatment,
+    decimal TaxRate,
+    DateTime? TaxEffectiveFrom,
     DateTime? LastReconciledAt,
     DateTime BalanceUpdatedAt);

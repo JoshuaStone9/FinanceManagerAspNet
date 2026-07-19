@@ -18,6 +18,9 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         string? provider,
         string? accountType,
         string? holdingType,
+        string? taxTreatment,
+        decimal taxRate,
+        DateTime? taxEffectiveFrom,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -47,7 +50,10 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             startingBalance,
             provider ?? "Other",
             accountType ?? "Savings",
-            holdingType ?? "Cash");
+            holdingType ?? "Cash",
+            taxTreatment ?? "Tax Free",
+            taxRate,
+            taxEffectiveFrom);
 
         TempData["Success"] = $"{safeName} settings updated.";
         return RedirectToAction(nameof(Index));
@@ -62,6 +68,9 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         string? provider,
         string? accountType,
         string? holdingType,
+        string? taxTreatment,
+        decimal taxRate,
+        DateTime? taxEffectiveFrom,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -81,7 +90,10 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             openingBalance,
             provider ?? "Other",
             accountType ?? "Savings",
-            holdingType ?? "Cash");
+            holdingType ?? "Cash",
+            taxTreatment ?? "Tax Free",
+            taxRate,
+            taxEffectiveFrom);
 
         TempData["Success"] = $"{name.Trim()} added.";
         return RedirectToAction(nameof(Index));

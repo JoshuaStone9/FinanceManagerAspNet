@@ -116,7 +116,7 @@
                 <div class="fm-account-summary-meta">
                     <span>@account.Provider</span>
                     <span>@account.AccountType</span>
-                    <span>@account.HoldingType</span>
+                    <span>@account.HoldingType</span><span>@(account.TaxTreatment == "Taxable" ? $"Taxable at {account.TaxRate:0.##}%" : "Tax free")</span>
                     <span>@account.InterestRate.ToString("0.##")% AER</span>
                     <span>@account.MonthlyContribution.ToString("C", gb) monthly</span>
                 </div>
@@ -184,6 +184,9 @@
                                 <span>Monthly contribution</span>
                                 <input name="monthlyContribution" type="number" min="0" step="0.01" value="@account.MonthlyContribution.ToString("0.00", CultureInfo.InvariantCulture)" required />
                             </label>
+                            <label><span>Tax treatment</span><select name="taxTreatment">@foreach (var option in new[] { "Tax Free", "Taxable" }) { <option value="@option" selected="@(account.TaxTreatment == option)">@option</option> }</select></label>
+                            <label><span>Tax rate</span><input name="taxRate" type="number" min="0" max="100" step="0.01" value="@account.TaxRate.ToString("0.##", CultureInfo.InvariantCulture)"/><small>For example, 22 for a 22% deduction.</small></label>
+                            <label><span>Tax starts</span><input name="taxEffectiveFrom" type="date" value="@account.TaxEffectiveFrom?.ToString("yyyy-MM-dd")"/><small>Useful for a future rule change such as April 2027.</small></label>
                             <label class="fm-account-toggle fm-field-span-2">
                                 <input name="includeInGlobalGoal" type="checkbox" value="true" checked="@account.IncludeInForecast" />
                                 <span>Include in Statistics forecast</span>

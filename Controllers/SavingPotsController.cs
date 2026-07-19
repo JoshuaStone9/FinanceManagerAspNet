@@ -22,6 +22,7 @@ public sealed class SavingPotsController(
             includeFutureContributions);
         var pots = await repo.GetReservePotsAsync();
         var summaries = await repo.GetReservePotFundingSummariesAsync(pots);
+        var investmentStages = await repo.GetReservePotInvestmentStagesAsync();
         await repo.SyncFundingRemindersAsync(pots, summaries);
         var totalAllocated = pots.Where(x => x.IsActive).Sum(x => Math.Max(0m, x.AllocatedAmount));
         var remainingToAllocate = Math.Max(0m, accountSummary.SurplusAboveBaseline - totalAllocated);
@@ -36,6 +37,7 @@ public sealed class SavingPotsController(
             InterestForecast = interestForecast,
             Pots = pots,
             FundingSummaries = summaries,
+            InvestmentStages = investmentStages,
             RecoveryRecommendations = recommendations,
             DueReminders = dueReminders
         });
@@ -231,6 +233,31 @@ public sealed class SavingPotsController(
         await repo.AddFinanceEventAsync("Household Reserve", "FundingHistoryRebuilt", "ReservePot", id, $"{pot.Name} funding history rebuilt", $"Funding history now starts {startDate:dd MMM yyyy}.", null, "User");
         TempData["Success"] = "Funding history recalculated.";
         return Redirect($"{Url.Action(nameof(Index))}#pot-{id}");
+    }
+
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveInvestmentStage(int id, int potId, int stageOrder, string investmentType, string provider, decimal expectedAnnualReturn, DateTime startDate, DateTime? endDate, string? notes)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        try
+        {
+            await repo.SaveReservePotInvestmentStageAsync(id, potId, stageOrder, investmentType, provider, expectedAnnualReturn, startDate, endDate, notes);
+            TempData["Success"] = id > 0 ? "Investment journey stage updated." : "Investment journey stage added.";
+        }
+        catch (ArgumentException ex) { TempData["Error"] = ex.Message; }
+        return Redirect($"{Url.Action(nameof(Index))}#journey-{potId}");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteInvestmentStage(int id, int potId)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        await repo.DeleteReservePotInvestmentStageAsync(id, potId);
+        TempData["Success"] = "Investment journey stage deleted.";
+        return Redirect($"{Url.Action(nameof(Index))}#journey-{potId}");
     }
 
     [HttpPost]

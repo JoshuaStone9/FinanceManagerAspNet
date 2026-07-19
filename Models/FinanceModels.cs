@@ -12,7 +12,10 @@ public sealed record AccountBalance(
     decimal StartingBalance = 0m,
     string Provider = "Other",
     string AccountType = "Savings",
-    string HoldingType = "Cash");
+    string HoldingType = "Cash",
+    string TaxTreatment = "Tax Free",
+    decimal TaxRate = 0m,
+    DateTime? TaxEffectiveFrom = null);
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);
 public sealed record IncomeSnapshot(int Year, int Month, decimal Amount, int SickDays, DateTime UpdatedAt);
 
@@ -491,7 +494,10 @@ public sealed record ReserveAccountOption(
     decimal Balance,
     decimal InterestRate,
     decimal MonthlyContribution,
-    bool IsSelected);
+    bool IsSelected,
+    string TaxTreatment,
+    decimal TaxRate,
+    DateTime? TaxEffectiveFrom);
 
 
 public sealed record ReserveAccountInterestForecast(
@@ -501,8 +507,13 @@ public sealed record ReserveAccountInterestForecast(
     decimal AnnualInterestRate,
     decimal MonthlyContribution,
     decimal ContributionsAdded,
-    decimal EstimatedInterest,
-    decimal ProjectedBalance);
+    decimal GrossInterest,
+    decimal EstimatedTax,
+    decimal NetInterest,
+    decimal ProjectedBalance)
+{
+    public decimal EstimatedInterest => NetInterest;
+}
 
 public sealed class ReserveInterestForecast
 {
@@ -513,7 +524,9 @@ public sealed class ReserveInterestForecast
     public int ForecastDays => Math.Max(0, (ForecastDate.Date - StartDate.Date).Days);
     public decimal CurrentTotal => Accounts.Sum(x => x.OpeningBalance);
     public decimal FutureContributions => Accounts.Sum(x => x.ContributionsAdded);
-    public decimal EstimatedInterest => Accounts.Sum(x => x.EstimatedInterest);
+    public decimal GrossInterest => Accounts.Sum(x => x.GrossInterest);
+    public decimal EstimatedTax => Accounts.Sum(x => x.EstimatedTax);
+    public decimal EstimatedInterest => Accounts.Sum(x => x.NetInterest);
     public decimal ProjectedTotal => Accounts.Sum(x => x.ProjectedBalance);
 }
 
@@ -643,6 +656,24 @@ public sealed record ReservePot(
             };
         }
     }
+}
+
+
+public sealed record ReservePotInvestmentStage(
+    int Id,
+    int ReservePotId,
+    int StageOrder,
+    string InvestmentType,
+    string Provider,
+    decimal ExpectedAnnualReturn,
+    DateTime StartDate,
+    DateTime? EndDate,
+    string? Notes,
+    DateTime UpdatedAt)
+{
+    public string DateRangeLabel => EndDate.HasValue
+        ? $"{StartDate:MMM yyyy} to {EndDate.Value:MMM yyyy}"
+        : $"From {StartDate:MMM yyyy}";
 }
 
 
@@ -814,6 +845,7 @@ public sealed class HouseholdReserveViewModel
     public List<ReserveRecoveryRecommendation> RecoveryRecommendations { get; set; } = [];
     public List<FinanceReminderRow> DueReminders { get; set; } = [];
     public Dictionary<int, ReservePotFundingSummary> FundingSummaries { get; set; } = [];
+    public Dictionary<int, List<ReservePotInvestmentStage>> InvestmentStages { get; set; } = [];
     public decimal TotalAllocated => Pots.Where(p => p.IsActive).Sum(p => Math.Max(0m, p.AllocatedAmount));
     public int ActivePotCount => Pots.Count(p => p.IsActive);
     public decimal RemainingToTargets => Pots.Where(p => p.IsActive && p.TargetAmount.HasValue).Sum(p => Math.Max(0m, p.TargetAmount!.Value - Math.Max(0m, p.AllocatedAmount)));

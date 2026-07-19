@@ -75,6 +75,9 @@ IF COL_LENGTH('dbo.account_balances','starting_balance') IS NULL ALTER TABLE dbo
 IF COL_LENGTH('dbo.account_balances','provider') IS NULL ALTER TABLE dbo.account_balances ADD provider nvarchar(120) NOT NULL CONSTRAINT DF_account_balances_provider DEFAULT 'Other';
 IF COL_LENGTH('dbo.account_balances','account_type') IS NULL ALTER TABLE dbo.account_balances ADD account_type nvarchar(80) NOT NULL CONSTRAINT DF_account_balances_account_type DEFAULT 'Savings';
 IF COL_LENGTH('dbo.account_balances','holding_type') IS NULL ALTER TABLE dbo.account_balances ADD holding_type nvarchar(80) NOT NULL CONSTRAINT DF_account_balances_holding_type DEFAULT 'Cash';
+IF COL_LENGTH('dbo.account_balances','tax_treatment') IS NULL ALTER TABLE dbo.account_balances ADD tax_treatment nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_tax_treatment DEFAULT 'Tax Free';
+IF COL_LENGTH('dbo.account_balances','tax_rate') IS NULL ALTER TABLE dbo.account_balances ADD tax_rate decimal(9,4) NOT NULL CONSTRAINT DF_account_balances_tax_rate DEFAULT 0;
+IF COL_LENGTH('dbo.account_balances','tax_effective_from') IS NULL ALTER TABLE dbo.account_balances ADD tax_effective_from date NULL;
 UPDATE dbo.account_balances SET starting_balance=amount WHERE starting_balance IS NULL;
 ALTER TABLE dbo.account_balances ALTER COLUMN starting_balance decimal(18,2) NOT NULL;
 
@@ -202,6 +205,23 @@ IF COL_LENGTH('dbo.reserve_pots','carry_excess_forward') IS NULL ALTER TABLE dbo
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_from') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_from date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_paused_until') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_paused_until date NULL;
 IF COL_LENGTH('dbo.reserve_pots','funding_pause_reason') IS NULL ALTER TABLE dbo.reserve_pots ADD funding_pause_reason nvarchar(300) NULL;
+
+IF OBJECT_ID('dbo.reserve_pot_investment_stages','U') IS NULL
+CREATE TABLE dbo.reserve_pot_investment_stages(
+    reserve_pot_investment_stage_id int IDENTITY(1,1) PRIMARY KEY,
+    reserve_pot_id int NOT NULL,
+    stage_order int NOT NULL,
+    investment_type nvarchar(80) NOT NULL,
+    provider nvarchar(120) NOT NULL DEFAULT 'Other',
+    expected_annual_return decimal(9,4) NOT NULL DEFAULT 0,
+    start_date date NOT NULL,
+    end_date date NULL,
+    notes nvarchar(500) NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_reserve_pot_investment_stages_pot FOREIGN KEY(reserve_pot_id) REFERENCES dbo.reserve_pots(reserve_pot_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_reserve_pot_investment_stages_order UNIQUE(reserve_pot_id,stage_order)
+);
 
 -- Phase 8.4.1 Batch 1: link dashboard household-reserve allocations to reserve pots by ID.
 IF COL_LENGTH('dbo.savings','reserve_pot_id') IS NULL ALTER TABLE dbo.savings ADD reserve_pot_id int NULL;
@@ -688,6 +708,9 @@ VALUES(@sourceKey,@sourceName,'Interest',@year,@month,@estimated,@actual,@date,@
                 account.Provider,
                 account.AccountType,
                 account.HoldingType,
+                account.TaxTreatment,
+                account.TaxRate,
+                account.TaxEffectiveFrom,
                 lastReconciled,
                 account.UpdatedAt));
         }
@@ -956,12 +979,16 @@ SELECT @@ROWCOUNT;", con);
         var emergencyProvider = await GetStringSettingAsync("EmergencyFundProvider", "Other");
         var emergencyAccountType = await GetStringSettingAsync("EmergencyFundAccountType", "Savings");
         var emergencyHoldingType = await GetStringSettingAsync("EmergencyFundHoldingType", "Cash");
+        var emergencyTaxTreatment = await GetStringSettingAsync("EmergencyFundTaxTreatment", "Tax Free");
+        var emergencyTaxRate = await GetDecimalSettingAsync("EmergencyFundTaxRate", 0m);
+        var emergencyTaxEffectiveText = await GetStringSettingAsync("EmergencyFundTaxEffectiveFrom", string.Empty);
+        DateTime? emergencyTaxEffectiveFrom = DateTime.TryParse(emergencyTaxEffectiveText, out var parsedTaxDate) ? parsedTaxDate.Date : null;
         var accounts = new List<AccountBalance>
         {
-            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency, emergencyStartingBalance, emergencyProvider, emergencyAccountType, emergencyHoldingType)
+            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency, emergencyStartingBalance, emergencyProvider, emergencyAccountType, emergencyHoldingType, emergencyTaxTreatment, emergencyTaxRate, emergencyTaxEffectiveFrom)
         };
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type FROM dbo.account_balances ORDER BY [name]", con);
+        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from FROM dbo.account_balances ORDER BY [name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
         {
@@ -977,7 +1004,10 @@ SELECT @@ROWCOUNT;", con);
                 r.GetDecimal(8),
                 r.GetString(9),
                 r.GetString(10),
-                r.GetString(11)));
+                r.GetString(11),
+                r.GetString(12),
+                r.GetDecimal(13),
+                r.IsDBNull(14) ? null : r.GetDateTime(14)));
         }
         return accounts;
     }
@@ -1078,12 +1108,18 @@ SELECT @@ROWCOUNT;", con);
         decimal startingBalance,
         string provider,
         string accountType,
-        string holdingType)
+        string holdingType,
+        string taxTreatment,
+        decimal taxRate,
+        DateTime? taxEffectiveFrom)
     {
         await EnsureModernTablesAsync();
         provider = string.IsNullOrWhiteSpace(provider) ? "Other" : provider.Trim();
         accountType = string.IsNullOrWhiteSpace(accountType) ? "Savings" : accountType.Trim();
         holdingType = string.IsNullOrWhiteSpace(holdingType) ? "Cash" : holdingType.Trim();
+        taxTreatment = string.IsNullOrWhiteSpace(taxTreatment) ? "Tax Free" : taxTreatment.Trim();
+        taxRate = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? Math.Clamp(taxRate, 0m, 100m) : 0m;
+        taxEffectiveFrom = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? taxEffectiveFrom?.Date : null;
 
         if (id == 0 && name == "Emergency Fund")
         {
@@ -1093,22 +1129,27 @@ SELECT @@ROWCOUNT;", con);
             await SaveStringSettingAsync("EmergencyFundProvider", provider);
             await SaveStringSettingAsync("EmergencyFundAccountType", accountType);
             await SaveStringSettingAsync("EmergencyFundHoldingType", holdingType);
+            await SaveStringSettingAsync("EmergencyFundTaxTreatment", taxTreatment);
+            await SaveDecimalSettingAsync("EmergencyFundTaxRate", taxRate);
+            await SaveStringSettingAsync("EmergencyFundTaxEffectiveFrom", taxEffectiveFrom?.ToString("yyyy-MM-dd") ?? string.Empty);
             return;
         }
 
         if (id == 0)
         {
-            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type)
-VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType)",
+            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from)
+VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom)",
                 ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
-                ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType));
+                ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value));
             id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE [name]=@name ORDER BY account_balance_id DESC", ("@name", name)));
         }
         else
         {
-            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
+            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
                 ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
-                ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType));
+                ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value));
         }
 
         await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)",
@@ -3055,6 +3096,49 @@ WHERE system_key=@negativeKey;", con, (SqlTransaction)tx);
             await tx.RollbackAsync();
             throw;
         }
+    }
+
+
+    public async Task<Dictionary<int, List<ReservePotInvestmentStage>>> GetReservePotInvestmentStagesAsync()
+    {
+        await EnsureModernTablesAsync();
+        var result = new Dictionary<int, List<ReservePotInvestmentStage>>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"SELECT reserve_pot_investment_stage_id,reserve_pot_id,stage_order,investment_type,provider,expected_annual_return,start_date,end_date,notes,updated_at
+FROM dbo.reserve_pot_investment_stages ORDER BY reserve_pot_id,stage_order", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            var stage = new ReservePotInvestmentStage(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetDecimal(5),r.GetDateTime(6),r.IsDBNull(7)?null:r.GetDateTime(7),r.IsDBNull(8)?null:r.GetString(8),r.GetDateTime(9));
+            if (!result.TryGetValue(stage.ReservePotId, out var list)) result[stage.ReservePotId] = list = [];
+            list.Add(stage);
+        }
+        return result;
+    }
+
+    public async Task SaveReservePotInvestmentStageAsync(int id, int potId, int stageOrder, string investmentType, string provider, decimal expectedAnnualReturn, DateTime startDate, DateTime? endDate, string? notes)
+    {
+        await EnsureModernTablesAsync();
+        if (potId <= 0) throw new ArgumentException("A Money Pot is required.");
+        if (string.IsNullOrWhiteSpace(investmentType)) throw new ArgumentException("Investment type is required.");
+        if (endDate.HasValue && endDate.Value.Date <= startDate.Date) throw new ArgumentException("The stage end date must be after its start date.");
+        if (expectedAnnualReturn < -100m || expectedAnnualReturn > 100m) throw new ArgumentException("Expected annual return must be between -100% and 100%.");
+        var duplicate = await ScalarAsync("SELECT COUNT(*) FROM dbo.reserve_pot_investment_stages WHERE reserve_pot_id=@potId AND stage_order=@stageOrder AND reserve_pot_investment_stage_id<>@id", ("@potId",potId),("@stageOrder",Math.Max(1,stageOrder)),("@id",id));
+        if (Convert.ToInt32(duplicate) > 0) throw new ArgumentException("That stage order is already in use for this pot.");
+        if (id <= 0)
+            await ExecuteAsync(@"INSERT INTO dbo.reserve_pot_investment_stages(reserve_pot_id,stage_order,investment_type,provider,expected_annual_return,start_date,end_date,notes)
+VALUES(@potId,@order,@type,@provider,@rate,@start,@end,@notes)",("@potId",potId),("@order",Math.Max(1,stageOrder)),("@type",investmentType.Trim()),("@provider",string.IsNullOrWhiteSpace(provider)?"Other":provider.Trim()),("@rate",expectedAnnualReturn),("@start",startDate.Date),("@end",endDate.HasValue?endDate.Value.Date:DBNull.Value),("@notes",DbValue(notes)));
+        else
+            await ExecuteAsync(@"UPDATE dbo.reserve_pot_investment_stages SET stage_order=@order,investment_type=@type,provider=@provider,expected_annual_return=@rate,start_date=@start,end_date=@end,notes=@notes,updated_at=SYSUTCDATETIME() WHERE reserve_pot_investment_stage_id=@id AND reserve_pot_id=@potId",("@id",id),("@potId",potId),("@order",Math.Max(1,stageOrder)),("@type",investmentType.Trim()),("@provider",string.IsNullOrWhiteSpace(provider)?"Other":provider.Trim()),("@rate",expectedAnnualReturn),("@start",startDate.Date),("@end",endDate.HasValue?endDate.Value.Date:DBNull.Value),("@notes",DbValue(notes)));
+        await AddFinanceEventAsync("Household Reserve", id <= 0 ? "InvestmentStageCreated" : "InvestmentStageUpdated", "ReservePot", potId, "Investment journey updated", $"Stage {Math.Max(1,stageOrder)}: {investmentType.Trim()} at {expectedAnnualReturn:0.##}% expected annual return.", null, "User");
+    }
+
+    public async Task DeleteReservePotInvestmentStageAsync(int id, int potId)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("DELETE FROM dbo.reserve_pot_investment_stages WHERE reserve_pot_investment_stage_id=@id AND reserve_pot_id=@potId",("@id",id),("@potId",potId));
+        await AddFinanceEventAsync("Household Reserve", "InvestmentStageDeleted", "ReservePot", potId, "Investment journey stage deleted", null, null, "User");
     }
 
     public async Task DeleteReservePotAsync(int id)

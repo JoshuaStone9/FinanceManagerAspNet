@@ -413,3 +413,9 @@ Financial reminders are now surfaced as a unified Financial Tasks inbox and Dash
 - Money Pots can now be created from an existing starting amount instead of always beginning at zero.
 - Existing Money Pot starting amounts can be corrected later while preserving contributions and withdrawals recorded after the pot entered Finance Manager.
 - Existing account and Money Pot records are migrated automatically by treating their current balance as their initial starting balance.
+
+
+## Phase 11.3–11.4
+- Ordered investment journey stages for Money Pots.
+- Account tax treatment with future effective dates.
+- Gross, estimated tax and net interest forecasting.
