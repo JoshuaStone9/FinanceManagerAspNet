@@ -1,6 +1,32 @@
 @model FinanceManagerAspNet.Models.FinanceEventsViewModel
 @using System.Globalization
 @{ ViewData["Title"] = "Events"; var gb = CultureInfo.GetCultureInfo("en-GB"); }
-<section class="hero card"><div><p class="eyebrow">Audit timeline</p><h1>Finance Events</h1><p class="muted">A readable history of important manual and automatic actions across Finance Manager.</p></div><a class="secondary" asp-controller="SavingPots" asp-action="Index">Back to Money Pots</a></section>
-<section class="card"><form method="get" class="account-form"><label>Allocation<select name="potId"><option value="">All allocations</option>@foreach(var pot in Model.Pots){<option value="@pot.Id" selected="@(Model.PotId == pot.Id)">@pot.Name</option>}</select></label><label>Event type<input name="eventType" value="@Model.EventType" placeholder="e.g. FundingMissed"/></label><label>From<input type="date" name="from" value="@Model.From?.ToString("yyyy-MM-dd")"/></label><label>To<input type="date" name="to" value="@Model.To?.ToString("yyyy-MM-dd")"/></label><button class="primary">Filter events</button></form></section>
-<section class="card"><div class="table-wrap"><table><thead><tr><th>Date and time</th><th>Area</th><th>Event</th><th>Details</th><th>Amount</th><th>Source</th></tr></thead><tbody>@if(Model.Events.Count==0){<tr><td colspan="6" class="muted">No matching events yet.</td></tr>}@foreach(var item in Model.Events){<tr><td>@item.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td><td>@item.Area</td><td><strong>@item.Title</strong><br/><span class="muted">@item.EventType</span></td><td>@item.Description</td><td>@(item.Amount?.ToString("C", gb) ?? "—")</td><td>@item.Source</td></tr>}</tbody></table></div></section>
+<section class="hero card"><div><p class="eyebrow">Activity timeline</p><h1>Finance Events</h1><p class="muted">Important changes are shown by default. Detailed action records remain available without overwhelming the timeline.</p></div><a class="secondary" asp-controller="SavingPots" asp-action="Index">Back to Money Pots</a></section>
+<section class="card">
+<form method="get" class="account-form">
+<label>Allocation<select name="potId"><option value="">All allocations</option>@foreach(var pot in Model.Pots){<option value="@pot.Id" selected="@(Model.PotId == pot.Id)">@pot.Name</option>}</select></label>
+<label>Area<input name="area" value="@Model.Area" placeholder="e.g. Household Reserve"/></label>
+<label>Event type<input name="eventType" value="@Model.EventType" placeholder="e.g. BalanceReconciled"/></label>
+<label>From<input type="date" name="from" value="@Model.From?.ToString("yyyy-MM-dd")"/></label>
+<label>To<input type="date" name="to" value="@Model.To?.ToString("yyyy-MM-dd")"/></label>
+<label class="fm-account-toggle"><input type="checkbox" name="includeDetailedAudit" value="true" checked="@Model.IncludeDetailedAudit"/><span>Include detailed action audit</span></label>
+<button class="primary">Filter events</button>
+</form>
+</section>
+@foreach (var day in Model.Events.GroupBy(x => x.OccurredAt.ToLocalTime().Date))
+{
+<section class="card fm-event-day">
+<div class="fm-section-heading"><div><p class="eyebrow">@day.Key.ToString("dddd")</p><h2>@day.Key.ToString("dd MMMM yyyy")</h2></div><span class="muted">@day.Count() event@(day.Count()==1?string.Empty:"s")</span></div>
+<div class="fm-event-list">
+@foreach(var item in day)
+{
+<article class="fm-event-item">
+<div class="fm-event-time">@item.OccurredAt.ToLocalTime().ToString("HH:mm")</div>
+<div><div class="fm-event-badges"><span>@item.Area</span><span>@item.EventType</span></div><h3>@item.Title</h3>@if(!string.IsNullOrWhiteSpace(item.Description)){<p class="muted">@item.Description</p>}<small>@item.Source · @item.EntityType</small></div>
+@if(item.Amount.HasValue){<strong class="fm-event-amount">@item.Amount.Value.ToString("C", gb)</strong>}
+</article>
+}
+</div>
+</section>
+}
+@if(Model.Events.Count==0){<section class="card"><p class="muted">No matching events yet.</p></section>}

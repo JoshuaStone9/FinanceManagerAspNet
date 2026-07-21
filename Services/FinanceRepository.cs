@@ -829,6 +829,17 @@ WHERE passive_income_record_id=@id AND monthly_income_entry_id IS NULL AND balan
         var emergencyFund = await GetEmergencyFundAsync();
         var accounts = await GetAccountsAsync(emergencyFund);
         var rows = new List<AccountReconciliationRow>();
+        var tolerance = Math.Max(0m, await GetDecimalSettingAsync("AccountBalanceTolerance", 5m));
+        var baseReserveAmount = Math.Max(0m, await GetDecimalSettingAsync("EmergencyFundBaseline", 12000m));
+        var selectedAccountIds = await GetSelectedReserveAccountIdsAsync();
+        var selectedAccountsTotal = Math.Round(accounts
+            .Where(x => selectedAccountIds.Contains(x.Id))
+            .Sum(x => x.Amount), 2);
+        var loggedVirtualPotsTotal = Math.Round(Convert.ToDecimal(await ScalarAsync(
+            "SELECT COALESCE(SUM(allocated_amount),0) FROM dbo.reserve_pots WHERE is_active=1")), 2);
+        var expectedReserveTotal = Math.Round(baseReserveAmount + loggedVirtualPotsTotal, 2);
+        var reserveDifference = Math.Round(selectedAccountsTotal - expectedReserveTotal, 2);
+        var reserveStatus = GetReconciliationStatus(reserveDifference, tolerance);
 
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
@@ -857,6 +868,20 @@ WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at
                 : pendingReader.GetDateTime(2);
             await pendingReader.CloseAsync();
 
+            var recentActivities = new List<AccountRecentActivityRow>();
+            await using var activityCmd = new SqlCommand(@"SELECT TOP 5 occurred_at,title,event_type,amount,source
+FROM dbo.finance_events
+WHERE area IN ('Household Reserve','Accounts & Settings')
+ORDER BY occurred_at DESC", con);
+            await using var activityReader = await activityCmd.ExecuteReaderAsync();
+            while (await activityReader.ReadAsync())
+            {
+                recentActivities.Add(new AccountRecentActivityRow(
+                    activityReader.GetDateTime(0), activityReader.GetString(1), activityReader.GetString(2),
+                    activityReader.IsDBNull(3) ? null : activityReader.GetDecimal(3), activityReader.GetString(4)));
+            }
+            await activityReader.CloseAsync();
+
             rows.Add(new AccountReconciliationRow(
                 account.Id,
                 sourceKey,
@@ -877,17 +902,35 @@ WHERE source_key=@sourceKey AND income_type='Interest' AND balance_reconciled_at
                 Math.Round(pendingInterest, 2),
                 pendingCount,
                 oldestPendingInterestDate,
-                account.InterestHandling));
+                account.InterestHandling,
+                account.Amount,
+                0m,
+                selectedAccountIds.Contains(account.Id) ? "Included in combined check" : "Not selected",
+                recentActivities));
         }
 
         return new AccountReconciliationViewModel
         {
+            BalanceTolerance = tolerance,
+            SelectedAccountsTotal = selectedAccountsTotal,
+            BaseReserveAmount = baseReserveAmount,
+            LoggedVirtualPotsTotal = loggedVirtualPotsTotal,
+            ExpectedReserveTotal = expectedReserveTotal,
+            ReserveDifference = reserveDifference,
+            ReserveReconciliationStatus = reserveStatus,
             Accounts = rows.OrderBy(x => x.AccountName).ToList()
         };
     }
 
+    private static string GetReconciliationStatus(decimal difference, decimal tolerance)
+        => Math.Abs(difference) <= 0.01m
+            ? "Balanced"
+            : Math.Abs(difference) <= tolerance
+                ? "Within expected interest variance"
+                : difference > 0m ? "More than logged" : "Less than logged";
 
-    public async Task<decimal> UpdateReconciledAccountBalanceAsync(string sourceKey, decimal actualBalance, bool reconcilePendingInterest)
+
+    public async Task<AccountBalanceUpdateResult> UpdateReconciledAccountBalanceAsync(string sourceKey, decimal actualBalance, bool reconcilePendingInterest)
     {
         await EnsureModernTablesAsync();
         await using var con = new SqlConnection(ConnStr);
@@ -969,14 +1012,64 @@ VALUES(@sourceKey, @name, @previous, @interest, @new)", con, tx);
             log.Parameters.AddWithValue("@new", actualBalance);
             await log.ExecuteNonQueryAsync();
 
+            var tolerance = Math.Max(0m, await GetDecimalSettingAsync("AccountBalanceTolerance", 5m));
+            var baseReserveAmount = Math.Max(0m, await GetDecimalSettingAsync("EmergencyFundBaseline", 12000m));
+            var selectedAccountIds = await GetSelectedReserveAccountIdsAsync();
+
+            decimal selectedAccountsTotal = 0m;
+            if (selectedAccountIds.Contains(0))
+            {
+                await using var emergencyTotalCmd = new SqlCommand(
+                    "SELECT COALESCE((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0)", con, tx);
+                selectedAccountsTotal += Convert.ToDecimal(await emergencyTotalCmd.ExecuteScalarAsync());
+            }
+
+            if (selectedAccountIds.Any(x => x > 0))
+            {
+                var selectedIds = selectedAccountIds.Where(x => x > 0).ToArray();
+                var parameterNames = selectedIds.Select((_, index) => $"@selectedId{index}").ToArray();
+                await using var selectedTotalCmd = new SqlCommand(
+                    $"SELECT COALESCE(SUM(amount),0) FROM dbo.account_balances WHERE account_balance_id IN ({string.Join(",", parameterNames)})",
+                    con,
+                    tx);
+                for (var index = 0; index < selectedIds.Length; index++)
+                    selectedTotalCmd.Parameters.AddWithValue(parameterNames[index], selectedIds[index]);
+                selectedAccountsTotal += Convert.ToDecimal(await selectedTotalCmd.ExecuteScalarAsync());
+            }
+
+            await using var potsTotalCmd = new SqlCommand(
+                "SELECT COALESCE(SUM(allocated_amount),0) FROM dbo.reserve_pots WHERE is_active=1", con, tx);
+            var loggedVirtualPotsTotal = Convert.ToDecimal(await potsTotalCmd.ExecuteScalarAsync());
+            var expectedBalance = Math.Round(baseReserveAmount + loggedVirtualPotsTotal, 2);
+            var difference = Math.Round(selectedAccountsTotal - expectedBalance, 2);
+            var status = GetReconciliationStatus(difference, tolerance);
+
+            await using var eventCmd = new SqlCommand(@"INSERT INTO dbo.finance_events(area,event_type,entity_type,title,[description],amount,source)
+VALUES('Accounts & Settings','BalanceReconciled','HouseholdReserve',@title,@description,@amount,'User')", con, tx);
+            eventCmd.Parameters.AddWithValue("@title", $"{accountName} balance updated");
+            eventCmd.Parameters.AddWithValue("@description", $"Combined reserve check: {status}. Selected accounts {selectedAccountsTotal:C}; base reserve {baseReserveAmount:C}; logged pots {loggedVirtualPotsTotal:C}; difference {difference:C}.");
+            eventCmd.Parameters.AddWithValue("@amount", actualBalance);
+            await eventCmd.ExecuteNonQueryAsync();
+
             await tx.CommitAsync();
-            return Math.Round(reconciledInterest, 2);
+            return new AccountBalanceUpdateResult(Math.Round(reconciledInterest, 2), expectedBalance, selectedAccountsTotal, difference, status, accountName);
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
         }
+    }
+
+    public async Task<List<int>> GetSelectedReserveAccountIdsAsync()
+    {
+        var ids = new List<int>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand("SELECT account_id FROM dbo.reserve_account_selections ORDER BY display_order, account_id", con);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) ids.Add(reader.GetInt32(0));
+        return ids;
     }
 
     public async Task<decimal> GetMonthlyAllowanceAsync(int month, decimal fallback)
@@ -2386,18 +2479,6 @@ VALUES(@potId, @amount, @date, @note)",
         ("@note", DbValue(note)));
     }
 
-    public async Task<IReadOnlySet<int>> GetSelectedReserveAccountIdsAsync()
-    {
-        await EnsureModernTablesAsync();
-        var ids = new HashSet<int>();
-        await using var con = new SqlConnection(ConnStr);
-        await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT account_id FROM dbo.reserve_account_selections ORDER BY display_order, account_id", con);
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) ids.Add(reader.GetInt32(0));
-        return ids;
-    }
-
     public async Task SaveReserveAccountSelectionAsync(IEnumerable<int> accountIds)
     {
         await EnsureModernTablesAsync();
@@ -2823,16 +2904,18 @@ ORDER BY source_year DESC,source_month DESC,target_year,target_month", recoveryC
             ("@area",area),("@type",eventType),("@entityType",entityType),("@entityId",entityId.HasValue?entityId.Value:DBNull.Value),("@title",title),("@description",DbValue(description)),("@amount",amount.HasValue?amount.Value:DBNull.Value),("@source",source));
     }
 
-    public async Task<List<FinanceEventRow>> GetFinanceEventsAsync(int? potId = null, string? eventType = null, DateTime? from = null, DateTime? to = null)
+    public async Task<List<FinanceEventRow>> GetFinanceEventsAsync(int? potId = null, string? eventType = null, string? area = null, bool includeDetailedAudit = false, DateTime? from = null, DateTime? to = null)
     {
         await EnsureModernTablesAsync();
         var list = new List<FinanceEventRow>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        var sql = "SELECT finance_event_id,occurred_at,area,event_type,entity_type,entity_id,title,[description],amount,source FROM dbo.finance_events WHERE (@potId IS NULL OR (entity_type='ReservePot' AND entity_id=@potId)) AND (@eventType IS NULL OR event_type=@eventType) AND (@from IS NULL OR occurred_at>=@from) AND (@to IS NULL OR occurred_at<DATEADD(day,1,@to)) ORDER BY occurred_at DESC";
+        var sql = "SELECT finance_event_id,occurred_at,area,event_type,entity_type,entity_id,title,[description],amount,source FROM dbo.finance_events WHERE (@potId IS NULL OR (entity_type='ReservePot' AND entity_id=@potId)) AND (@eventType IS NULL OR event_type=@eventType) AND (@area IS NULL OR area=@area) AND (@includeDetailed=1 OR event_type<>'AuditAction') AND (@from IS NULL OR occurred_at>=@from) AND (@to IS NULL OR occurred_at<DATEADD(day,1,@to)) ORDER BY occurred_at DESC";
         await using var cmd = new SqlCommand(sql, con);
         cmd.Parameters.AddWithValue("@potId", potId.HasValue ? potId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("@eventType", string.IsNullOrWhiteSpace(eventType) ? DBNull.Value : eventType);
+        cmd.Parameters.AddWithValue("@area", string.IsNullOrWhiteSpace(area) ? DBNull.Value : area);
+        cmd.Parameters.AddWithValue("@includeDetailed", includeDetailedAudit);
         cmd.Parameters.AddWithValue("@from", from.HasValue ? from.Value.Date : DBNull.Value);
         cmd.Parameters.AddWithValue("@to", to.HasValue ? to.Value.Date : DBNull.Value);
         await using var r = await cmd.ExecuteReaderAsync();

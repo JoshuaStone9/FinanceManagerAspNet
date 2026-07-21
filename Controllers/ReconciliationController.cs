@@ -131,10 +131,13 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
 
         try
         {
-            var reconciledInterest = await repo.UpdateReconciledAccountBalanceAsync(sourceKey, actualBalance, reconcilePendingInterest);
-            TempData["Success"] = reconciledInterest > 0m
-                ? $"Current account balance saved and {reconciledInterest:C} pending interest marked as reconciled."
-                : "Current account balance saved. No income entry was created.";
+            var result = await repo.UpdateReconciledAccountBalanceAsync(sourceKey, actualBalance, reconcilePendingInterest);
+            var differenceText = result.Difference == 0m
+                ? "No unexplained difference remains."
+                : $"There is {(result.Difference > 0m ? "more" : "less")} than logged by {Math.Abs(result.Difference):C}.";
+            TempData[result.Status is "More than logged" or "Less than logged" ? "Warning" : "Success"] =
+                $"{result.AccountName} saved — {result.Status}. {differenceText}" +
+                (result.ReconciledInterest > 0m ? $" {result.ReconciledInterest:C} pending interest was marked as reflected." : string.Empty);
         }
         catch (InvalidOperationException ex)
         {

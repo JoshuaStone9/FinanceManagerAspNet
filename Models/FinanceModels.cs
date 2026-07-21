@@ -832,10 +832,13 @@ public sealed class FinanceEventsViewModel
 {
     public int? PotId { get; set; }
     public string? EventType { get; set; }
+    public string? Area { get; set; }
+    public bool IncludeDetailedAudit { get; set; }
     public DateTime? From { get; set; }
     public DateTime? To { get; set; }
     public List<ReservePot> Pots { get; set; } = [];
     public List<FinanceEventRow> Events { get; set; } = [];
+    public IReadOnlyList<string> Areas => Events.Select(x => x.Area).Distinct().OrderBy(x => x).ToList();
 }
 
 public sealed class HouseholdReserveViewModel

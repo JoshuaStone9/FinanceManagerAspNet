@@ -2,7 +2,15 @@ namespace FinanceManagerAspNet.Models;
 
 public sealed class AccountReconciliationViewModel
 {
+    public decimal BalanceTolerance { get; init; } = 5m;
     public IReadOnlyList<AccountReconciliationRow> Accounts { get; init; } = [];
+    public decimal SelectedAccountsTotal { get; init; }
+    public decimal BaseReserveAmount { get; init; }
+    public decimal LoggedVirtualPotsTotal { get; init; }
+    public decimal ExpectedReserveTotal { get; init; }
+    public decimal ReserveDifference { get; init; }
+    public string ReserveReconciliationStatus { get; init; } = "Balanced";
+    public bool HasReserveConcern => ReserveReconciliationStatus is "More than logged" or "Less than logged";
     public int AccountsNeedingInterestReconciliation => Accounts.Count(x => x.PendingInterestCount > 0);
     public decimal TotalPendingInterest => Accounts.Sum(x => x.PendingInterest);
     public DateTime? OldestPendingInterestDate => Accounts
@@ -36,8 +44,29 @@ public sealed record AccountReconciliationRow(
     decimal PendingInterest,
     int PendingInterestCount,
     DateTime? OldestPendingInterestDate,
-    string InterestHandling)
+    string InterestHandling,
+    decimal ExpectedBalance,
+    decimal Difference,
+    string ReconciliationStatus,
+    IReadOnlyList<AccountRecentActivityRow> RecentActivities)
 {
     public decimal SuggestedBalance => Math.Round(RecordedBalance + PendingInterest, 2);
     public bool NeedsInterestReconciliation => PendingInterestCount > 0 && PendingInterest > 0m;
+    public bool HasBalanceConcern => ReconciliationStatus is "More than logged" or "Less than logged";
 }
+
+
+public sealed record AccountRecentActivityRow(
+    DateTime OccurredAt,
+    string Title,
+    string EventType,
+    decimal? Amount,
+    string Source);
+
+public sealed record AccountBalanceUpdateResult(
+    decimal ReconciledInterest,
+    decimal ExpectedBalance,
+    decimal ActualBalance,
+    decimal Difference,
+    string Status,
+    string AccountName);

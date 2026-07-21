@@ -1233,3 +1233,11 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-interest-reconciliation-stats small{color:var(--muted);font-size:.72rem}
 .fm-interest-reconciliation-stats button{min-height:54px;align-self:stretch;white-space:nowrap}
 @media(max-width:760px){.fm-interest-reconciliation-stats{width:100%;justify-content:stretch}.fm-interest-reconciliation-stats>div{flex:1;min-width:90px}.fm-interest-reconciliation-stats button{width:100%}}
+
+.fm-balance-reconciliation-state{display:grid;gap:.2rem;margin-top:.8rem;padding:.8rem 1rem;border-radius:12px;background:rgba(77,166,107,.10)}
+.fm-balance-reconciliation-state.is-warning{background:rgba(224,154,54,.14);border:1px solid rgba(224,154,54,.35)}
+.fm-balance-reconciliation-state span,.fm-balance-reconciliation-state small{color:var(--muted)}
+.fm-recent-account-activity{margin:1rem 0;padding:1rem;border-radius:12px;background:rgba(255,255,255,.035)}
+.fm-recent-account-activity ul{list-style:none;padding:0;margin:.7rem 0 0;display:grid;gap:.55rem}
+.fm-recent-account-activity li{display:grid;grid-template-columns:110px 1fr auto;gap:.75rem;align-items:center}
+.fm-event-list{display:grid;gap:.75rem}.fm-event-item{display:grid;grid-template-columns:70px 1fr auto;gap:1rem;padding:1rem;border-radius:12px;background:rgba(255,255,255,.035);align-items:start}.fm-event-time{font-weight:700}.fm-event-badges{display:flex;gap:.4rem;flex-wrap:wrap}.fm-event-badges span{font-size:.75rem;padding:.2rem .5rem;border-radius:999px;background:rgba(255,255,255,.07)}.fm-event-item h3{margin:.45rem 0 .2rem}.fm-event-item p{margin:.2rem 0}.fm-event-amount{white-space:nowrap}

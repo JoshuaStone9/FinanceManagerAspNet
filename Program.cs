@@ -8,7 +8,8 @@ using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<FinanceActionAuditFilter>();
+builder.Services.AddControllersWithViews(options => options.Filters.AddService<FinanceActionAuditFilter>());
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("FinanceManager")));
 
@@ -100,14 +101,17 @@ using (var scope = app.Services.CreateScope())
         ?? configuration.GetConnectionString("FinanceManager")
         ?? throw new InvalidOperationException("Missing FinanceManager connection string.");
 
-    EnsureSqlDatabaseExists(connectionString);
+    //EnsureSqlDatabaseExists(connectionString);
 
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
-    await EnsurePersonalVaultSchemaAsync(db);
+    //var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    var financeRepository = scope.ServiceProvider.GetRequiredService<FinanceRepository>();
-    await financeRepository.EnsureModernTablesAsync();
+    //if (!await db.Database.CanConnectAsync())
+    //{
+    //    throw new InvalidOperationException(
+    //        "The Finance Manager database exists, but the application could not connect to it.");
+    //}
+
+    //await EnsurePersonalVaultSchemaAsync(db);
 }
 
 app.Run();
