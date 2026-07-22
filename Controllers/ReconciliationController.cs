@@ -8,6 +8,50 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
     [HttpGet]
     public async Task<IActionResult> Index() => View(await repo.GetAccountReconciliationAsync());
 
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddEmergencyFundContribution(decimal amount, string? note)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        if (amount <= 0m)
+        {
+            TempData["Error"] = "Enter an emergency-fund contribution greater than zero.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        try
+        {
+            var result = await repo.AddEmergencyFundContributionAsync(amount, note);
+            TempData["Success"] = result.RemainingShortfall > 0m
+                ? $"{amount:C} added to the Emergency Fund. Balance: {result.NewBalance:C}. Remaining to base level: {result.RemainingShortfall:C}."
+                : $"{amount:C} added to the Emergency Fund. The {result.Baseline:C} base level has been reached.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException)
+        {
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReverseEmergencyFundContribution(long transactionId, string? reason)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        try
+        {
+            var result = await repo.ReverseEmergencyFundTransactionAsync(transactionId, reason);
+            TempData["Success"] = result.RemainingShortfall > 0m
+                ? $"Contribution reversed. Emergency Fund balance: {result.NewBalance:C}. Remaining to base level: {result.RemainingShortfall:C}."
+                : $"Contribution reversed. Emergency Fund balance: {result.NewBalance:C}.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException)
+        {
+            TempData["Error"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index));
+    }
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveAccount(
         int id,

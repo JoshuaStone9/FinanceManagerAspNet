@@ -66,3 +66,17 @@
 - Added expected-versus-received passive income to the Income workspace.
 - Confirmed interest is recorded as real monthly income only after receipt.
 - Added duplicate protection, backup/restore support and safe monthly reset support.
+
+## Phase 11.9 — Event Exports and Emergency Fund Restoration
+
+- Added filtered CSV and PDF exports to Finance Events.
+- Added a dedicated Emergency Fund contribution workflow.
+- Emergency Fund top-ups are recorded as allocations rather than Extra Expenses.
+- Other pots remain fundable while the Emergency Fund is below its base level, with an advisory shortfall message.
+- Added structured `EmergencyFundContribution` audit events.
+
+### Phase 11.9 ledger extension
+- Added `emergency_fund_transactions` as an auditable Emergency Fund movement ledger.
+- Linked each new contribution to its Dashboard allocation and Finance Event.
+- Added per-contribution reversal with duplicate-reversal protection.
+- Reversals now update the Emergency Fund balance, Dashboard allocation, ledger, and event history atomically.

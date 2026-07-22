@@ -51,6 +51,7 @@ builder.Services.AddScoped<IFinancialForecastService, FinancialForecastService>(
 builder.Services.AddScoped<IWhatIfForecastService, WhatIfForecastService>();
 builder.Services.AddScoped<IForecastScenarioService, ForecastScenarioService>();
 builder.Services.AddScoped<FinanceRepository>();
+builder.Services.AddSingleton<FinanceEventExportService>();
 builder.Services.AddScoped<FinanceCalculator>();
 builder.Services.AddHttpClient<MarketPriceService>();
 builder.Services.AddScoped<AppAuthService>();

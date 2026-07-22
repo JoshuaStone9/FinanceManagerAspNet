@@ -335,6 +335,27 @@ CREATE TABLE dbo.finance_events(
     source nvarchar(40) NOT NULL DEFAULT 'System'
 );
 
+IF OBJECT_ID('dbo.emergency_fund_transactions','U') IS NULL
+CREATE TABLE dbo.emergency_fund_transactions(
+    emergency_fund_transaction_id bigint IDENTITY(1,1) PRIMARY KEY,
+    transaction_type nvarchar(60) NOT NULL,
+    amount decimal(18,2) NOT NULL,
+    occurred_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    note nvarchar(500) NULL,
+    dashboard_savings_id int NULL,
+    finance_event_id bigint NULL,
+    reversed_transaction_id bigint NULL,
+    reversed_by_transaction_id bigint NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_emergency_fund_transactions_savings FOREIGN KEY(dashboard_savings_id) REFERENCES dbo.savings(savings_id),
+    CONSTRAINT FK_emergency_fund_transactions_event FOREIGN KEY(finance_event_id) REFERENCES dbo.finance_events(finance_event_id),
+    CONSTRAINT FK_emergency_fund_transactions_reversed FOREIGN KEY(reversed_transaction_id) REFERENCES dbo.emergency_fund_transactions(emergency_fund_transaction_id),
+    CONSTRAINT FK_emergency_fund_transactions_reversed_by FOREIGN KEY(reversed_by_transaction_id) REFERENCES dbo.emergency_fund_transactions(emergency_fund_transaction_id)
+);
+
+IF OBJECT_ID('dbo.emergency_fund_transactions','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_emergency_fund_transactions_occurred' AND object_id=OBJECT_ID('dbo.emergency_fund_transactions'))
+CREATE INDEX IX_emergency_fund_transactions_occurred ON dbo.emergency_fund_transactions(occurred_at DESC);
+
 IF OBJECT_ID('dbo.recommendation_applications','U') IS NULL
 CREATE TABLE dbo.recommendation_applications(
     recommendation_application_id bigint IDENTITY(1,1) PRIMARY KEY,
@@ -909,8 +930,11 @@ ORDER BY occurred_at DESC", con);
                 recentActivities));
         }
 
+        var emergencyFundTransactions = await GetEmergencyFundTransactionsAsync(con);
+
         return new AccountReconciliationViewModel
         {
+            EmergencyFundTransactions = emergencyFundTransactions,
             BalanceTolerance = tolerance,
             SelectedAccountsTotal = selectedAccountsTotal,
             BaseReserveAmount = baseReserveAmount,
@@ -1354,6 +1378,202 @@ SELECT @@ROWCOUNT;", con);
     {
         await EnsureModernTablesAsync();
         await ExecuteAsync("DELETE FROM dbo.savings_contribution_changes WHERE savings_contribution_change_id=@id", ("@id", id));
+    }
+
+
+    public async Task<(long TransactionId, decimal PreviousBalance, decimal NewBalance, decimal Baseline, decimal RemainingShortfall)> AddEmergencyFundContributionAsync(decimal amount, string? note)
+    {
+        if (amount <= 0m) throw new ArgumentOutOfRangeException(nameof(amount), "Contribution must be greater than zero.");
+        await EnsureModernTablesAsync();
+
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var tx = (SqlTransaction)await con.BeginTransactionAsync();
+        try
+        {
+            decimal previous;
+            await using (var readBalance = new SqlCommand(
+                "SELECT COALESCE((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0)", con, tx))
+            {
+                previous = Convert.ToDecimal(await readBalance.ExecuteScalarAsync() ?? 0m);
+            }
+
+            var updated = previous + amount;
+            await using (var updateBalance = new SqlCommand(
+                "IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount, updated_at=SYSUTCDATETIME() ELSE INSERT INTO dbo.emergency_fund(amount,updated_at) VALUES(@amount,SYSUTCDATETIME())", con, tx))
+            {
+                updateBalance.Parameters.AddWithValue("@amount", updated);
+                await updateBalance.ExecuteNonQueryAsync();
+            }
+
+            decimal baseline;
+            await using (var readBaseline = new SqlCommand(
+                "SELECT TRY_CONVERT(decimal(18,2),[value]) FROM dbo.finance_settings WHERE [key]='EmergencyFundBaseline'", con, tx))
+            {
+                var baselineValue = await readBaseline.ExecuteScalarAsync();
+                baseline = baselineValue is null or DBNull ? 12000m : Convert.ToDecimal(baselineValue);
+            }
+
+            var shortfall = Math.Max(0m, baseline - updated);
+            var cleanNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            var description = cleanNote is null
+                ? $"Emergency Fund increased from {previous:C} to {updated:C}. Remaining shortfall: {shortfall:C}."
+                : $"{cleanNote} Emergency Fund increased from {previous:C} to {updated:C}. Remaining shortfall: {shortfall:C}.";
+
+            int savingsId;
+            await using (var addDashboardAllocation = new SqlCommand(@"INSERT INTO dbo.savings
+([name],amount,[date],[type],[length],notes,pot_name_snapshot,reserve_pot_id)
+OUTPUT INSERTED.savings_id
+VALUES('Emergency Fund',@amount,CONVERT(date,GETDATE()),'Emergency Fund Restoration','One-off',@notes,'Emergency Fund',NULL)", con, tx))
+            {
+                addDashboardAllocation.Parameters.AddWithValue("@amount", amount);
+                addDashboardAllocation.Parameters.AddWithValue("@notes", cleanNote is null
+                    ? "Added through Account Management emergency-fund restoration."
+                    : $"Added through Account Management emergency-fund restoration. {cleanNote}");
+                savingsId = Convert.ToInt32(await addDashboardAllocation.ExecuteScalarAsync());
+            }
+
+            long eventId;
+            await using (var addEvent = new SqlCommand(@"INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source)
+OUTPUT INSERTED.finance_event_id
+VALUES('Household Reserve','EmergencyFundContribution','EmergencyFund',NULL,'Emergency Fund contribution',@description,@amount,'User')", con, tx))
+            {
+                addEvent.Parameters.AddWithValue("@description", description);
+                addEvent.Parameters.AddWithValue("@amount", amount);
+                eventId = Convert.ToInt64(await addEvent.ExecuteScalarAsync());
+            }
+
+            long transactionId;
+            await using (var addTransaction = new SqlCommand(@"INSERT INTO dbo.emergency_fund_transactions
+(transaction_type,amount,note,dashboard_savings_id,finance_event_id)
+OUTPUT INSERTED.emergency_fund_transaction_id
+VALUES('Contribution',@amount,@note,@savingsId,@eventId)", con, tx))
+            {
+                addTransaction.Parameters.AddWithValue("@amount", amount);
+                addTransaction.Parameters.AddWithValue("@note", (object?)cleanNote ?? DBNull.Value);
+                addTransaction.Parameters.AddWithValue("@savingsId", savingsId);
+                addTransaction.Parameters.AddWithValue("@eventId", eventId);
+                transactionId = Convert.ToInt64(await addTransaction.ExecuteScalarAsync());
+            }
+
+            await tx.CommitAsync();
+            return (transactionId, previous, updated, baseline, shortfall);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<(decimal PreviousBalance, decimal NewBalance, decimal Baseline, decimal RemainingShortfall)> ReverseEmergencyFundTransactionAsync(long transactionId, string? reason)
+    {
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var tx = (SqlTransaction)await con.BeginTransactionAsync();
+        try
+        {
+            decimal amount;
+            int? savingsId;
+            await using (var read = new SqlCommand(@"SELECT amount,dashboard_savings_id,note,reversed_by_transaction_id,transaction_type
+FROM dbo.emergency_fund_transactions WITH (UPDLOCK,HOLDLOCK)
+WHERE emergency_fund_transaction_id=@id", con, tx))
+            {
+                read.Parameters.AddWithValue("@id", transactionId);
+                await using var r = await read.ExecuteReaderAsync();
+                if (!await r.ReadAsync()) throw new InvalidOperationException("The selected emergency-fund transaction could not be found.");
+                if (!string.Equals(r.GetString(4), "Contribution", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Only contribution transactions can currently be reversed.");
+                if (!r.IsDBNull(3)) throw new InvalidOperationException("This contribution has already been reversed.");
+                amount = r.GetDecimal(0);
+                savingsId = r.IsDBNull(1) ? null : r.GetInt32(1);
+            }
+
+            decimal previous;
+            await using (var readBalance = new SqlCommand("SELECT COALESCE((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0)", con, tx))
+                previous = Convert.ToDecimal(await readBalance.ExecuteScalarAsync() ?? 0m);
+            if (previous < amount) throw new InvalidOperationException("This contribution cannot be reversed because the Emergency Fund balance is lower than the contribution amount.");
+            var updated = previous - amount;
+            await using (var updateBalance = new SqlCommand("UPDATE dbo.emergency_fund SET amount=@amount,updated_at=SYSUTCDATETIME()", con, tx))
+            {
+                updateBalance.Parameters.AddWithValue("@amount", updated);
+                await updateBalance.ExecuteNonQueryAsync();
+            }
+
+            if (savingsId.HasValue)
+            {
+                await using (var unlinkSaving = new SqlCommand("UPDATE dbo.emergency_fund_transactions SET dashboard_savings_id=NULL WHERE emergency_fund_transaction_id=@transactionId", con, tx))
+                {
+                    unlinkSaving.Parameters.AddWithValue("@transactionId", transactionId);
+                    await unlinkSaving.ExecuteNonQueryAsync();
+                }
+                await using var deleteSaving = new SqlCommand("DELETE FROM dbo.savings WHERE savings_id=@id", con, tx);
+                deleteSaving.Parameters.AddWithValue("@id", savingsId.Value);
+                await deleteSaving.ExecuteNonQueryAsync();
+            }
+
+            decimal baseline;
+            await using (var readBaseline = new SqlCommand("SELECT TRY_CONVERT(decimal(18,2),[value]) FROM dbo.finance_settings WHERE [key]='EmergencyFundBaseline'", con, tx))
+            {
+                var value = await readBaseline.ExecuteScalarAsync();
+                baseline = value is null or DBNull ? 12000m : Convert.ToDecimal(value);
+            }
+            var shortfall = Math.Max(0m, baseline - updated);
+            var cleanReason = string.IsNullOrWhiteSpace(reason) ? "Contribution reversed by user." : reason.Trim();
+            var description = $"Reversed emergency-fund contribution #{transactionId} of {amount:C}. Balance changed from {previous:C} to {updated:C}. Remaining shortfall: {shortfall:C}. Reason: {cleanReason}";
+
+            long eventId;
+            await using (var addEvent = new SqlCommand(@"INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source)
+OUTPUT INSERTED.finance_event_id
+VALUES('Household Reserve','EmergencyFundContributionReversed','EmergencyFund',NULL,'Emergency Fund contribution reversed',@description,@amount,'User')", con, tx))
+            {
+                addEvent.Parameters.AddWithValue("@description", description);
+                addEvent.Parameters.AddWithValue("@amount", -amount);
+                eventId = Convert.ToInt64(await addEvent.ExecuteScalarAsync());
+            }
+
+            long reversalId;
+            await using (var addReversal = new SqlCommand(@"INSERT INTO dbo.emergency_fund_transactions
+(transaction_type,amount,note,finance_event_id,reversed_transaction_id)
+OUTPUT INSERTED.emergency_fund_transaction_id
+VALUES('Reversal',@amount,@note,@eventId,@originalId)", con, tx))
+            {
+                addReversal.Parameters.AddWithValue("@amount", -amount);
+                addReversal.Parameters.AddWithValue("@note", cleanReason);
+                addReversal.Parameters.AddWithValue("@eventId", eventId);
+                addReversal.Parameters.AddWithValue("@originalId", transactionId);
+                reversalId = Convert.ToInt64(await addReversal.ExecuteScalarAsync());
+            }
+
+            await using (var markOriginal = new SqlCommand("UPDATE dbo.emergency_fund_transactions SET reversed_by_transaction_id=@reversalId WHERE emergency_fund_transaction_id=@id", con, tx))
+            {
+                markOriginal.Parameters.AddWithValue("@reversalId", reversalId);
+                markOriginal.Parameters.AddWithValue("@id", transactionId);
+                await markOriginal.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+            return (previous, updated, baseline, shortfall);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task<List<EmergencyFundTransactionRow>> GetEmergencyFundTransactionsAsync(SqlConnection con)
+    {
+        var rows = new List<EmergencyFundTransactionRow>();
+        await using var cmd = new SqlCommand(@"SELECT emergency_fund_transaction_id,transaction_type,amount,occurred_at,note,reversed_transaction_id,reversed_by_transaction_id
+FROM dbo.emergency_fund_transactions
+ORDER BY occurred_at DESC,emergency_fund_transaction_id DESC", con);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            rows.Add(new EmergencyFundTransactionRow(r.GetInt64(0),r.GetString(1),r.GetDecimal(2),r.GetDateTime(3),r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetInt64(5),r.IsDBNull(6)?null:r.GetInt64(6)));
+        }
+        return rows;
     }
 
     public async Task SaveManualEmergencyFundUpdateAsync(decimal newTotal, string? reason)

@@ -436,3 +436,6 @@ Account Management now presents pending interest as a single notification summar
 ## Phase 11.7 — Tax-aware interest engine
 
 Interest tax settings now drive the full interest workflow. Monthly estimates calculate gross interest, configured tax and net interest. Confirmed payments store the breakdown, while Monthly Income and Account Management use only the net amount. Statistics forecasts now show projected gross interest, estimated tax and projected net interest, and only net interest is added to the goal-date total. A blank tax start date applies the configured tax immediately; a future date delays the deduction until that date.
+
+## Phase 11.9 Emergency Fund ledger
+Emergency Fund contributions created through Account Management are stored as individual ledger transactions. Each new contribution is linked to its Dashboard allocation and Finance Event and may be reversed independently from the Account Management transaction history. See `Documentation/Phase-11.9-Event-Exports-and-Emergency-Fund-Restoration.md` for the complete rules.

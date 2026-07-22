@@ -11,6 +11,10 @@
 <label>To<input type="date" name="to" value="@Model.To?.ToString("yyyy-MM-dd")"/></label>
 <label class="fm-account-toggle"><input type="checkbox" name="includeDetailedAudit" value="true" checked="@Model.IncludeDetailedAudit"/><span>Include detailed action audit</span></label>
 <button class="primary">Filter events</button>
+<div class="fm-account-editor-actions fm-field-span-all">
+<a class="button" asp-action="ExportCsv" asp-route-potId="@Model.PotId" asp-route-eventType="@Model.EventType" asp-route-area="@Model.Area" asp-route-includeDetailedAudit="@Model.IncludeDetailedAudit" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">Export CSV</a>
+<a class="button" asp-action="ExportPdf" asp-route-potId="@Model.PotId" asp-route-eventType="@Model.EventType" asp-route-area="@Model.Area" asp-route-includeDetailedAudit="@Model.IncludeDetailedAudit" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">Export PDF</a>
+</div>
 </form>
 </section>
 @foreach (var day in Model.Events.GroupBy(x => x.OccurredAt.ToLocalTime().Date))

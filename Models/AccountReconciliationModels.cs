@@ -4,6 +4,7 @@ public sealed class AccountReconciliationViewModel
 {
     public decimal BalanceTolerance { get; init; } = 5m;
     public IReadOnlyList<AccountReconciliationRow> Accounts { get; init; } = [];
+    public IReadOnlyList<EmergencyFundTransactionRow> EmergencyFundTransactions { get; init; } = [];
     public decimal SelectedAccountsTotal { get; init; }
     public decimal BaseReserveAmount { get; init; }
     public decimal LoggedVirtualPotsTotal { get; init; }
@@ -70,3 +71,16 @@ public sealed record AccountBalanceUpdateResult(
     decimal Difference,
     string Status,
     string AccountName);
+
+public sealed record EmergencyFundTransactionRow(
+    long TransactionId,
+    string TransactionType,
+    decimal Amount,
+    DateTime OccurredAt,
+    string? Note,
+    long? ReversedTransactionId,
+    long? ReversedByTransactionId)
+{
+    public bool CanReverse => TransactionType == "Contribution" && ReversedByTransactionId is null;
+    public bool IsReversed => ReversedByTransactionId is not null;
+}

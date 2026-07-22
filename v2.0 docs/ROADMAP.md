@@ -35,3 +35,11 @@
 - The notification shows affected accounts, the pending total, and the age/date of the oldest unreconciled interest payment.
 - Review Accounts opens the oldest affected account directly in its balance-check panel.
 - Pending-interest details remain available only inside Update Balance, keeping the main account grid focused.
+
+## Phase 11.9 — Event Exports and Emergency Fund Restoration
+
+- Added filtered CSV and PDF exports to Finance Events.
+- Added a dedicated Emergency Fund contribution workflow.
+- Emergency Fund top-ups are recorded as allocations rather than Extra Expenses.
+- Other pots remain fundable while the Emergency Fund is below its base level, with an advisory shortfall message.
+- Added structured `EmergencyFundContribution` audit events.
