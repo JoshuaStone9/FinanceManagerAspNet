@@ -5,6 +5,9 @@ public sealed class AccountReconciliationViewModel
     public decimal BalanceTolerance { get; init; } = 5m;
     public IReadOnlyList<AccountReconciliationRow> Accounts { get; init; } = [];
     public IReadOnlyList<EmergencyFundTransactionRow> EmergencyFundTransactions { get; init; } = [];
+    public decimal EmergencyFundTotal { get; init; }
+    public string? DefaultEmergencyFundAccountName { get; init; }
+    public bool HasEmergencyFundDestination => !string.IsNullOrWhiteSpace(DefaultEmergencyFundAccountName);
     public decimal SelectedAccountsTotal { get; init; }
     public decimal BaseReserveAmount { get; init; }
     public decimal LoggedVirtualPotsTotal { get; init; }
@@ -46,6 +49,8 @@ public sealed record AccountReconciliationRow(
     int PendingInterestCount,
     DateTime? OldestPendingInterestDate,
     string InterestHandling,
+    string Purpose,
+    bool IsDefaultEmergencyFundDestination,
     decimal ExpectedBalance,
     decimal Difference,
     string ReconciliationStatus,

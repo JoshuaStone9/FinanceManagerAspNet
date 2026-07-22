@@ -66,6 +66,8 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         decimal taxRate,
         DateTime? taxEffectiveFrom,
         string? interestHandling,
+        string? purpose,
+        bool isDefaultEmergencyFundDestination = false,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -83,7 +85,7 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             return RedirectToAction(nameof(Index));
         }
 
-        var safeName = id == 0 ? "Emergency Fund" : name.Trim();
+        var safeName = name.Trim();
         var adjustedBalance = account.RecordedBalance + (startingBalance - account.StartingBalance);
         await repo.SaveAccountAsync(
             id,
@@ -99,7 +101,9 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             taxTreatment ?? "Tax Free",
             taxRate,
             taxEffectiveFrom,
-            interestHandling ?? "Keep invested");
+            interestHandling ?? "Keep invested",
+            purpose ?? "General",
+            isDefaultEmergencyFundDestination);
 
         TempData["Success"] = $"{safeName} settings updated.";
         return RedirectToAction(nameof(Index));
@@ -118,6 +122,8 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         decimal taxRate,
         DateTime? taxEffectiveFrom,
         string? interestHandling,
+        string? purpose,
+        bool isDefaultEmergencyFundDestination = false,
         bool includeInGlobalGoal = false)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
@@ -141,7 +147,9 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             taxTreatment ?? "Tax Free",
             taxRate,
             taxEffectiveFrom,
-            interestHandling ?? "Keep invested");
+            interestHandling ?? "Keep invested",
+            purpose ?? "General",
+            isDefaultEmergencyFundDestination);
 
         TempData["Success"] = $"{name.Trim()} added.";
         return RedirectToAction(nameof(Index));
@@ -153,7 +161,7 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
         if (id <= 0)
         {
-            TempData["Error"] = "The Emergency Fund cannot be deleted.";
+            TempData["Error"] = "The selected account could not be found.";
             return RedirectToAction(nameof(Index));
         }
 

@@ -138,3 +138,13 @@ A user may make any number of contributions. Each remains independently reversib
 The system does not provide a generic “undo last contribution” action because that could affect the wrong entry when several contributions exist.
 
 Contributions created before the ledger table was introduced remain visible in Finance Events and on historic Dashboard months, but they are not automatically backfilled into the ledger because their exact event-to-dashboard linkage cannot be proven safely.
+
+## Collapsible restoration interface
+
+The Account Management page keeps Phase 11.9 unobtrusive:
+
+- The entire Restore Emergency Fund feature is shown only while the recorded Emergency Fund balance is below the configured base reserve level.
+- A compact top-level control opens and closes the contribution form.
+- The transaction ledger is collapsed independently under its own Show/Hide control.
+- Once the base level has been reached, the restoration control, contribution form, and ledger panel are not rendered.
+- The ledger data is retained even when hidden so that it becomes available again if the Emergency Fund later falls below its base level.

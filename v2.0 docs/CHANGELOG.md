@@ -80,3 +80,12 @@
 - Linked each new contribution to its Dashboard allocation and Finance Event.
 - Added per-contribution reversal with duplicate-reversal protection.
 - Reversals now update the Emergency Fund balance, Dashboard allocation, ledger, and event history atomically.
+
+## Phase 12.0 — Account Purpose and Emergency Fund Configuration
+
+- Added account-purpose classification to Account Management.
+- Removed Emergency Fund identification by account display name.
+- Added support for multiple Emergency Fund accounts and a combined balance.
+- Added one configurable default restoration destination.
+- Linked new Emergency Fund ledger transactions to their destination account.
+- Added safe migration from the legacy standalone Emergency Fund balance.

@@ -79,6 +79,18 @@ IF COL_LENGTH('dbo.account_balances','tax_treatment') IS NULL ALTER TABLE dbo.ac
 IF COL_LENGTH('dbo.account_balances','tax_rate') IS NULL ALTER TABLE dbo.account_balances ADD tax_rate decimal(9,4) NOT NULL CONSTRAINT DF_account_balances_tax_rate DEFAULT 0;
 IF COL_LENGTH('dbo.account_balances','tax_effective_from') IS NULL ALTER TABLE dbo.account_balances ADD tax_effective_from date NULL;
 IF COL_LENGTH('dbo.account_balances','interest_handling') IS NULL ALTER TABLE dbo.account_balances ADD interest_handling nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_interest_handling DEFAULT 'Keep invested';
+IF COL_LENGTH('dbo.account_balances','purpose') IS NULL ALTER TABLE dbo.account_balances ADD purpose nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_purpose DEFAULT 'General';
+IF COL_LENGTH('dbo.account_balances','is_default_emergency_fund_destination') IS NULL ALTER TABLE dbo.account_balances ADD is_default_emergency_fund_destination bit NOT NULL CONSTRAINT DF_account_balances_default_emergency DEFAULT 0;
+IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund') AND EXISTS (SELECT 1 FROM dbo.emergency_fund WHERE amount > 0)
+BEGIN
+    INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,interest_handling,purpose,is_default_emergency_fund_destination)
+    SELECT 'Emergency Fund', amount, 3.8, 0, 1, amount, 'Other', 'Savings', 'Cash', 'Tax Free', 0, 'Keep invested', 'EmergencyFund', 1 FROM dbo.emergency_fund;
+    UPDATE dbo.emergency_fund SET amount=0,updated_at=SYSUTCDATETIME();
+END;
+IF EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund') AND NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund' AND is_default_emergency_fund_destination=1)
+BEGIN
+    UPDATE dbo.account_balances SET is_default_emergency_fund_destination=1 WHERE account_balance_id=(SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE purpose='EmergencyFund' ORDER BY account_balance_id);
+END;
 UPDATE dbo.account_balances SET starting_balance=amount WHERE starting_balance IS NULL;
 ALTER TABLE dbo.account_balances ALTER COLUMN starting_balance decimal(18,2) NOT NULL;
 
@@ -353,6 +365,8 @@ CREATE TABLE dbo.emergency_fund_transactions(
     CONSTRAINT FK_emergency_fund_transactions_reversed_by FOREIGN KEY(reversed_by_transaction_id) REFERENCES dbo.emergency_fund_transactions(emergency_fund_transaction_id)
 );
 
+IF COL_LENGTH('dbo.emergency_fund_transactions','account_balance_id') IS NULL ALTER TABLE dbo.emergency_fund_transactions ADD account_balance_id int NULL;
+
 IF OBJECT_ID('dbo.emergency_fund_transactions','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_emergency_fund_transactions_occurred' AND object_id=OBJECT_ID('dbo.emergency_fund_transactions'))
 CREATE INDEX IX_emergency_fund_transactions_occurred ON dbo.emergency_fund_transactions(occurred_at DESC);
 
@@ -510,7 +524,6 @@ WHERE asset_type IN ('Gold','Silver')
 IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_asset_holdings_type' AND object_id=OBJECT_ID('dbo.asset_holdings')) CREATE INDEX IX_asset_holdings_type ON dbo.asset_holdings(asset_type);
 IF OBJECT_ID('dbo.asset_holdings','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_asset_holdings_symbol' AND object_id=OBJECT_ID('dbo.asset_holdings')) CREATE INDEX IX_asset_holdings_symbol ON dbo.asset_holdings(symbol);
 
-IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Lucy''s ISA') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Lucy''s ISA',4000,3.8,0,1);
 IF OBJECT_ID('dbo.forecast_scenarios','U') IS NULL
 CREATE TABLE dbo.forecast_scenarios(
     forecast_scenario_id int IDENTITY(1,1) PRIMARY KEY,
@@ -531,10 +544,8 @@ CREATE TABLE dbo.forecast_scenarios(
 );
 
 IF OBJECT_ID('dbo.forecast_scenarios','U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_forecast_scenarios_preferred' AND object_id=OBJECT_ID('dbo.forecast_scenarios'))
-CREATE INDEX IX_forecast_scenarios_preferred ON dbo.forecast_scenarios(is_preferred, updated_at DESC);
-
-IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE [name]='Monzo Pots') INSERT INTO dbo.account_balances([name], amount, interest_rate, monthly_contribution, include_in_global_goal) VALUES('Monzo Pots',1370,2.75,0,1);";
-        await ExecuteAsync(sql);
+CREATE INDEX IX_forecast_scenarios_preferred ON dbo.forecast_scenarios(is_preferred, updated_at DESC);";
+    await ExecuteAsync(sql);
     }
 
     public async Task<List<PaymentRow>> GetRowsAsync(string source, int month, int year)
@@ -584,13 +595,15 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
 
     public async Task<decimal> GetEmergencyFundAsync()
     {
-        var value = await ScalarAsync("SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC");
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync("SELECT COALESCE(SUM(amount),0) FROM dbo.account_balances WHERE purpose='EmergencyFund'");
         return value is null or DBNull ? 0m : Convert.ToDecimal(value);
     }
 
     public async Task<DateTime?> GetEmergencyFundUpdatedAsync()
     {
-        var value = await ScalarAsync("SELECT TOP 1 updated_at FROM dbo.emergency_fund ORDER BY updated_at DESC");
+        await EnsureModernTablesAsync();
+        var value = await ScalarAsync("SELECT MAX(updated_at) FROM dbo.account_balances WHERE purpose='EmergencyFund'");
         return value is null or DBNull ? null : Convert.ToDateTime(value);
     }
 
@@ -854,7 +867,7 @@ WHERE passive_income_record_id=@id AND monthly_income_entry_id IS NULL AND balan
         var baseReserveAmount = Math.Max(0m, await GetDecimalSettingAsync("EmergencyFundBaseline", 12000m));
         var selectedAccountIds = await GetSelectedReserveAccountIdsAsync();
         var selectedAccountsTotal = Math.Round(accounts
-            .Where(x => selectedAccountIds.Contains(x.Id))
+            .Where(x => selectedAccountIds.Contains(x.Id) || x.Purpose == "EmergencyFund")
             .Sum(x => x.Amount), 2);
         var loggedVirtualPotsTotal = Math.Round(Convert.ToDecimal(await ScalarAsync(
             "SELECT COALESCE(SUM(allocated_amount),0) FROM dbo.reserve_pots WHERE is_active=1")), 2);
@@ -924,16 +937,23 @@ ORDER BY occurred_at DESC", con);
                 pendingCount,
                 oldestPendingInterestDate,
                 account.InterestHandling,
+                account.Purpose,
+                account.IsDefaultEmergencyFundDestination,
                 account.Amount,
                 0m,
-                selectedAccountIds.Contains(account.Id) ? "Included in combined check" : "Not selected",
+                (selectedAccountIds.Contains(account.Id) || account.Purpose == "EmergencyFund") ? "Included in combined check" : "Not selected",
                 recentActivities));
         }
 
         var emergencyFundTransactions = await GetEmergencyFundTransactionsAsync(con);
+        var emergencyAccounts = accounts.Where(x => x.Purpose == "EmergencyFund").ToList();
+        var emergencyFundTotal = Math.Round(emergencyAccounts.Sum(x => x.Amount), 2);
+        var defaultEmergencyAccountName = emergencyAccounts.FirstOrDefault(x => x.IsDefaultEmergencyFundDestination)?.Name;
 
         return new AccountReconciliationViewModel
         {
+            EmergencyFundTotal = emergencyFundTotal,
+            DefaultEmergencyFundAccountName = defaultEmergencyAccountName,
             EmergencyFundTransactions = emergencyFundTransactions,
             BalanceTolerance = tolerance,
             SelectedAccountsTotal = selectedAccountsTotal,
@@ -1287,42 +1307,19 @@ SELECT @@ROWCOUNT;", con);
     public async Task<List<AccountBalance>> GetAccountsAsync(decimal emergencyFund)
     {
         await EnsureModernTablesAsync();
-        var includeEmergency = await GetDecimalSettingAsync("SavingsIncludeEmergencyFund", 1m) == 1m;
-        var emergencyStartingBalance = await GetDecimalSettingAsync("EmergencyFundStartingBalance", emergencyFund);
-        var emergencyProvider = await GetStringSettingAsync("EmergencyFundProvider", "Other");
-        var emergencyAccountType = await GetStringSettingAsync("EmergencyFundAccountType", "Savings");
-        var emergencyHoldingType = await GetStringSettingAsync("EmergencyFundHoldingType", "Cash");
-        var emergencyTaxTreatment = await GetStringSettingAsync("EmergencyFundTaxTreatment", "Tax Free");
-        var emergencyTaxRate = await GetDecimalSettingAsync("EmergencyFundTaxRate", 0m);
-        var emergencyTaxEffectiveText = await GetStringSettingAsync("EmergencyFundTaxEffectiveFrom", string.Empty);
-        var emergencyInterestHandling = await GetStringSettingAsync("EmergencyFundInterestHandling", "Keep invested");
-        DateTime? emergencyTaxEffectiveFrom = DateTime.TryParse(emergencyTaxEffectiveText, out var parsedTaxDate) ? parsedTaxDate.Date : null;
-        var accounts = new List<AccountBalance>
-        {
-            new(0, "Emergency Fund", emergencyFund, await GetDecimalSettingAsync("EmergencyFundInterestRate", 3.8m), 0, true, await GetEmergencyFundUpdatedAsync() ?? DateTime.MinValue, includeEmergency, emergencyStartingBalance, emergencyProvider, emergencyAccountType, emergencyHoldingType, emergencyTaxTreatment, emergencyTaxRate, emergencyTaxEffectiveFrom, emergencyInterestHandling)
-        };
-        await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
-        await using var cmd = new SqlCommand("SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling FROM dbo.account_balances ORDER BY [name]", con);
+        var accounts = new List<AccountBalance>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        await using var cmd = new SqlCommand(@"SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling,purpose,is_default_emergency_fund_destination
+FROM dbo.account_balances ORDER BY [name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
         {
             accounts.Add(new AccountBalance(
-                r.GetInt32(0),
-                r.GetString(1),
-                r.GetDecimal(2),
-                r.GetDecimal(3),
-                r.GetDecimal(4),
-                r.GetBoolean(5),
-                r.GetDateTime(6),
-                r.GetBoolean(7),
-                r.GetDecimal(8),
-                r.GetString(9),
-                r.GetString(10),
-                r.GetString(11),
-                r.GetString(12),
-                r.GetDecimal(13),
-                r.IsDBNull(14) ? null : r.GetDateTime(14),
-                r.GetString(15)));
+                r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4),
+                r.GetBoolean(5), r.GetDateTime(6), r.GetBoolean(7), r.GetDecimal(8), r.GetString(9),
+                r.GetString(10), r.GetString(11), r.GetString(12), r.GetDecimal(13),
+                r.IsDBNull(14) ? null : r.GetDateTime(14), r.GetString(15), r.GetString(16), r.GetBoolean(17)));
         }
         return accounts;
     }
@@ -1391,18 +1388,29 @@ SELECT @@ROWCOUNT;", con);
         await using var tx = (SqlTransaction)await con.BeginTransactionAsync();
         try
         {
-            decimal previous;
-            await using (var readBalance = new SqlCommand(
-                "SELECT COALESCE((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0)", con, tx))
+            int destinationAccountId;
+            string destinationAccountName;
+            await using (var readDestination = new SqlCommand(@"SELECT TOP 1 account_balance_id,[name],amount
+FROM dbo.account_balances WITH (UPDLOCK,HOLDLOCK)
+WHERE purpose='EmergencyFund'
+ORDER BY is_default_emergency_fund_destination DESC,account_balance_id", con, tx))
             {
-                previous = Convert.ToDecimal(await readBalance.ExecuteScalarAsync() ?? 0m);
+                await using var destinationReader = await readDestination.ExecuteReaderAsync();
+                if (!await destinationReader.ReadAsync())
+                    throw new InvalidOperationException("Choose an account purpose of Emergency fund before recording a contribution.");
+                destinationAccountId = destinationReader.GetInt32(0);
+                destinationAccountName = destinationReader.GetString(1);
             }
 
+            decimal previous;
+            await using (var readBalance = new SqlCommand("SELECT COALESCE(SUM(amount),0) FROM dbo.account_balances WHERE purpose='EmergencyFund'", con, tx))
+                previous = Convert.ToDecimal(await readBalance.ExecuteScalarAsync() ?? 0m);
+
             var updated = previous + amount;
-            await using (var updateBalance = new SqlCommand(
-                "IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount, updated_at=SYSUTCDATETIME() ELSE INSERT INTO dbo.emergency_fund(amount,updated_at) VALUES(@amount,SYSUTCDATETIME())", con, tx))
+            await using (var updateBalance = new SqlCommand("UPDATE dbo.account_balances SET amount=amount+@amount,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id", con, tx))
             {
-                updateBalance.Parameters.AddWithValue("@amount", updated);
+                updateBalance.Parameters.AddWithValue("@amount", amount);
+                updateBalance.Parameters.AddWithValue("@id", destinationAccountId);
                 await updateBalance.ExecuteNonQueryAsync();
             }
 
@@ -1424,9 +1432,10 @@ SELECT @@ROWCOUNT;", con);
             await using (var addDashboardAllocation = new SqlCommand(@"INSERT INTO dbo.savings
 ([name],amount,[date],[type],[length],notes,pot_name_snapshot,reserve_pot_id)
 OUTPUT INSERTED.savings_id
-VALUES('Emergency Fund',@amount,CONVERT(date,GETDATE()),'Emergency Fund Restoration','One-off',@notes,'Emergency Fund',NULL)", con, tx))
+VALUES(@accountName,@amount,CONVERT(date,GETDATE()),'Emergency Fund Restoration','One-off',@notes,@accountName,NULL)", con, tx))
             {
                 addDashboardAllocation.Parameters.AddWithValue("@amount", amount);
+                addDashboardAllocation.Parameters.AddWithValue("@accountName", destinationAccountName);
                 addDashboardAllocation.Parameters.AddWithValue("@notes", cleanNote is null
                     ? "Added through Account Management emergency-fund restoration."
                     : $"Added through Account Management emergency-fund restoration. {cleanNote}");
@@ -1436,23 +1445,26 @@ VALUES('Emergency Fund',@amount,CONVERT(date,GETDATE()),'Emergency Fund Restorat
             long eventId;
             await using (var addEvent = new SqlCommand(@"INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source)
 OUTPUT INSERTED.finance_event_id
-VALUES('Household Reserve','EmergencyFundContribution','EmergencyFund',NULL,'Emergency Fund contribution',@description,@amount,'User')", con, tx))
+VALUES('Household Reserve','EmergencyFundContribution','Account',@accountId,@title,@description,@amount,'User')", con, tx))
             {
                 addEvent.Parameters.AddWithValue("@description", description);
                 addEvent.Parameters.AddWithValue("@amount", amount);
+                addEvent.Parameters.AddWithValue("@accountId", destinationAccountId);
+                addEvent.Parameters.AddWithValue("@title", $"{destinationAccountName} contribution");
                 eventId = Convert.ToInt64(await addEvent.ExecuteScalarAsync());
             }
 
             long transactionId;
             await using (var addTransaction = new SqlCommand(@"INSERT INTO dbo.emergency_fund_transactions
-(transaction_type,amount,note,dashboard_savings_id,finance_event_id)
+(transaction_type,amount,note,dashboard_savings_id,finance_event_id,account_balance_id)
 OUTPUT INSERTED.emergency_fund_transaction_id
-VALUES('Contribution',@amount,@note,@savingsId,@eventId)", con, tx))
+VALUES('Contribution',@amount,@note,@savingsId,@eventId,@accountId)", con, tx))
             {
                 addTransaction.Parameters.AddWithValue("@amount", amount);
                 addTransaction.Parameters.AddWithValue("@note", (object?)cleanNote ?? DBNull.Value);
                 addTransaction.Parameters.AddWithValue("@savingsId", savingsId);
                 addTransaction.Parameters.AddWithValue("@eventId", eventId);
+                addTransaction.Parameters.AddWithValue("@accountId", destinationAccountId);
                 transactionId = Convert.ToInt64(await addTransaction.ExecuteScalarAsync());
             }
 
@@ -1476,9 +1488,12 @@ VALUES('Contribution',@amount,@note,@savingsId,@eventId)", con, tx))
         {
             decimal amount;
             int? savingsId;
-            await using (var read = new SqlCommand(@"SELECT amount,dashboard_savings_id,note,reversed_by_transaction_id,transaction_type
-FROM dbo.emergency_fund_transactions WITH (UPDLOCK,HOLDLOCK)
-WHERE emergency_fund_transaction_id=@id", con, tx))
+            int accountId;
+            string accountName;
+            await using (var read = new SqlCommand(@"SELECT t.amount,t.dashboard_savings_id,t.note,t.reversed_by_transaction_id,t.transaction_type,t.account_balance_id,a.[name]
+FROM dbo.emergency_fund_transactions t
+LEFT JOIN dbo.account_balances a ON a.account_balance_id=t.account_balance_id
+WHERE t.emergency_fund_transaction_id=@id", con, tx))
             {
                 read.Parameters.AddWithValue("@id", transactionId);
                 await using var r = await read.ExecuteReaderAsync();
@@ -1487,16 +1502,26 @@ WHERE emergency_fund_transaction_id=@id", con, tx))
                 if (!r.IsDBNull(3)) throw new InvalidOperationException("This contribution has already been reversed.");
                 amount = r.GetDecimal(0);
                 savingsId = r.IsDBNull(1) ? null : r.GetInt32(1);
+                if (r.IsDBNull(5) || r.IsDBNull(6)) throw new InvalidOperationException("This legacy contribution is not linked to an account and cannot be reversed automatically.");
+                accountId = r.GetInt32(5);
+                accountName = r.GetString(6);
             }
 
             decimal previous;
-            await using (var readBalance = new SqlCommand("SELECT COALESCE((SELECT TOP 1 amount FROM dbo.emergency_fund ORDER BY updated_at DESC),0)", con, tx))
+            await using (var readBalance = new SqlCommand("SELECT COALESCE(SUM(amount),0) FROM dbo.account_balances WHERE purpose='EmergencyFund'", con, tx))
                 previous = Convert.ToDecimal(await readBalance.ExecuteScalarAsync() ?? 0m);
-            if (previous < amount) throw new InvalidOperationException("This contribution cannot be reversed because the Emergency Fund balance is lower than the contribution amount.");
-            var updated = previous - amount;
-            await using (var updateBalance = new SqlCommand("UPDATE dbo.emergency_fund SET amount=@amount,updated_at=SYSUTCDATETIME()", con, tx))
+            decimal accountBalance;
+            await using (var readAccountBalance = new SqlCommand("SELECT amount FROM dbo.account_balances WITH (UPDLOCK,HOLDLOCK) WHERE account_balance_id=@id", con, tx))
             {
-                updateBalance.Parameters.AddWithValue("@amount", updated);
+                readAccountBalance.Parameters.AddWithValue("@id", accountId);
+                accountBalance = Convert.ToDecimal(await readAccountBalance.ExecuteScalarAsync() ?? 0m);
+            }
+            if (accountBalance < amount) throw new InvalidOperationException($"This contribution cannot be reversed because {accountName} no longer contains the full contribution amount.");
+            var updated = previous - amount;
+            await using (var updateBalance = new SqlCommand("UPDATE dbo.account_balances SET amount=amount-@amount,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id", con, tx))
+            {
+                updateBalance.Parameters.AddWithValue("@amount", amount);
+                updateBalance.Parameters.AddWithValue("@id", accountId);
                 await updateBalance.ExecuteNonQueryAsync();
             }
 
@@ -1525,23 +1550,26 @@ WHERE emergency_fund_transaction_id=@id", con, tx))
             long eventId;
             await using (var addEvent = new SqlCommand(@"INSERT INTO dbo.finance_events(area,event_type,entity_type,entity_id,title,[description],amount,source)
 OUTPUT INSERTED.finance_event_id
-VALUES('Household Reserve','EmergencyFundContributionReversed','EmergencyFund',NULL,'Emergency Fund contribution reversed',@description,@amount,'User')", con, tx))
+VALUES('Household Reserve','EmergencyFundContributionReversed','Account',@accountId,@title,@description,@amount,'User')", con, tx))
             {
                 addEvent.Parameters.AddWithValue("@description", description);
                 addEvent.Parameters.AddWithValue("@amount", -amount);
+                addEvent.Parameters.AddWithValue("@accountId", accountId);
+                addEvent.Parameters.AddWithValue("@title", $"{accountName} contribution reversed");
                 eventId = Convert.ToInt64(await addEvent.ExecuteScalarAsync());
             }
 
             long reversalId;
             await using (var addReversal = new SqlCommand(@"INSERT INTO dbo.emergency_fund_transactions
-(transaction_type,amount,note,finance_event_id,reversed_transaction_id)
+(transaction_type,amount,note,finance_event_id,reversed_transaction_id,account_balance_id)
 OUTPUT INSERTED.emergency_fund_transaction_id
-VALUES('Reversal',@amount,@note,@eventId,@originalId)", con, tx))
+VALUES('Reversal',@amount,@note,@eventId,@originalId,@accountId)", con, tx))
             {
                 addReversal.Parameters.AddWithValue("@amount", -amount);
                 addReversal.Parameters.AddWithValue("@note", cleanReason);
                 addReversal.Parameters.AddWithValue("@eventId", eventId);
                 addReversal.Parameters.AddWithValue("@originalId", transactionId);
+                addReversal.Parameters.AddWithValue("@accountId", accountId);
                 reversalId = Convert.ToInt64(await addReversal.ExecuteScalarAsync());
             }
 
@@ -1623,7 +1651,9 @@ ORDER BY occurred_at DESC,emergency_fund_transaction_id DESC", con);
         string taxTreatment,
         decimal taxRate,
         DateTime? taxEffectiveFrom,
-        string interestHandling)
+        string interestHandling,
+        string purpose,
+        bool isDefaultEmergencyFundDestination)
     {
         await EnsureModernTablesAsync();
         provider = string.IsNullOrWhiteSpace(provider) ? "Other" : provider.Trim();
@@ -1633,43 +1663,48 @@ ORDER BY occurred_at DESC,emergency_fund_transaction_id DESC", con);
         taxRate = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? Math.Clamp(taxRate, 0m, 100m) : 0m;
         taxEffectiveFrom = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? taxEffectiveFrom?.Date : null;
         interestHandling = NormalizeInterestHandling(interestHandling);
-
-        if (id == 0 && name == "Emergency Fund")
-        {
-            await ExecuteAsync("IF EXISTS (SELECT 1 FROM dbo.emergency_fund) UPDATE dbo.emergency_fund SET amount=@amount,updated_at=GETDATE() ELSE INSERT INTO dbo.emergency_fund(amount,updated_at) VALUES(@amount,GETDATE())", ("@amount", amount));
-            await SaveDecimalSettingAsync("EmergencyFundInterestRate", rate);
-            await SaveDecimalSettingAsync("EmergencyFundStartingBalance", startingBalance);
-            await SaveStringSettingAsync("EmergencyFundProvider", provider);
-            await SaveStringSettingAsync("EmergencyFundAccountType", accountType);
-            await SaveStringSettingAsync("EmergencyFundHoldingType", holdingType);
-            await SaveStringSettingAsync("EmergencyFundTaxTreatment", taxTreatment);
-            await SaveDecimalSettingAsync("EmergencyFundTaxRate", taxRate);
-            await SaveStringSettingAsync("EmergencyFundTaxEffectiveFrom", taxEffectiveFrom?.ToString("yyyy-MM-dd") ?? string.Empty);
-            await SaveStringSettingAsync("EmergencyFundInterestHandling", interestHandling);
-            return;
-        }
+        purpose = NormalizeAccountPurpose(purpose);
+        isDefaultEmergencyFundDestination = purpose == "EmergencyFund" && isDefaultEmergencyFundDestination;
 
         if (id == 0)
         {
-            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling)
-VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom,@interestHandling)",
+            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling,purpose,is_default_emergency_fund_destination)
+VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom,@interestHandling,@purpose,@isDefault)",
                 ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
                 ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
-                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling));
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling), ("@purpose", purpose), ("@isDefault", isDefaultEmergencyFundDestination));
             id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE [name]=@name ORDER BY account_balance_id DESC", ("@name", name)));
         }
         else
         {
-            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,interest_handling=@interestHandling,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
+            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,interest_handling=@interestHandling,purpose=@purpose,is_default_emergency_fund_destination=@isDefault,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
                 ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
                 ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
-                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling));
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling), ("@purpose", purpose), ("@isDefault", isDefaultEmergencyFundDestination));
         }
+
+        if (isDefaultEmergencyFundDestination)
+            await ExecuteAsync("UPDATE dbo.account_balances SET is_default_emergency_fund_destination=CASE WHEN account_balance_id=@id THEN 1 ELSE 0 END WHERE purpose='EmergencyFund'", ("@id", id));
+        else if (purpose != "EmergencyFund")
+            await ExecuteAsync("UPDATE dbo.account_balances SET is_default_emergency_fund_destination=0 WHERE account_balance_id=@id", ("@id", id));
+
+        await ExecuteAsync("IF EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund') AND NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund' AND is_default_emergency_fund_destination=1) UPDATE dbo.account_balances SET is_default_emergency_fund_destination=1 WHERE account_balance_id=(SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE purpose='EmergencyFund' ORDER BY account_balance_id)");
 
         await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)",
             ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly));
     }
 
+
+    private static string NormalizeAccountPurpose(string? purpose)
+        => purpose switch
+        {
+            "EmergencyFund" => "EmergencyFund",
+            "Bills" => "Bills",
+            "EverydaySpending" => "EverydaySpending",
+            "Savings" => "Savings",
+            "Investment" => "Investment",
+            _ => "General"
+        };
 
     public async Task DeleteAccountAsync(int id)
     {

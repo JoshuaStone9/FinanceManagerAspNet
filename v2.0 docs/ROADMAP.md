@@ -43,3 +43,7 @@
 - Emergency Fund top-ups are recorded as allocations rather than Extra Expenses.
 - Other pots remain fundable while the Emergency Fund is below its base level, with an advisory shortfall message.
 - Added structured `EmergencyFundContribution` audit events.
+
+## Phase 12.0 — Account Purpose and Emergency Fund Configuration — Complete
+
+Account behaviour is now based on a stable purpose rather than the editable account name. Multiple accounts can form the Emergency Fund, with one selected as the default contribution destination.

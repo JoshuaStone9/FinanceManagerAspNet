@@ -439,3 +439,7 @@ Interest tax settings now drive the full interest workflow. Monthly estimates ca
 
 ## Phase 11.9 Emergency Fund ledger
 Emergency Fund contributions created through Account Management are stored as individual ledger transactions. Each new contribution is linked to its Dashboard allocation and Finance Event and may be reversed independently from the Account Management transaction history. See `Documentation/Phase-11.9-Event-Exports-and-Emergency-Fund-Restoration.md` for the complete rules.
+
+## Phase 12.0 Account purposes
+
+Accounts now have a stable purpose independent of their display name. Multiple accounts may be classified as Emergency Fund accounts, their balances are combined, and one is selected as the default destination for restoration contributions. See `Documentation/Phase-12.0-Account-Purpose-and-Emergency-Fund-Configuration.md`.

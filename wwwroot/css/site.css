@@ -1241,3 +1241,52 @@ html[data-theme="light"] .fm-dashboard-month{background:rgba(255,255,255,.76)}
 .fm-recent-account-activity ul{list-style:none;padding:0;margin:.7rem 0 0;display:grid;gap:.55rem}
 .fm-recent-account-activity li{display:grid;grid-template-columns:110px 1fr auto;gap:.75rem;align-items:center}
 .fm-event-list{display:grid;gap:.75rem}.fm-event-item{display:grid;grid-template-columns:70px 1fr auto;gap:1rem;padding:1rem;border-radius:12px;background:rgba(255,255,255,.035);align-items:start}.fm-event-time{font-weight:700}.fm-event-badges{display:flex;gap:.4rem;flex-wrap:wrap}.fm-event-badges span{font-size:.75rem;padding:.2rem .5rem;border-radius:999px;background:rgba(255,255,255,.07)}.fm-event-item h3{margin:.45rem 0 .2rem}.fm-event-item p{margin:.2rem 0}.fm-event-amount{white-space:nowrap}
+
+/* Phase 11.9: collapsible Emergency Fund restoration and ledger history */
+.fm-emergency-restoration { padding: 0; overflow: hidden; }
+.fm-emergency-restoration > summary,
+.fm-emergency-history > summary { list-style: none; cursor: pointer; }
+.fm-emergency-restoration > summary::-webkit-details-marker,
+.fm-emergency-history > summary::-webkit-details-marker { display: none; }
+.fm-emergency-restoration-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+}
+.fm-emergency-restoration-toggle > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+.fm-emergency-restoration-toggle strong { font-size: 1.05rem; }
+.fm-emergency-toggle-action {
+  min-width: 82px;
+  text-align: center;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: var(--accent-gradient, linear-gradient(90deg, #7c5cff, #16b6d9));
+  color: #fff;
+  font-weight: 700;
+}
+.fm-emergency-restoration-content {
+  border-top: 1px solid var(--border);
+  padding: 20px;
+}
+.fm-emergency-history { margin-top: 1.5rem; }
+.fm-emergency-history-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+.fm-emergency-history-content { padding-top: 16px; }
+.when-open { display: none; }
+details[open] > summary .when-open { display: inline; }
+details[open] > summary .when-closed { display: none; }
+
+@media (max-width: 720px) {
+  .fm-emergency-restoration-toggle { align-items: flex-start; }
+  .fm-emergency-toggle-action { min-width: 68px; padding: 9px 12px; }
+}
