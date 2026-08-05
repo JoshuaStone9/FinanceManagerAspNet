@@ -366,7 +366,8 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             existing.Category,
             existing.Type,
             existing.Length,
-            existing.Notes);
+            existing.Notes,
+            existing.AccountBalanceId);
 
         if (source == "savings")
             await repo.ApplyReserveAllocationAsync(existing.Name, amount - existing.Amount);
@@ -451,6 +452,7 @@ public sealed class MonthlyMoneyController(FinanceRepository repo) : Controller
             IsCarryOverEligible = isCarryOverEligible,
             IsMoneyPots = isMoneyPots,
             Rows = await repo.GetRowsAsync(source, selectedMonth, selectedYear),
+            Accounts = (await repo.GetAccountsAsync(await repo.GetEmergencyFundAsync())).OrderBy(x => x.Name).ToList(),
             ExistingOptions = await repo.GetExistingPaymentOptionsAsync(source),
             PermanentTemplates = permanentTemplates,
             MissingPermanentTemplates = missingPermanentTemplates,

@@ -210,7 +210,7 @@ public sealed class DashboardController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, string? returnAnchor, bool isPermanent = false)
+    public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, string? returnAnchor, bool isPermanent = false, int? accountBalanceId = null)
     {
         if (!CanEdit()) return LoginRedirect();
 
@@ -238,7 +238,7 @@ public sealed class DashboardController(
             ? new DateTime(year, month, Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month)))
             : date;
 
-        await repo.AddPaymentAsync(source, name, amount, selectedDate, category, type, length, notes);
+        await repo.AddPaymentAsync(source, name, amount, selectedDate, category, type, length, notes, accountBalanceId);
         if (source == "savings" && amount > 0)
             await repo.ApplyReserveAllocationAsync(name, amount);
 
@@ -270,6 +270,7 @@ public sealed class DashboardController(
         if (item is null) return NotFound();
         ViewBag.Year = year;
         ViewBag.Month = month;
+        ViewBag.Accounts = (await repo.GetAccountsAsync(await repo.GetEmergencyFundAsync())).OrderBy(x => x.Name).ToList();
         ViewBag.ReturnAction = source switch
         {
             "income" => "Income",
@@ -284,11 +285,11 @@ public sealed class DashboardController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditPayment(int year, int month, string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    public async Task<IActionResult> EditPayment(int year, int month, string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, int? accountBalanceId = null)
     {
         if (!CanEdit()) return LoginRedirect();
         var existing = await repo.GetPaymentAsync(source, id);
-        await repo.UpdatePaymentAsync(source, id, name, Math.Max(0, amount), date, category, type, length, notes);
+        await repo.UpdatePaymentAsync(source, id, name, Math.Max(0, amount), date, category, type, length, notes, accountBalanceId);
         if (source == "savings" && existing is not null)
         {
             await repo.ApplyReserveAllocationAsync(existing.Name, -existing.Amount);

@@ -10,6 +10,8 @@ public record PaymentRow(
     string? Length,
     string? Notes,
     string Source,
+    int? AccountBalanceId = null,
+    string? AccountName = null,
     int? ReservePotId = null,
     string? PotNameSnapshot = null,
     string? CurrentReservePotName = null)
