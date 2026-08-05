@@ -256,7 +256,30 @@
                 <span>Account name</span>
                 <input name="name" placeholder="e.g. Cash ISA" required />
             </label>
-            <label>
+            <label class="fm-field-span-2">
+                <span>How will this account be used?</span>
+                <select name="usageType" data-account-usage>
+                    <option value="Tracking">Savings or investment tracking</option>
+                    <option value="StatementOnly">Statement reconciliation only</option>
+                    <option value="Both">Balance tracking and statement reconciliation</option>
+                </select>
+                <small>Statement-only accounts are used to compare PDF transactions and do not require balances, interest or forecast settings.</small>
+            </label>
+            <label data-statement-field hidden>
+                <span>Last four digits (optional)</span>
+                <input name="lastFourDigits" inputmode="numeric" maxlength="4" pattern="[0-9]{0,4}" placeholder="e.g. 0638" />
+            </label>
+            <label data-statement-field hidden>
+                <span>Statement parser</span>
+                <select name="statementParser">
+                    <option value="Generic">Generic PDF</option>
+                    <option value="FirstDirect">First Direct</option>
+                    <option value="Monzo">Monzo</option>
+                    <option value="Trading212">Trading 212</option>
+                    <option value="Manual">Manual review only</option>
+                </select>
+            </label>
+            <label data-tracking-field>
                 <span>Account purpose</span>
                 <select name="purpose">
                     <option value="General">General account</option>
@@ -268,7 +291,7 @@
                 </select>
                 <small>The purpose controls behaviour; the account name remains freely editable.</small>
             </label>
-            <label class="fm-account-toggle">
+            <label class="fm-account-toggle" data-tracking-field>
                 <input name="isDefaultEmergencyFundDestination" type="checkbox" value="true" />
                 <span>Use as default Emergency Fund contribution destination</span>
             </label>
@@ -276,7 +299,7 @@
                 <span>Provider</span>
                 <input name="provider" placeholder="e.g. Trading 212" value="Other" required />
             </label>
-            <label>
+            <label data-tracking-field>
                 <span>Account wrapper</span>
                 <select name="accountType">
                     <option>Savings</option>
@@ -285,7 +308,7 @@
                     <option>General Investment Account</option>
                 </select>
             </label>
-            <label>
+            <label data-tracking-field>
                 <span>Holding type</span>
                 <select name="holdingType">
                     <option>Cash</option>
@@ -294,20 +317,20 @@
                     <option>Mixed</option>
                 </select>
             </label>
-            <label>
+            <label data-tracking-field>
                 <span>Starting balance</span>
                 <input name="openingBalance" type="number" min="0" step="0.01" value="0.00" required />
                 <small>Use the amount already held when bringing an existing account into Finance Manager.</small>
             </label>
-            <label>
+            <label data-tracking-field>
                 <span>Interest rate (AER)</span>
                 <input name="interestRate" type="number" min="0" step="0.01" value="0.00" required />
             </label>
-            <label>
+            <label data-tracking-field>
                 <span>Monthly contribution</span>
                 <input name="monthlyContribution" type="number" min="0" step="0.01" value="0.00" required />
             </label>
-            <label>
+            <label data-tracking-field>
                 <span>Default interest handling</span>
                 <select name="interestHandling">
                     <option value="Keep invested" selected>Keep invested</option>
@@ -315,10 +338,11 @@
                 </select>
                 <small>You can override this choice for an individual payment each month.</small>
             </label>
-            <label class="fm-account-toggle">
+            <label class="fm-account-toggle" data-tracking-field>
                 <input name="includeInGlobalGoal" type="checkbox" value="true" checked />
                 <span>Include in Statistics forecast</span>
             </label>
+            <input type="hidden" name="isActive" value="true" />
             <div class="fm-account-editor-actions fm-field-span-all">
                 <button class="primary" type="submit">Add account</button>
                 <button class="button" type="button" data-close-new-account>Cancel</button>
@@ -330,14 +354,14 @@
 <section class="card fm-account-management-panel">
     <div class="fm-section-heading">
         <div>
-            <p class="eyebrow">Forecast accounts</p>
-            <h2>@Model.Accounts.Count recorded account@(Model.Accounts.Count == 1 ? string.Empty : "s")</h2>
-            <p class="muted">Expand an account only when you need to change its settings or check its current balance.</p>
+            <p class="eyebrow">Tracked savings and investments</p>
+            <h2>@Model.TrackingAccounts.Count tracked account@(Model.TrackingAccounts.Count == 1 ? string.Empty : "s")</h2>
+            <p class="muted">These accounts retain balances, interest, contributions and forecast behaviour.</p>
         </div>
     </div>
 
     <div class="fm-account-card-grid">
-        @foreach (var account in Model.Accounts)
+        @foreach (var account in Model.TrackingAccounts)
         {
             var panelId = $"account-panel-{account.SourceKey.Replace(':', '-').Replace(' ', '-')}";
             <article class="fm-account-summary-card" data-account-card data-needs-reconciliation="@account.NeedsInterestReconciliation.ToString().ToLowerInvariant()">
@@ -352,6 +376,7 @@
                 </div>
 
                 <div class="fm-account-summary-meta">
+                    <span>@(account.UsageType == "Both" ? "Tracking + statements" : "Balance tracking")</span>
                     <span>@(account.Purpose == "EmergencyFund" ? "Emergency fund" : account.Purpose)</span>
                     @if (account.IsDefaultEmergencyFundDestination) { <span>Default contribution destination</span> }
                     <span>@account.Provider</span>
@@ -395,7 +420,28 @@
                                 <span>Account name</span>
                                 <input name="name" value="@account.AccountName" required />
                             </label>
-                            <label>
+                            <label class="fm-field-span-2">
+                                <span>How is this account used?</span>
+                                <select name="usageType" data-account-usage>
+                                    <option value="Tracking" selected="@(account.UsageType == "Tracking")">Savings or investment tracking</option>
+                                    <option value="StatementOnly" selected="@(account.UsageType == "StatementOnly")">Statement reconciliation only</option>
+                                    <option value="Both" selected="@(account.UsageType == "Both")">Balance tracking and statement reconciliation</option>
+                                </select>
+                            </label>
+                            <label data-statement-field hidden="@(!account.SupportsStatements)">
+                                <span>Last four digits (optional)</span>
+                                <input name="lastFourDigits" value="@account.LastFourDigits" inputmode="numeric" maxlength="4" pattern="[0-9]{0,4}" />
+                            </label>
+                            <label data-statement-field hidden="@(!account.SupportsStatements)">
+                                <span>Statement parser</span>
+                                <select name="statementParser">
+                                    @foreach (var option in new[] { ("Generic", "Generic PDF"), ("FirstDirect", "First Direct"), ("Monzo", "Monzo"), ("Trading212", "Trading 212"), ("Manual", "Manual review only") })
+                                    {
+                                        <option value="@option.Item1" selected="@(account.StatementParser == option.Item1)">@option.Item2</option>
+                                    }
+                                </select>
+                            </label>
+                            <label data-tracking-field>
                                 <span>Account purpose</span>
                                 <select name="purpose">
                                     @foreach (var option in new[] { ("General", "General account"), ("EmergencyFund", "Emergency fund"), ("Bills", "Bills account"), ("EverydaySpending", "Everyday spending"), ("Savings", "Savings"), ("Investment", "Investment") })
@@ -405,7 +451,7 @@
                                 </select>
                                 <small>Changing the display name will not change this account's role.</small>
                             </label>
-                            <label class="fm-account-toggle">
+                            <label class="fm-account-toggle" data-tracking-field>
                                 <input name="isDefaultEmergencyFundDestination" type="checkbox" value="true" checked="@account.IsDefaultEmergencyFundDestination" />
                                 <span>Default Emergency Fund contribution destination</span>
                             </label>
@@ -413,7 +459,7 @@
                                 <span>Provider</span>
                                 <input name="provider" value="@account.Provider" required />
                             </label>
-                            <label>
+                            <label data-tracking-field>
                                 <span>Account wrapper</span>
                                 <select name="accountType">
                                     @foreach (var option in new[] { "Savings", "Cash ISA", "Stocks & Shares ISA", "General Investment Account" })
@@ -422,7 +468,7 @@
                                     }
                                 </select>
                             </label>
-                            <label>
+                            <label data-tracking-field>
                                 <span>Holding type</span>
                                 <select name="holdingType">
                                     @foreach (var option in new[] { "Cash", "Money Market Fund", "Stocks & Shares", "Mixed" })
@@ -431,23 +477,23 @@
                                     }
                                 </select>
                             </label>
-                            <label>
+                            <label data-tracking-field>
                                 <span>Starting balance</span>
                                 <input name="startingBalance" type="number" min="0" step="0.01" value="@account.StartingBalance.ToString("0.00", CultureInfo.InvariantCulture)" required />
                                 <small>Changing this adjusts the recorded balance by the same difference, preserving later activity.</small>
                             </label>
-                            <label>
+                            <label data-tracking-field>
                                 <span>Interest rate (AER)</span>
                                 <input name="interestRate" type="number" min="0" step="0.01" value="@account.InterestRate.ToString("0.####", CultureInfo.InvariantCulture)" required />
                             </label>
-                            <label>
+                            <label data-tracking-field>
                                 <span>Monthly contribution</span>
                                 <input name="monthlyContribution" type="number" min="0" step="0.01" value="@account.MonthlyContribution.ToString("0.00", CultureInfo.InvariantCulture)" required />
                             </label>
                             <label><span>Tax treatment</span><select name="taxTreatment">@foreach (var option in new[] { "Tax Free", "Taxable" }) { <option value="@option" selected="@(account.TaxTreatment == option)">@option</option> }</select></label>
                             <label><span>Tax rate</span><input name="taxRate" type="number" min="0" max="100" step="0.01" value="@account.TaxRate.ToString("0.##", CultureInfo.InvariantCulture)"/><small>For example, 22 for a 22% deduction.</small></label>
                             <label><span>Tax starts</span><input name="taxEffectiveFrom" type="date" value="@account.TaxEffectiveFrom?.ToString("yyyy-MM-dd")"/><small>Useful for a future rule change such as April 2027.</small></label>
-                            <label>
+                            <label data-tracking-field>
                                 <span>Default interest handling</span>
                                 <select name="interestHandling">
                                     @foreach (var option in new[] { "Keep invested", "Add to Monthly Income" })
@@ -457,9 +503,256 @@
                                 </select>
                                 <small>Used as the pre-selected choice when monthly interest is confirmed.</small>
                             </label>
-                            <label class="fm-account-toggle fm-field-span-2">
+                            <label class="fm-account-toggle fm-field-span-2" data-tracking-field>
                                 <input name="includeInGlobalGoal" type="checkbox" value="true" checked="@account.IncludeInForecast" />
                                 <span>Include in Statistics forecast</span>
+                            </label>
+                            <label class="fm-account-toggle fm-field-span-2">
+                                <input name="isActive" type="checkbox" value="true" checked="@account.IsActive" />
+                                <input name="isActive" type="hidden" value="false" />
+                                <span>Account is active</span>
+                            </label>
+                            <div class="fm-account-editor-actions fm-field-span-all">
+                                <button class="primary" type="submit">Save changes</button>
+                                <button class="button" type="button" data-account-panel-close>Cancel</button>
+                                @if (account.AccountId > 0)
+                                {
+                                    <button class="danger-inline fm-delete-account-trigger" type="submit" form="delete-account-@account.AccountId">Delete account</button>
+                                }
+                            </div>
+                        </form>
+
+                        @if (account.AccountId > 0)
+                        {
+                            <form id="delete-account-@account.AccountId" asp-action="DeleteAccount" method="post" data-confirm="Delete @account.AccountName? This cannot be undone.">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@account.AccountId" />
+                            </form>
+                        }
+                    </div>
+
+                    <div class="fm-account-expand-panel" id="@panelId-balance" data-account-panel="balance" hidden>
+                        <div class="fm-account-panel-heading">
+                            <div>
+                                <p class="eyebrow">Balance check</p>
+                                <h4>Update @account.AccountName</h4>
+                            </div>
+                            <button class="button fm-panel-close" type="button" data-account-panel-close>Close</button>
+                        </div>
+
+                        <div class="fm-balance-context">
+                            <span>Recorded balance</span>
+                            <strong>@account.RecordedBalance.ToString("C", gb)</strong>
+                            @if (account.PendingInterestCount > 0)
+                            {
+                                <span>Confirmed interest not yet reflected</span>
+                                <strong>+@account.PendingInterest.ToString("C", gb)</strong>
+                                <span>Suggested current balance</span>
+                                <strong>@account.SuggestedBalance.ToString("C", gb)</strong>
+                            }
+                            <small>Saving here only updates the recorded account value. It never creates another income entry or changes your monthly budget.</small>
+                        </div>
+
+                        @if (account.RecentActivities.Count > 0)
+                        {
+                            <div class="fm-recent-account-activity">
+                                <h5>Recent activity that may explain a difference</h5>
+                                <ul>
+                                    @foreach (var activity in account.RecentActivities)
+                                    {
+                                        <li><span>@activity.OccurredAt.ToLocalTime().ToString("dd MMM HH:mm")</span><strong>@activity.Title</strong><small>@(activity.Amount?.ToString("C", gb) ?? activity.EventType)</small></li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        <form asp-action="UpdateBalance" method="post" class="fm-balance-check-form" data-balance-confirm data-recorded-balance="@account.RecordedBalance.ToString("0.00", CultureInfo.InvariantCulture)" data-pending-interest="@account.PendingInterest.ToString("0.00", CultureInfo.InvariantCulture)" data-account-name="@account.AccountName">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="sourceKey" value="@account.SourceKey" />
+                            <label>
+                                <span>Current account balance</span>
+                                <input name="actualBalance" type="number" min="0" step="0.01" value="@(account.PendingInterestCount > 0 ? account.SuggestedBalance : account.RecordedBalance).ToString("0.00", CultureInfo.InvariantCulture)" required />
+                            </label>
+                            @if (account.PendingInterestCount > 0)
+                            {
+                                <label class="fm-account-toggle">
+                                    <input name="reconcilePendingInterest" type="checkbox" value="true" checked />
+                                    <span>Mark the @account.PendingInterestCount pending interest payment@(account.PendingInterestCount == 1 ? string.Empty : "s") as reflected in this balance</span>
+                                </label>
+                            }
+                            <button class="primary" type="submit">Save current balance</button>
+                        </form>
+                    </div>
+                }
+            </article>
+        }
+    </div>
+</section>
+
+
+<section class="card fm-account-management-panel">
+    <div class="fm-section-heading">
+        <div>
+            <p class="eyebrow">Statement reconciliation accounts</p>
+            <h2>@Model.StatementAccounts.Count statement account@(Model.StatementAccounts.Count == 1 ? string.Empty : "s")</h2>
+            <p class="muted">These accounts are available for PDF statement inspection and transaction matching. Statement-only accounts do not affect balances or forecasts.</p>
+        </div>
+    </div>
+
+    <div class="fm-account-card-grid">
+        @foreach (var account in Model.StatementAccounts)
+        {
+            var panelId = $"statement-account-panel-{account.SourceKey.Replace(':', '-').Replace(' ', '-')}";
+            <article class="fm-account-summary-card" data-account-card data-needs-reconciliation="@account.NeedsInterestReconciliation.ToString().ToLowerInvariant()">
+                <div class="fm-account-summary-topline">
+                    <div>
+                        <h3>@account.AccountName</h3>
+                        <p class="fm-account-primary-balance">@account.MaskedAccountReference</p>
+                    </div>
+                    <span class="fm-account-forecast-state @(account.IncludeInForecast ? "is-included" : "")">
+                        @(account.StatementParser == "Generic" ? "Generic PDF parser" : account.StatementParser)
+                    </span>
+                </div>
+
+                <div class="fm-account-summary-meta">
+                    <span>@(account.UsageType == "Both" ? "Tracking + statements" : "Statement only")</span>
+                    <span>@(account.Purpose == "EmergencyFund" ? "Emergency fund" : account.Purpose)</span>
+                    @if (account.IsDefaultEmergencyFundDestination) { <span>Default contribution destination</span> }
+                    <span>@account.Provider</span>
+                    <span>@account.AccountType</span>
+                    <span>@account.HoldingType</span><span>@(account.TaxTreatment == "Taxable" ? $"Taxable at {account.TaxRate:0.##}%" : "Tax free")</span>
+                    <span>@account.InterestRate.ToString("0.##")% AER</span>
+                    <span>@account.MonthlyContribution.ToString("C", gb) monthly</span>
+                    <span>Interest: @account.InterestHandling</span>
+                </div>
+
+                <div class="fm-account-summary-dates">
+                    <span>Updated @account.BalanceUpdatedAt.ToString("dd MMM yyyy")</span>
+                    <span>Last balance check: @(account.LastReconciledAt?.ToString("dd MMM yyyy") ?? "Never")</span>
+                </div>
+
+                <div class="fm-balance-reconciliation-state is-ok">
+                    <strong>Ready for statement reconciliation</strong>
+                    <span>PDF importing and transaction matching will be added in the next Phase 14 stage.</span>
+                </div>
+
+                @if (canEdit)
+                {
+                    <div class="fm-account-card-actions">
+                        <button class="button" type="button" data-account-panel-trigger="settings" aria-controls="@panelId-settings" aria-expanded="false">Edit account</button>
+                        @if (account.TracksBalances)
+                        {
+                            <button class="primary" type="button" data-account-panel-trigger="balance" aria-controls="@panelId-balance" aria-expanded="false">Update balance</button>
+                        }
+                    </div>
+
+                    <div class="fm-account-expand-panel" id="@panelId-settings" data-account-panel="settings" hidden>
+                        <div class="fm-account-panel-heading">
+                            <div>
+                                <p class="eyebrow">Account settings</p>
+                                <h4>Edit @account.AccountName</h4>
+                            </div>
+                            <button class="button fm-panel-close" type="button" data-account-panel-close>Close</button>
+                        </div>
+
+                        <form asp-action="SaveAccount" method="post" class="fm-account-editor-grid">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@account.AccountId" />
+                            <label class="fm-field-span-2">
+                                <span>Account name</span>
+                                <input name="name" value="@account.AccountName" required />
+                            </label>
+                            <label class="fm-field-span-2">
+                                <span>How is this account used?</span>
+                                <select name="usageType" data-account-usage>
+                                    <option value="Tracking" selected="@(account.UsageType == "Tracking")">Savings or investment tracking</option>
+                                    <option value="StatementOnly" selected="@(account.UsageType == "StatementOnly")">Statement reconciliation only</option>
+                                    <option value="Both" selected="@(account.UsageType == "Both")">Balance tracking and statement reconciliation</option>
+                                </select>
+                            </label>
+                            <label data-statement-field hidden="@(!account.SupportsStatements)">
+                                <span>Last four digits (optional)</span>
+                                <input name="lastFourDigits" value="@account.LastFourDigits" inputmode="numeric" maxlength="4" pattern="[0-9]{0,4}" />
+                            </label>
+                            <label data-statement-field hidden="@(!account.SupportsStatements)">
+                                <span>Statement parser</span>
+                                <select name="statementParser">
+                                    @foreach (var option in new[] { ("Generic", "Generic PDF"), ("FirstDirect", "First Direct"), ("Monzo", "Monzo"), ("Trading212", "Trading 212"), ("Manual", "Manual review only") })
+                                    {
+                                        <option value="@option.Item1" selected="@(account.StatementParser == option.Item1)">@option.Item2</option>
+                                    }
+                                </select>
+                            </label>
+                            <label data-tracking-field>
+                                <span>Account purpose</span>
+                                <select name="purpose">
+                                    @foreach (var option in new[] { ("General", "General account"), ("EmergencyFund", "Emergency fund"), ("Bills", "Bills account"), ("EverydaySpending", "Everyday spending"), ("Savings", "Savings"), ("Investment", "Investment") })
+                                    {
+                                        <option value="@option.Item1" selected="@(account.Purpose == option.Item1)">@option.Item2</option>
+                                    }
+                                </select>
+                                <small>Changing the display name will not change this account's role.</small>
+                            </label>
+                            <label class="fm-account-toggle" data-tracking-field>
+                                <input name="isDefaultEmergencyFundDestination" type="checkbox" value="true" checked="@account.IsDefaultEmergencyFundDestination" />
+                                <span>Default Emergency Fund contribution destination</span>
+                            </label>
+                            <label>
+                                <span>Provider</span>
+                                <input name="provider" value="@account.Provider" required />
+                            </label>
+                            <label data-tracking-field>
+                                <span>Account wrapper</span>
+                                <select name="accountType">
+                                    @foreach (var option in new[] { "Savings", "Cash ISA", "Stocks & Shares ISA", "General Investment Account" })
+                                    {
+                                        <option value="@option" selected="@(account.AccountType == option)">@option</option>
+                                    }
+                                </select>
+                            </label>
+                            <label data-tracking-field>
+                                <span>Holding type</span>
+                                <select name="holdingType">
+                                    @foreach (var option in new[] { "Cash", "Money Market Fund", "Stocks & Shares", "Mixed" })
+                                    {
+                                        <option value="@option" selected="@(account.HoldingType == option)">@option</option>
+                                    }
+                                </select>
+                            </label>
+                            <label data-tracking-field>
+                                <span>Starting balance</span>
+                                <input name="startingBalance" type="number" min="0" step="0.01" value="@account.StartingBalance.ToString("0.00", CultureInfo.InvariantCulture)" required />
+                                <small>Changing this adjusts the recorded balance by the same difference, preserving later activity.</small>
+                            </label>
+                            <label data-tracking-field>
+                                <span>Interest rate (AER)</span>
+                                <input name="interestRate" type="number" min="0" step="0.01" value="@account.InterestRate.ToString("0.####", CultureInfo.InvariantCulture)" required />
+                            </label>
+                            <label data-tracking-field>
+                                <span>Monthly contribution</span>
+                                <input name="monthlyContribution" type="number" min="0" step="0.01" value="@account.MonthlyContribution.ToString("0.00", CultureInfo.InvariantCulture)" required />
+                            </label>
+                            <label><span>Tax treatment</span><select name="taxTreatment">@foreach (var option in new[] { "Tax Free", "Taxable" }) { <option value="@option" selected="@(account.TaxTreatment == option)">@option</option> }</select></label>
+                            <label><span>Tax rate</span><input name="taxRate" type="number" min="0" max="100" step="0.01" value="@account.TaxRate.ToString("0.##", CultureInfo.InvariantCulture)"/><small>For example, 22 for a 22% deduction.</small></label>
+                            <label><span>Tax starts</span><input name="taxEffectiveFrom" type="date" value="@account.TaxEffectiveFrom?.ToString("yyyy-MM-dd")"/><small>Useful for a future rule change such as April 2027.</small></label>
+                            <label data-tracking-field>
+                                <span>Default interest handling</span>
+                                <select name="interestHandling">
+                                    @foreach (var option in new[] { "Keep invested", "Add to Monthly Income" })
+                                    {
+                                        <option value="@option" selected="@(account.InterestHandling == option)">@option</option>
+                                    }
+                                </select>
+                                <small>Used as the pre-selected choice when monthly interest is confirmed.</small>
+                            </label>
+                            <label class="fm-account-toggle fm-field-span-2" data-tracking-field>
+                                <input name="includeInGlobalGoal" type="checkbox" value="true" checked="@account.IncludeInForecast" />
+                                <span>Include in Statistics forecast</span>
+                            </label>
+                            <label class="fm-account-toggle fm-field-span-2">
+                                <input name="isActive" type="checkbox" value="true" checked="@account.IsActive" />
+                                <input name="isActive" type="hidden" value="false" />
+                                <span>Account is active</span>
                             </label>
                             <div class="fm-account-editor-actions fm-field-span-all">
                                 <button class="primary" type="submit">Save changes</button>
@@ -543,6 +836,23 @@
     const newAccountPanel = document.querySelector('[data-new-account-panel]');
     const newAccountTriggers = document.querySelectorAll('[data-toggle-new-account]');
     const newAccountClosers = document.querySelectorAll('[data-close-new-account]');
+
+    const configureAccountUsageForm = form => {
+        const usage = form.querySelector('[data-account-usage]');
+        if (!usage) return;
+        const apply = () => {
+            const tracks = usage.value !== 'StatementOnly';
+            const statements = usage.value !== 'Tracking';
+            form.querySelectorAll('[data-tracking-field]').forEach(field => field.hidden = !tracks);
+            form.querySelectorAll('[data-statement-field]').forEach(field => field.hidden = !statements);
+            form.querySelectorAll('[data-tracking-field] input, [data-tracking-field] select').forEach(input => input.disabled = !tracks);
+            form.querySelectorAll('[data-statement-field] input, [data-statement-field] select').forEach(input => input.disabled = !statements);
+        };
+        usage.addEventListener('change', apply);
+        apply();
+    };
+
+    document.querySelectorAll('form').forEach(configureAccountUsageForm);
 
     const setNewAccountVisibility = visible => {
         if (!newAccountPanel) return;

@@ -67,6 +67,10 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         DateTime? taxEffectiveFrom,
         string? interestHandling,
         string? purpose,
+        string? usageType,
+        string? lastFourDigits,
+        string? statementParser,
+        bool isActive = true,
         bool isDefaultEmergencyFundDestination = false,
         bool includeInGlobalGoal = false)
     {
@@ -86,7 +90,21 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         }
 
         var safeName = name.Trim();
-        var adjustedBalance = account.RecordedBalance + (startingBalance - account.StartingBalance);
+        var statementOnly = string.Equals(usageType, "StatementOnly", StringComparison.OrdinalIgnoreCase);
+        if (statementOnly)
+        {
+            startingBalance = account.StartingBalance;
+            interestRate = account.InterestRate;
+            monthlyContribution = account.MonthlyContribution;
+            includeInGlobalGoal = false;
+            taxTreatment = account.TaxTreatment;
+            taxRate = account.TaxRate;
+            taxEffectiveFrom = account.TaxEffectiveFrom;
+            interestHandling = account.InterestHandling;
+        }
+        var adjustedBalance = statementOnly
+            ? account.RecordedBalance
+            : account.RecordedBalance + (startingBalance - account.StartingBalance);
         await repo.SaveAccountAsync(
             id,
             safeName,
@@ -103,7 +121,11 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             taxEffectiveFrom,
             interestHandling ?? "Keep invested",
             purpose ?? "General",
-            isDefaultEmergencyFundDestination);
+            isDefaultEmergencyFundDestination,
+            usageType ?? "Tracking",
+            lastFourDigits,
+            statementParser ?? "Generic",
+            isActive);
 
         TempData["Success"] = $"{safeName} settings updated.";
         return RedirectToAction(nameof(Index));
@@ -123,6 +145,10 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
         DateTime? taxEffectiveFrom,
         string? interestHandling,
         string? purpose,
+        string? usageType,
+        string? lastFourDigits,
+        string? statementParser,
+        bool isActive = true,
         bool isDefaultEmergencyFundDestination = false,
         bool includeInGlobalGoal = false)
     {
@@ -149,7 +175,11 @@ public sealed class ReconciliationController(FinanceRepository repo) : Controlle
             taxEffectiveFrom,
             interestHandling ?? "Keep invested",
             purpose ?? "General",
-            isDefaultEmergencyFundDestination);
+            isDefaultEmergencyFundDestination,
+            usageType ?? "Tracking",
+            lastFourDigits,
+            statementParser ?? "Generic",
+            isActive);
 
         TempData["Success"] = $"{name.Trim()} added.";
         return RedirectToAction(nameof(Index));

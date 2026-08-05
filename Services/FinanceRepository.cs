@@ -34,6 +34,11 @@ IF OBJECT_ID('dbo.savings','U') IS NULL
 CREATE TABLE dbo.savings(savings_id int IDENTITY(1,1) PRIMARY KEY, [name] nvarchar(150) NOT NULL, amount decimal(18,2) NOT NULL, [date] date NOT NULL, [type] nvarchar(80) NULL, [length] nvarchar(50) NULL, notes nvarchar(500) NULL);
 IF COL_LENGTH('dbo.savings','type') IS NULL ALTER TABLE dbo.savings ADD [type] nvarchar(80) NULL;
 IF COL_LENGTH('dbo.investments','type') IS NULL ALTER TABLE dbo.investments ADD [type] nvarchar(80) NULL;
+IF COL_LENGTH('dbo.bills','account_balance_id') IS NULL ALTER TABLE dbo.bills ADD account_balance_id int NULL;
+IF COL_LENGTH('dbo.everyday_spending','account_balance_id') IS NULL ALTER TABLE dbo.everyday_spending ADD account_balance_id int NULL;
+IF COL_LENGTH('dbo.extra_expenses','account_balance_id') IS NULL ALTER TABLE dbo.extra_expenses ADD account_balance_id int NULL;
+IF COL_LENGTH('dbo.investments','account_balance_id') IS NULL ALTER TABLE dbo.investments ADD account_balance_id int NULL;
+IF COL_LENGTH('dbo.savings','account_balance_id') IS NULL ALTER TABLE dbo.savings ADD account_balance_id int NULL;
 
 
 IF OBJECT_ID('dbo.monthly_entry_templates','U') IS NULL
@@ -81,6 +86,10 @@ IF COL_LENGTH('dbo.account_balances','tax_effective_from') IS NULL ALTER TABLE d
 IF COL_LENGTH('dbo.account_balances','interest_handling') IS NULL ALTER TABLE dbo.account_balances ADD interest_handling nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_interest_handling DEFAULT 'Keep invested';
 IF COL_LENGTH('dbo.account_balances','purpose') IS NULL ALTER TABLE dbo.account_balances ADD purpose nvarchar(40) NOT NULL CONSTRAINT DF_account_balances_purpose DEFAULT 'General';
 IF COL_LENGTH('dbo.account_balances','is_default_emergency_fund_destination') IS NULL ALTER TABLE dbo.account_balances ADD is_default_emergency_fund_destination bit NOT NULL CONSTRAINT DF_account_balances_default_emergency DEFAULT 0;
+IF COL_LENGTH('dbo.account_balances','usage_type') IS NULL ALTER TABLE dbo.account_balances ADD usage_type nvarchar(30) NOT NULL CONSTRAINT DF_account_balances_usage_type DEFAULT 'Tracking';
+IF COL_LENGTH('dbo.account_balances','last_four_digits') IS NULL ALTER TABLE dbo.account_balances ADD last_four_digits nvarchar(4) NULL;
+IF COL_LENGTH('dbo.account_balances','statement_parser') IS NULL ALTER TABLE dbo.account_balances ADD statement_parser nvarchar(80) NOT NULL CONSTRAINT DF_account_balances_statement_parser DEFAULT 'Generic';
+IF COL_LENGTH('dbo.account_balances','is_active') IS NULL ALTER TABLE dbo.account_balances ADD is_active bit NOT NULL CONSTRAINT DF_account_balances_is_active DEFAULT 1;
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund') AND EXISTS (SELECT 1 FROM dbo.emergency_fund WHERE amount > 0)
 BEGIN
     INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,interest_handling,purpose,is_default_emergency_fund_destination)
@@ -564,11 +573,11 @@ CREATE INDEX IX_forecast_scenarios_preferred ON dbo.forecast_scenarios(is_prefer
         var potNameSnapshot = source == "savings" ? "p.pot_name_snapshot" : "NULL";
         var currentReservePotName = source == "savings" ? "rp.[name]" : "NULL";
         var tableExpression = source == "savings"
-            ? $"{map.Table} p LEFT JOIN dbo.reserve_pots rp ON rp.reserve_pot_id = p.reserve_pot_id"
-            : $"{map.Table} p";
+            ? $"{map.Table} p LEFT JOIN dbo.reserve_pots rp ON rp.reserve_pot_id = p.reserve_pot_id LEFT JOIN dbo.account_balances ab ON ab.account_balance_id = p.account_balance_id"
+            : $"{map.Table} p LEFT JOIN dbo.account_balances ab ON ab.account_balance_id = p.account_balance_id";
 
         string sql = $@"SELECT p.{map.Id} AS id, p.[name], p.amount, p.{map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], p.{map.Length} AS [length], p.{map.Notes} AS notes,
-{reservePotId} AS reserve_pot_id, {potNameSnapshot} AS pot_name_snapshot, {currentReservePotName} AS current_reserve_pot_name
+p.account_balance_id, ab.[name] AS account_name, {reservePotId} AS reserve_pot_id, {potNameSnapshot} AS pot_name_snapshot, {currentReservePotName} AS current_reserve_pot_name
 FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@year ORDER BY p.{map.Date} DESC";
         var rows = new List<PaymentRow>();
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
@@ -588,7 +597,9 @@ FROM {tableExpression} WHERE MONTH(p.{map.Date})=@month AND YEAR(p.{map.Date})=@
                 source,
                 r.IsDBNull(8) ? null : r.GetInt32(8),
                 r.IsDBNull(9) ? null : r.GetString(9),
-                r.IsDBNull(10) ? null : r.GetString(10)));
+                r.IsDBNull(10) ? null : r.GetInt32(10),
+                r.IsDBNull(11) ? null : r.GetString(11),
+                r.IsDBNull(12) ? null : r.GetString(12)));
         }
         return rows;
     }
@@ -867,7 +878,7 @@ WHERE passive_income_record_id=@id AND monthly_income_entry_id IS NULL AND balan
         var baseReserveAmount = Math.Max(0m, await GetDecimalSettingAsync("EmergencyFundBaseline", 12000m));
         var selectedAccountIds = await GetSelectedReserveAccountIdsAsync();
         var selectedAccountsTotal = Math.Round(accounts
-            .Where(x => selectedAccountIds.Contains(x.Id) || x.Purpose == "EmergencyFund")
+            .Where(x => x.TracksBalances && (selectedAccountIds.Contains(x.Id) || x.Purpose == "EmergencyFund"))
             .Sum(x => x.Amount), 2);
         var loggedVirtualPotsTotal = Math.Round(Convert.ToDecimal(await ScalarAsync(
             "SELECT COALESCE(SUM(allocated_amount),0) FROM dbo.reserve_pots WHERE is_active=1")), 2);
@@ -878,7 +889,7 @@ WHERE passive_income_record_id=@id AND monthly_income_entry_id IS NULL AND balan
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
 
-        foreach (var account in accounts.Where(x => x.Amount >= 0m))
+        foreach (var account in accounts.Where(x => x.IsActive && x.Amount >= 0m))
         {
             var sourceKey = account.Id == 0 ? "emergency-fund" : $"account-{account.Id}";
             await using var cmd = new SqlCommand(
@@ -939,6 +950,10 @@ ORDER BY occurred_at DESC", con);
                 account.InterestHandling,
                 account.Purpose,
                 account.IsDefaultEmergencyFundDestination,
+                account.UsageType,
+                account.LastFourDigits,
+                account.StatementParser,
+                account.IsActive,
                 account.Amount,
                 0m,
                 (selectedAccountIds.Contains(account.Id) || account.Purpose == "EmergencyFund") ? "Included in combined check" : "Not selected",
@@ -946,7 +961,7 @@ ORDER BY occurred_at DESC", con);
         }
 
         var emergencyFundTransactions = await GetEmergencyFundTransactionsAsync(con);
-        var emergencyAccounts = accounts.Where(x => x.Purpose == "EmergencyFund").ToList();
+        var emergencyAccounts = accounts.Where(x => x.TracksBalances && x.Purpose == "EmergencyFund").ToList();
         var emergencyFundTotal = Math.Round(emergencyAccounts.Sum(x => x.Amount), 2);
         var defaultEmergencyAccountName = emergencyAccounts.FirstOrDefault(x => x.IsDefaultEmergencyFundDestination)?.Name;
 
@@ -1310,7 +1325,7 @@ SELECT @@ROWCOUNT;", con);
         var accounts = new List<AccountBalance>();
         await using var con = new SqlConnection(ConnStr);
         await con.OpenAsync();
-        await using var cmd = new SqlCommand(@"SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling,purpose,is_default_emergency_fund_destination
+        await using var cmd = new SqlCommand(@"SELECT account_balance_id,[name],amount,interest_rate,monthly_contribution,include_in_global_goal,updated_at,include_in_savings_command,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling,purpose,is_default_emergency_fund_destination,usage_type,last_four_digits,statement_parser,is_active
 FROM dbo.account_balances ORDER BY [name]", con);
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
@@ -1319,7 +1334,8 @@ FROM dbo.account_balances ORDER BY [name]", con);
                 r.GetInt32(0), r.GetString(1), r.GetDecimal(2), r.GetDecimal(3), r.GetDecimal(4),
                 r.GetBoolean(5), r.GetDateTime(6), r.GetBoolean(7), r.GetDecimal(8), r.GetString(9),
                 r.GetString(10), r.GetString(11), r.GetString(12), r.GetDecimal(13),
-                r.IsDBNull(14) ? null : r.GetDateTime(14), r.GetString(15), r.GetString(16), r.GetBoolean(17)));
+                r.IsDBNull(14) ? null : r.GetDateTime(14), r.GetString(15), r.GetString(16), r.GetBoolean(17),
+                r.GetString(18), r.IsDBNull(19) ? null : r.GetString(19), r.GetString(20), r.GetBoolean(21)));
         }
         return accounts;
     }
@@ -1653,7 +1669,11 @@ ORDER BY occurred_at DESC,emergency_fund_transaction_id DESC", con);
         DateTime? taxEffectiveFrom,
         string interestHandling,
         string purpose,
-        bool isDefaultEmergencyFundDestination)
+        bool isDefaultEmergencyFundDestination,
+        string usageType = "Tracking",
+        string? lastFourDigits = null,
+        string statementParser = "Generic",
+        bool isActive = true)
     {
         await EnsureModernTablesAsync();
         provider = string.IsNullOrWhiteSpace(provider) ? "Other" : provider.Trim();
@@ -1664,23 +1684,31 @@ ORDER BY occurred_at DESC,emergency_fund_transaction_id DESC", con);
         taxEffectiveFrom = taxTreatment.Equals("Taxable", StringComparison.OrdinalIgnoreCase) ? taxEffectiveFrom?.Date : null;
         interestHandling = NormalizeInterestHandling(interestHandling);
         purpose = NormalizeAccountPurpose(purpose);
-        isDefaultEmergencyFundDestination = purpose == "EmergencyFund" && isDefaultEmergencyFundDestination;
+        usageType = NormalizeAccountUsageType(usageType);
+        lastFourDigits = NormalizeLastFourDigits(lastFourDigits);
+        statementParser = string.IsNullOrWhiteSpace(statementParser) ? "Generic" : statementParser.Trim();
+        if (usageType == "StatementOnly")
+        {
+            include = false;
+            isDefaultEmergencyFundDestination = false;
+        }
+        isDefaultEmergencyFundDestination = usageType != "StatementOnly" && purpose == "EmergencyFund" && isDefaultEmergencyFundDestination;
 
         if (id == 0)
         {
-            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling,purpose,is_default_emergency_fund_destination)
-VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom,@interestHandling,@purpose,@isDefault)",
+            await ExecuteAsync(@"INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,tax_effective_from,interest_handling,purpose,is_default_emergency_fund_destination,usage_type,last_four_digits,statement_parser,is_active)
+VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@holdingType,@taxTreatment,@taxRate,@taxEffectiveFrom,@interestHandling,@purpose,@isDefault,@usageType,@lastFourDigits,@statementParser,@isActive)",
                 ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
                 ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
-                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling), ("@purpose", purpose), ("@isDefault", isDefaultEmergencyFundDestination));
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling), ("@purpose", purpose), ("@isDefault", isDefaultEmergencyFundDestination), ("@usageType", usageType), ("@lastFourDigits", DbValue(lastFourDigits)), ("@statementParser", statementParser), ("@isActive", isActive));
             id = Convert.ToInt32(await ScalarAsync("SELECT TOP 1 account_balance_id FROM dbo.account_balances WHERE [name]=@name ORDER BY account_balance_id DESC", ("@name", name)));
         }
         else
         {
-            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,interest_handling=@interestHandling,purpose=@purpose,is_default_emergency_fund_destination=@isDefault,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
+            await ExecuteAsync(@"UPDATE dbo.account_balances SET [name]=@name,amount=@amount,interest_rate=@rate,monthly_contribution=@monthly,include_in_global_goal=@include,starting_balance=@starting,provider=@provider,account_type=@accountType,holding_type=@holdingType,tax_treatment=@taxTreatment,tax_rate=@taxRate,tax_effective_from=@taxEffectiveFrom,interest_handling=@interestHandling,purpose=@purpose,is_default_emergency_fund_destination=@isDefault,usage_type=@usageType,last_four_digits=@lastFourDigits,statement_parser=@statementParser,is_active=@isActive,updated_at=SYSUTCDATETIME() WHERE account_balance_id=@id",
                 ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly), ("@include", include),
                 ("@starting", startingBalance), ("@provider", provider), ("@accountType", accountType), ("@holdingType", holdingType),
-                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling), ("@purpose", purpose), ("@isDefault", isDefaultEmergencyFundDestination));
+                ("@taxTreatment", taxTreatment), ("@taxRate", taxRate), ("@taxEffectiveFrom", taxEffectiveFrom.HasValue ? taxEffectiveFrom.Value : DBNull.Value), ("@interestHandling", interestHandling), ("@purpose", purpose), ("@isDefault", isDefaultEmergencyFundDestination), ("@usageType", usageType), ("@lastFourDigits", DbValue(lastFourDigits)), ("@statementParser", statementParser), ("@isActive", isActive));
         }
 
         if (isDefaultEmergencyFundDestination)
@@ -1694,6 +1722,22 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
             ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly));
     }
 
+
+
+    private static string NormalizeAccountUsageType(string? usageType)
+        => usageType switch
+        {
+            "StatementOnly" => "StatementOnly",
+            "Both" => "Both",
+            _ => "Tracking"
+        };
+
+    private static string? NormalizeLastFourDigits(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        return digits.Length <= 4 ? digits : digits[^4..];
+    }
 
     private static string NormalizeAccountPurpose(string? purpose)
         => purpose switch
@@ -1748,7 +1792,7 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
         );
     }
 
-    public async Task AddPaymentAsync(string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    public async Task AddPaymentAsync(string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, int? accountBalanceId = null)
     {
         await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name is required.", nameof(name));
@@ -1756,24 +1800,24 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
         switch (source)
         {
             case "bills":
-                await ExecuteAsync("INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description]) VALUES(@name,@amount,@date,@type,@length,@notes)",
-                    ("@name", name), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description], account_balance_id) VALUES(@name,@amount,@date,@type,@length,@notes,@accountBalanceId)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "everyday_spending":
-                await ExecuteAsync("INSERT INTO dbo.everyday_spending([name], amount, [date], category, [type], [length], [description]) VALUES(@name,@amount,@date,@category,@type,@length,@notes)",
-                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("INSERT INTO dbo.everyday_spending([name], amount, [date], category, [type], [length], [description], account_balance_id) VALUES(@name,@amount,@date,@category,@type,@length,@notes,@accountBalanceId)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "extra_expenses":
-                await ExecuteAsync("INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description]) VALUES(@name,@amount,@date,@category,@type,@length,@notes)",
-                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("INSERT INTO dbo.extra_expenses([name], amount, duedate, category, [type], [length], [description], account_balance_id) VALUES(@name,@amount,@date,@category,@type,@length,@notes,@accountBalanceId)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "investments":
-                await ExecuteAsync("INSERT INTO dbo.investments([name], amount, [date], category, [type], [length], notes) VALUES(@name,@amount,@date,@category,@type,@length,@notes)",
-                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("INSERT INTO dbo.investments([name], amount, [date], category, [type], [length], notes, account_balance_id) VALUES(@name,@amount,@date,@category,@type,@length,@notes,@accountBalanceId)",
+                    ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "savings":
-                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [type], [length], notes, pot_name_snapshot) VALUES(@name,@amount,@date,@type,@length,@notes,@snapshot)",
-                    ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
+                await ExecuteAsync("INSERT INTO dbo.savings([name], amount, [date], [type], [length], notes, pot_name_snapshot, account_balance_id) VALUES(@name,@amount,@date,@type,@length,@notes,@snapshot,@accountBalanceId)",
+                    ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");
@@ -1816,14 +1860,14 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
     """, ("@month", month), ("@year", year), ("@toMonth", to.Month), ("@toYear", to.Year));
 
             await ExecuteAsync("""
-        INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description])
+        INSERT INTO dbo.bills([name], amount, [date], [type], [length], [description], account_balance_id)
         SELECT [name], amount, @toDate, [type],
                CASE
                    WHEN TRY_CONVERT(int, [length]) IS NOT NULL AND TRY_CONVERT(int, [length]) > 1
                        THEN CONVERT(nvarchar(50), TRY_CONVERT(int, [length]) - 1)
                    ELSE [length]
                END,
-               @autoNote
+               @autoNote, account_balance_id
         FROM dbo.bills
         WHERE MONTH([date]) = @month
           AND YEAR([date]) = @year
@@ -1843,14 +1887,14 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
     """, ("@month", month), ("@year", year), ("@toMonth", to.Month), ("@toYear", to.Year));
 
             await ExecuteAsync("""
-        INSERT INTO dbo.investments([name], amount, [date], category, [length], notes)
+        INSERT INTO dbo.investments([name], amount, [date], category, [length], notes, account_balance_id)
         SELECT [name], amount, @toDate, category,
                CASE
                    WHEN TRY_CONVERT(int, [length]) IS NOT NULL AND TRY_CONVERT(int, [length]) > 1
                        THEN CONVERT(nvarchar(50), TRY_CONVERT(int, [length]) - 1)
                    ELSE [length]
                END,
-               @autoNote
+               @autoNote, account_balance_id
         FROM dbo.investments
         WHERE MONTH([date]) = @month
           AND YEAR([date]) = @year
@@ -2255,10 +2299,10 @@ OUTER APPLY (
         var potNameSnapshot = source == "savings" ? "p.pot_name_snapshot" : "NULL";
         var currentReservePotName = source == "savings" ? "rp.[name]" : "NULL";
         var tableExpression = source == "savings"
-            ? $"{map.Table} p LEFT JOIN dbo.reserve_pots rp ON rp.reserve_pot_id = p.reserve_pot_id"
-            : $"{map.Table} p";
+            ? $"{map.Table} p LEFT JOIN dbo.reserve_pots rp ON rp.reserve_pot_id = p.reserve_pot_id LEFT JOIN dbo.account_balances ab ON ab.account_balance_id = p.account_balance_id"
+            : $"{map.Table} p LEFT JOIN dbo.account_balances ab ON ab.account_balance_id = p.account_balance_id";
 
-        var sql = $"SELECT p.{map.Id} AS id, p.[name], p.amount, p.{map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], p.{map.Length} AS [length], p.{map.Notes} AS notes, {reservePotId}, {potNameSnapshot}, {currentReservePotName} FROM {tableExpression} WHERE p.{map.Id}=@id";
+        var sql = $"SELECT p.{map.Id} AS id, p.[name], p.amount, p.{map.Date} AS [date], {map.Category} AS category, {map.Type} AS [type], p.{map.Length} AS [length], p.{map.Notes} AS notes, p.account_balance_id, ab.[name], {reservePotId}, {potNameSnapshot}, {currentReservePotName} FROM {tableExpression} WHERE p.{map.Id}=@id";
         await using var con = new SqlConnection(ConnStr); await con.OpenAsync();
         await using var cmd = new SqlCommand(sql, con); cmd.Parameters.AddWithValue("@id", id);
         await using var r = await cmd.ExecuteReaderAsync();
@@ -2276,12 +2320,14 @@ OUTER APPLY (
                 source,
                 r.IsDBNull(8) ? null : r.GetInt32(8),
                 r.IsDBNull(9) ? null : r.GetString(9),
-                r.IsDBNull(10) ? null : r.GetString(10));
+                r.IsDBNull(10) ? null : r.GetInt32(10),
+                r.IsDBNull(11) ? null : r.GetString(11),
+                r.IsDBNull(12) ? null : r.GetString(12));
         }
         return null;
     }
 
-    public async Task UpdatePaymentAsync(string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes)
+    public async Task UpdatePaymentAsync(string source, int id, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, int? accountBalanceId = null)
     {
         await EnsureModernTablesAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name is required.", nameof(name));
@@ -2289,19 +2335,19 @@ OUTER APPLY (
         switch (source)
         {
             case "bills":
-                await ExecuteAsync("UPDATE dbo.bills SET [name]=@name, amount=@amount, [date]=@date, [type]=@type, [length]=@length, [description]=@notes WHERE billid=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("UPDATE dbo.bills SET [name]=@name, amount=@amount, [date]=@date, [type]=@type, [length]=@length, [description]=@notes,account_balance_id=@accountBalanceId WHERE billid=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "everyday_spending":
-                await ExecuteAsync("UPDATE dbo.everyday_spending SET [name]=@name, amount=@amount, [date]=@date, category=@category, [type]=@type, [length]=@length, [description]=@notes WHERE everyday_spending_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("UPDATE dbo.everyday_spending SET [name]=@name, amount=@amount, [date]=@date, category=@category, [type]=@type, [length]=@length, [description]=@notes,account_balance_id=@accountBalanceId WHERE everyday_spending_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "extra_expenses":
-                await ExecuteAsync("UPDATE dbo.extra_expenses SET [name]=@name, amount=@amount, duedate=@date, category=@category, [type]=@type, [length]=@length, [description]=@notes WHERE extra_expense_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("UPDATE dbo.extra_expenses SET [name]=@name, amount=@amount, duedate=@date, category=@category, [type]=@type, [length]=@length, [description]=@notes,account_balance_id=@accountBalanceId WHERE extra_expense_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "investments":
-                await ExecuteAsync("UPDATE dbo.investments SET [name]=@name, amount=@amount, [date]=@date, category=@category, [type]=@type, [length]=@length, notes=@notes WHERE investments_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)));
+                await ExecuteAsync("UPDATE dbo.investments SET [name]=@name, amount=@amount, [date]=@date, category=@category, [type]=@type, [length]=@length, notes=@notes,account_balance_id=@accountBalanceId WHERE investments_id=@id", ("@id", id), ("@name", name), ("@amount", amount), ("@date", date), ("@category", DbValue(category)), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             case "savings":
-                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [type]=@type, [length]=@length, notes=@notes, pot_name_snapshot=COALESCE(pot_name_snapshot,@snapshot) WHERE savings_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()));
+                await ExecuteAsync("UPDATE dbo.savings SET [name]=@name, amount=@amount, [date]=@date, [type]=@type, [length]=@length, notes=@notes, pot_name_snapshot=COALESCE(pot_name_snapshot,@snapshot),account_balance_id=@accountBalanceId WHERE savings_id=@id", ("@id", id), ("@name", name.Trim()), ("@amount", amount), ("@date", date), ("@type", DbValue(type)), ("@length", DbValue(length)), ("@notes", DbValue(notes)), ("@snapshot", name.Trim()), ("@accountBalanceId", accountBalanceId ?? (object)DBNull.Value));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), "Unknown payment section.");

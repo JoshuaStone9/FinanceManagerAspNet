@@ -178,6 +178,10 @@
                             {
                                 <small class="fm-recurring-readonly">@(repeatsMonthly ? "Repeats monthly" : "One-off")</small>
                             }
+                            @if (!string.IsNullOrWhiteSpace(row.AccountName))
+                            {
+                                <small class="fm-entry-account"><i data-lucide="landmark"></i> @row.AccountName</small>
+                            }
                             @if (!string.IsNullOrWhiteSpace(row.Notes))
                             {
                                 <small>@row.Notes</small>
@@ -338,6 +342,18 @@
                 <label>
                     Date
                     <input class="payment-date" name="date" type="date" value="@entryDateValue" required />
+                </label>
+
+                <label>
+                    Account
+                    <select name="accountBalanceId" class="payment-account">
+                        <option value="">Not assigned yet</option>
+                        @foreach (var account in Model.Accounts)
+                        {
+                            <option value="@account.Id">@account.Name · @account.Provider</option>
+                        }
+                    </select>
+                    <small>Choose the account this payment leaves or enters. This can be added later.</small>
                 </label>
 
                 @if (Model.SupportsCategory)

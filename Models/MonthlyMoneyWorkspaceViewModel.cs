@@ -24,6 +24,7 @@ public sealed class MonthlyMoneyWorkspaceViewModel
     public bool IsMoneyPots { get; init; }
     public IReadOnlyList<ReservePot> PotOptions { get; init; } = [];
     public IReadOnlyList<PaymentRow> Rows { get; init; } = [];
+    public IReadOnlyList<AccountBalance> Accounts { get; init; } = [];
     public IReadOnlyList<ExistingPaymentOption> ExistingOptions { get; init; } = [];
     public IReadOnlyList<MonthlyEntryTemplate> PermanentTemplates { get; init; } = [];
     public IReadOnlyList<MonthlyEntryTemplate> MissingPermanentTemplates { get; init; } = [];
