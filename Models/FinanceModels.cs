@@ -18,7 +18,15 @@ public sealed record AccountBalance(
     DateTime? TaxEffectiveFrom = null,
     string InterestHandling = "Keep invested",
     string Purpose = "General",
-    bool IsDefaultEmergencyFundDestination = false);
+    bool IsDefaultEmergencyFundDestination = false,
+    string UsageType = "Tracking",
+    string? LastFourDigits = null,
+    string StatementParser = "Generic",
+    bool IsActive = true)
+{
+    public bool TracksBalances => UsageType is "Tracking" or "Both";
+    public bool SupportsStatements => UsageType is "StatementOnly" or "Both";
+}
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);
 public sealed record IncomeSnapshot(int Year, int Month, decimal Amount, int SickDays, DateTime UpdatedAt);
 

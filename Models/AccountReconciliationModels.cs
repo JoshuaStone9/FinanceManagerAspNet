@@ -4,6 +4,8 @@ public sealed class AccountReconciliationViewModel
 {
     public decimal BalanceTolerance { get; init; } = 5m;
     public IReadOnlyList<AccountReconciliationRow> Accounts { get; init; } = [];
+    public IReadOnlyList<AccountReconciliationRow> TrackingAccounts => Accounts.Where(x => x.TracksBalances).ToList();
+    public IReadOnlyList<AccountReconciliationRow> StatementAccounts => Accounts.Where(x => x.UsageType == "StatementOnly").ToList();
     public IReadOnlyList<EmergencyFundTransactionRow> EmergencyFundTransactions { get; init; } = [];
     public decimal EmergencyFundTotal { get; init; }
     public string? DefaultEmergencyFundAccountName { get; init; }
@@ -51,6 +53,10 @@ public sealed record AccountReconciliationRow(
     string InterestHandling,
     string Purpose,
     bool IsDefaultEmergencyFundDestination,
+    string UsageType,
+    string? LastFourDigits,
+    string StatementParser,
+    bool IsActive,
     decimal ExpectedBalance,
     decimal Difference,
     string ReconciliationStatus,
@@ -59,6 +65,9 @@ public sealed record AccountReconciliationRow(
     public decimal SuggestedBalance => Math.Round(RecordedBalance + PendingInterest, 2);
     public bool NeedsInterestReconciliation => PendingInterestCount > 0 && PendingInterest > 0m;
     public bool HasBalanceConcern => ReconciliationStatus is "More than logged" or "Less than logged";
+    public bool TracksBalances => UsageType is "Tracking" or "Both";
+    public bool SupportsStatements => UsageType is "StatementOnly" or "Both";
+    public string MaskedAccountReference => string.IsNullOrWhiteSpace(LastFourDigits) ? "No account reference" : $"Ending {LastFourDigits}";
 }
 
 
