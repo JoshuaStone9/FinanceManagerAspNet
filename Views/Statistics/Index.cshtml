@@ -39,7 +39,7 @@
     <div class="deduct-panel">
       <div>
         <p class="eyebrow">Deduct from total</p>
-        <p class="muted">Remove money that is already committed or should not count towards this forecast.</p>
+        <p class="muted">Subtract this amount from the money projected to be available on the selected date.</p>
       </div>
       <label>
         Amount to deduct
@@ -54,17 +54,17 @@
   <article class="card">
     <p class="eyebrow">Total value now</p>
     <h2>@Model.SelectedTotalNow.ToString("C", gb)</h2>
-    <p>Selected balances after deducting @Model.DeductFromSelectedTotal.ToString("C", gb).</p>
+    <p>Current total of the selected balances. The deduction is applied only to the forecast at the selected date.</p>
   </article>
   <article class="card">
     <p class="eyebrow">Without interest by @Model.GoalDate.ToString("MMM yyyy")</p>
     <h2>@Model.SelectedProjectedWithoutInterest.ToString("C", gb)</h2>
-    <p>Current selected balance plus @Model.MonthlySavingTarget.ToString("C0", gb) saved each month.</p>
+    <p>Projected balance after deducting @Model.DeductFromSelectedTotal.ToString("C", gb) on the selected date.</p>
   </article>
   <article class="card">
     <p class="eyebrow">With interest by @Model.GoalDate.ToString("MMM yyyy")</p>
     <h2>@Model.SelectedProjectedWithInterest.ToString("C", gb)</h2>
-    <p class="good">Uses the @Model.MonthlySavingTarget.ToString("C0", gb) monthly target and each selected pot’s interest rate.</p>
+    <p class="good">Forecasts the full balance and interest first, then deducts @Model.DeductFromSelectedTotal.ToString("C", gb) on the selected date.</p>
   </article>
   <article class="card">
     <p class="eyebrow">Forecast after current month</p>

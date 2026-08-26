@@ -100,42 +100,49 @@ public sealed class StatisticsController(FinanceRepository repo, FinanceCalculat
         var currentMonthVariance = currentRemaining - monthlyTarget;
         var selectedDeduction = Math.Max(0, deductFromTotal ?? 0m);
         var selectedRawTotal = selectedAccounts.Sum(a => a.Amount);
-        var selectedTotalNow = Math.Max(0, selectedRawTotal - selectedDeduction);
+        var selectedTotalNow = Math.Max(0, selectedRawTotal);
 
-        // The headline forecast always uses the single configured monthly saving target (£1,200 by default),
-        // rather than adding every account's "Monthly in" amount on top of it.
-        var selectedWithoutInterest = selectedTotalNow + calc.ProjectSalarySavings(monthlyTarget, months);
+        // Forecast the full selected balance to the chosen date first.
+        // The user-entered deduction represents money that will be removed at that date,
+        // so it must not reduce today's opening balance or the interest earned along the way.
+        var selectedProjectedBeforeDeductionWithoutInterest =
+            selectedRawTotal + calc.ProjectSalarySavings(monthlyTarget, months);
+        var selectedWithoutInterest = Math.Max(
+            0,
+            selectedProjectedBeforeDeductionWithoutInterest - selectedDeduction);
 
-        // Spread the £1,200 target across selected pots using their recorded monthly-in values as weights.
-        // This preserves the existing monthly-in settings without double-counting them in the headline total.
-        decimal selectedWithInterest;
+        // Spread the configured monthly saving target across selected pots using their recorded
+        // monthly-in values as weights, forecast each pot normally, then deduct the requested
+        // amount once from the final projected total.
+        decimal selectedProjectedBeforeDeductionWithInterest;
         if (selectedAccounts.Count == 0)
         {
-            selectedWithInterest = 0m;
+            selectedProjectedBeforeDeductionWithInterest = 0m;
         }
         else
         {
             var rawMonthlyTotal = selectedAccounts.Sum(a => Math.Max(0, a.MonthlyContribution));
-            selectedWithInterest = 0m;
-            var remainingDeduction = selectedDeduction;
+            selectedProjectedBeforeDeductionWithInterest = 0m;
 
             for (var index = 0; index < selectedAccounts.Count; index++)
             {
                 var account = selectedAccounts[index];
-                var accountOpeningBalance = Math.Max(0, account.Amount - remainingDeduction);
-                remainingDeduction = Math.Max(0, remainingDeduction - account.Amount);
 
                 var allocatedMonthlyTarget = rawMonthlyTotal > 0
                     ? monthlyTarget * Math.Max(0, account.MonthlyContribution) / rawMonthlyTotal
                     : (index == 0 ? monthlyTarget : 0m);
 
-                selectedWithInterest += calc.CompoundMonthly(
-                    accountOpeningBalance,
+                selectedProjectedBeforeDeductionWithInterest += calc.CompoundMonthly(
+                    account.Amount,
                     account.InterestRate,
                     allocatedMonthlyTarget,
                     months);
             }
         }
+
+        var selectedWithInterest = Math.Max(
+            0,
+            selectedProjectedBeforeDeductionWithInterest - selectedDeduction);
 
         var pattern = recentUpdates.Count switch
         {
