@@ -1759,20 +1759,6 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
 
 
 
-    private static string NormalizeAccountUsageType(string? usageType)
-        => usageType switch
-        {
-            "StatementOnly" => "StatementOnly",
-            "Both" => "Both",
-            _ => "Tracking"
-        };
-
-    private static string? NormalizeLastFourDigits(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var digits = new string(value.Where(char.IsDigit).ToArray());
-        return digits.Length <= 4 ? digits : digits[^4..];
-    }
 
 
     private static string NormalizeAccountUsageType(string? usageType)
