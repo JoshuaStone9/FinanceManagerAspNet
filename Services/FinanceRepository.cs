@@ -94,6 +94,41 @@ IF COL_LENGTH('dbo.account_balances','usage_type') IS NULL ALTER TABLE dbo.accou
 IF COL_LENGTH('dbo.account_balances','last_four_digits') IS NULL ALTER TABLE dbo.account_balances ADD last_four_digits nvarchar(4) NULL;
 IF COL_LENGTH('dbo.account_balances','statement_parser') IS NULL ALTER TABLE dbo.account_balances ADD statement_parser nvarchar(80) NOT NULL CONSTRAINT DF_account_balances_statement_parser DEFAULT 'Generic';
 IF COL_LENGTH('dbo.account_balances','is_active') IS NULL ALTER TABLE dbo.account_balances ADD is_active bit NOT NULL CONSTRAINT DF_account_balances_is_active DEFAULT 1;
+
+IF OBJECT_ID('dbo.bank_statements','U') IS NULL
+CREATE TABLE dbo.bank_statements(
+    bank_statement_id bigint IDENTITY(1,1) PRIMARY KEY,
+    account_balance_id int NOT NULL,
+    [year] int NOT NULL,
+    [month] int NOT NULL,
+    original_file_name nvarchar(260) NULL,
+    stored_file_name nvarchar(260) NULL,
+    [status] nvarchar(30) NOT NULL DEFAULT 'Draft',
+    uploaded_at datetime2 NULL,
+    completed_at datetime2 NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_bank_statements_account FOREIGN KEY(account_balance_id) REFERENCES dbo.account_balances(account_balance_id),
+    CONSTRAINT UQ_bank_statements_account_month UNIQUE(account_balance_id,[year],[month])
+);
+
+IF OBJECT_ID('dbo.bank_statement_transactions','U') IS NULL
+CREATE TABLE dbo.bank_statement_transactions(
+    bank_statement_transaction_id bigint IDENTITY(1,1) PRIMARY KEY,
+    bank_statement_id bigint NOT NULL,
+    transaction_date date NOT NULL,
+    [description] nvarchar(300) NOT NULL,
+    amount decimal(18,2) NOT NULL,
+    direction nvarchar(10) NOT NULL,
+    [status] nvarchar(30) NOT NULL DEFAULT 'Unmatched',
+    matched_source nvarchar(40) NULL,
+    matched_entry_id int NULL,
+    match_label nvarchar(300) NULL,
+    notes nvarchar(500) NULL,
+    created_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at datetime2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_statement_transactions_statement FOREIGN KEY(bank_statement_id) REFERENCES dbo.bank_statements(bank_statement_id) ON DELETE CASCADE
+);
+
 IF NOT EXISTS (SELECT 1 FROM dbo.account_balances WHERE purpose='EmergencyFund') AND EXISTS (SELECT 1 FROM dbo.emergency_fund WHERE amount > 0)
 BEGIN
     INSERT INTO dbo.account_balances([name],amount,interest_rate,monthly_contribution,include_in_global_goal,starting_balance,provider,account_type,holding_type,tax_treatment,tax_rate,interest_handling,purpose,is_default_emergency_fund_destination)
@@ -1725,6 +1760,8 @@ VALUES(@name,@amount,@rate,@monthly,@include,@starting,@provider,@accountType,@h
         await ExecuteAsync("INSERT INTO dbo.account_balance_history(account_balance_id,[name],amount,interest_rate,monthly_contribution) VALUES(@id,@name,@amount,@rate,@monthly)",
             ("@id", id), ("@name", name), ("@amount", amount), ("@rate", rate), ("@monthly", monthly));
     }
+
+
 
 
 
@@ -3950,6 +3987,120 @@ WHERE rn = 1;";
         }
 
         return added;
+    }
+
+    public async Task<StatementReconciliationIndexViewModel> GetStatementReconciliationIndexAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var rows = new List<StatementAccountSummary>();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        const string sql = @"
+SELECT a.account_balance_id,a.[name],a.provider,a.last_four_digits,a.is_active,
+       s.bank_statement_id,s.[status],s.uploaded_at,
+       COUNT(t.bank_statement_transaction_id) transaction_count,
+       SUM(CASE WHEN t.[status]='Matched' THEN 1 ELSE 0 END) matched_count,
+       SUM(CASE WHEN t.[status]='Unmatched' THEN 1 ELSE 0 END) unmatched_count,
+       SUM(CASE WHEN t.[status]='Ignored' THEN 1 ELSE 0 END) ignored_count
+FROM dbo.account_balances a
+LEFT JOIN dbo.bank_statements s ON s.account_balance_id=a.account_balance_id AND s.[year]=@year AND s.[month]=@month
+LEFT JOIN dbo.bank_statement_transactions t ON t.bank_statement_id=s.bank_statement_id
+WHERE a.usage_type IN ('StatementOnly','Both')
+GROUP BY a.account_balance_id,a.[name],a.provider,a.last_four_digits,a.is_active,s.bank_statement_id,s.[status],s.uploaded_at
+ORDER BY a.is_active DESC,a.[name];";
+        await using var cmd = new SqlCommand(sql, con);
+        cmd.Parameters.AddWithValue("@year", year);
+        cmd.Parameters.AddWithValue("@month", month);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            rows.Add(new StatementAccountSummary(
+                reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
+                reader.IsDBNull(3) ? "No account reference" : $"Ending {reader.GetString(3)}", reader.GetBoolean(4),
+                reader.IsDBNull(5) ? null : reader.GetInt64(5), reader.IsDBNull(6) ? "Awaiting statement" : reader.GetString(6),
+                reader.GetInt32(8), reader.GetInt32(9), reader.GetInt32(10), reader.GetInt32(11),
+                reader.IsDBNull(7) ? null : reader.GetDateTime(7)));
+        }
+        return new StatementReconciliationIndexViewModel { Year = year, Month = month, Accounts = rows };
+    }
+
+    public async Task<long> GetOrCreateStatementAsync(int accountId, int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        var existing = await ScalarAsync("SELECT bank_statement_id FROM dbo.bank_statements WHERE account_balance_id=@accountId AND [year]=@year AND [month]=@month", ("@accountId", accountId), ("@year", year), ("@month", month));
+        if (existing is not null && existing != DBNull.Value) return Convert.ToInt64(existing);
+        await ExecuteAsync("INSERT INTO dbo.bank_statements(account_balance_id,[year],[month]) VALUES(@accountId,@year,@month)", ("@accountId", accountId), ("@year", year), ("@month", month));
+        return Convert.ToInt64(await ScalarAsync("SELECT bank_statement_id FROM dbo.bank_statements WHERE account_balance_id=@accountId AND [year]=@year AND [month]=@month", ("@accountId", accountId), ("@year", year), ("@month", month)));
+    }
+
+    public async Task AttachStatementFileAsync(long statementId, string originalName, string storedName)
+        => await ExecuteAsync("UPDATE dbo.bank_statements SET original_file_name=@original,stored_file_name=@stored,uploaded_at=SYSUTCDATETIME(),[status]=CASE WHEN [status]='Completed' THEN [status] ELSE 'In review' END WHERE bank_statement_id=@id", ("@original", originalName), ("@stored", storedName), ("@id", statementId));
+
+    public async Task AddStatementTransactionAsync(long statementId, DateTime date, string description, decimal amount, string direction)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync("INSERT INTO dbo.bank_statement_transactions(bank_statement_id,transaction_date,[description],amount,direction) VALUES(@statementId,@date,@description,@amount,@direction); UPDATE dbo.bank_statements SET [status]='In review' WHERE bank_statement_id=@statementId AND [status]<>'Completed'", ("@statementId", statementId), ("@date", date.Date), ("@description", description), ("@amount", amount), ("@direction", direction));
+    }
+
+    public async Task<StatementWorkspaceViewModel?> GetStatementWorkspaceAsync(long statementId)
+    {
+        await EnsureModernTablesAsync();
+        await using var con = new SqlConnection(ConnStr);
+        await con.OpenAsync();
+        const string headerSql = @"SELECT s.bank_statement_id,a.account_balance_id,a.[name],a.provider,s.[year],s.[month],s.[status],s.original_file_name,s.uploaded_at FROM dbo.bank_statements s INNER JOIN dbo.account_balances a ON a.account_balance_id=s.account_balance_id WHERE s.bank_statement_id=@id";
+        await using var header = new SqlCommand(headerSql, con);
+        header.Parameters.AddWithValue("@id", statementId);
+        int accountId, year, month; string accountName, provider, status; string? file; DateTime? uploaded;
+        await using (var reader = await header.ExecuteReaderAsync())
+        {
+            if (!await reader.ReadAsync()) return null;
+            accountId=reader.GetInt32(1); accountName=reader.GetString(2); provider=reader.GetString(3); year=reader.GetInt32(4); month=reader.GetInt32(5); status=reader.GetString(6); file=reader.IsDBNull(7)?null:reader.GetString(7); uploaded=reader.IsDBNull(8)?null:reader.GetDateTime(8);
+        }
+        var transactions = new List<StatementTransactionRow>();
+        await using (var cmd = new SqlCommand("SELECT bank_statement_transaction_id,transaction_date,[description],amount,direction,[status],matched_source,matched_entry_id,match_label,notes FROM dbo.bank_statement_transactions WHERE bank_statement_id=@id ORDER BY transaction_date,bank_statement_transaction_id", con))
+        {
+            cmd.Parameters.AddWithValue("@id", statementId);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while(await reader.ReadAsync()) transactions.Add(new StatementTransactionRow(reader.GetInt64(0),reader.GetDateTime(1),reader.GetString(2),reader.GetDecimal(3),reader.GetString(4),reader.GetString(5),reader.IsDBNull(6)?null:reader.GetString(6),reader.IsDBNull(7)?null:reader.GetInt32(7),reader.IsDBNull(8)?null:reader.GetString(8),reader.IsDBNull(9)?null:reader.GetString(9)));
+        }
+        var candidates = await GetFinanceEntryCandidatesAsync(accountId, year, month, con);
+        return new StatementWorkspaceViewModel { StatementId=statementId,AccountId=accountId,AccountName=accountName,Provider=provider,Year=year,Month=month,Status=status,OriginalFileName=file,UploadedAt=uploaded,Transactions=transactions,Candidates=candidates };
+    }
+
+    private static async Task<List<FinanceEntryCandidate>> GetFinanceEntryCandidatesAsync(int accountId, int year, int month, SqlConnection con)
+    {
+        var result = new List<FinanceEntryCandidate>();
+        var start = new DateTime(year,month,1); var end=start.AddMonths(1);
+        var sources = new[] { ("bills","billid","date","Out"), ("everyday_spending","everyday_spending_id","date","Out"), ("extra_expenses","extra_expense_id","duedate","Out"), ("investments","investments_id","date","Out"), ("savings","savings_id","date","Out") };
+        foreach (var (table,idCol,dateCol,direction) in sources)
+        {
+            var sql=$"SELECT {idCol},{dateCol},[name],amount FROM dbo.{table} WHERE account_balance_id=@accountId AND {dateCol}>=@start AND {dateCol}<@end ORDER BY {dateCol}";
+            await using var cmd=new SqlCommand(sql,con); cmd.Parameters.AddWithValue("@accountId",accountId);cmd.Parameters.AddWithValue("@start",start);cmd.Parameters.AddWithValue("@end",end);
+            await using var reader=await cmd.ExecuteReaderAsync();
+            while(await reader.ReadAsync()) result.Add(new FinanceEntryCandidate($"{table}:{reader.GetInt32(0)}",table,reader.GetInt32(0),reader.GetDateTime(1),reader.GetString(2),reader.GetDecimal(3),direction));
+        }
+        return result.OrderBy(x=>x.Date).ThenBy(x=>x.Name).ToList();
+    }
+
+    public async Task MatchStatementTransactionAsync(long transactionId, string candidateKey)
+    {
+        var parts=(candidateKey??"").Split(':',2); if(parts.Length!=2 || !int.TryParse(parts[1],out var id)) throw new InvalidOperationException("Select a valid Finance Manager entry.");
+        var allowed=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"bills","everyday_spending","extra_expenses","investments","savings"}; if(!allowed.Contains(parts[0])) throw new InvalidOperationException("Unsupported entry source.");
+        var map=parts[0] switch { "bills"=>("billid","date"), "everyday_spending"=>("everyday_spending_id","date"), "extra_expenses"=>("extra_expense_id","duedate"), "investments"=>("investments_id","date"), _=>("savings_id","date") };
+        await using var con=new SqlConnection(ConnStr); await con.OpenAsync();
+        await using var cmd=new SqlCommand($"SELECT [name],amount,{map.Item2} FROM dbo.{parts[0]} WHERE {map.Item1}=@id",con);cmd.Parameters.AddWithValue("@id",id);
+        string label; await using(var reader=await cmd.ExecuteReaderAsync()){ if(!await reader.ReadAsync()) throw new InvalidOperationException("The selected entry no longer exists."); label=$"{reader.GetDateTime(2):dd MMM} · {reader.GetString(0)} · {reader.GetDecimal(1):C}"; }
+        await ExecuteAsync("UPDATE dbo.bank_statement_transactions SET [status]='Matched',matched_source=@source,matched_entry_id=@entryId,match_label=@label,notes=NULL,updated_at=SYSUTCDATETIME() WHERE bank_statement_transaction_id=@id",("@source",parts[0]),("@entryId",id),("@label",label),("@id",transactionId));
+    }
+
+    public async Task SetStatementTransactionStatusAsync(long transactionId,string status,string? notes)
+        => await ExecuteAsync("UPDATE dbo.bank_statement_transactions SET [status]=@status,matched_source=NULL,matched_entry_id=NULL,match_label=NULL,notes=@notes,updated_at=SYSUTCDATETIME() WHERE bank_statement_transaction_id=@id",("@status",status),("@notes",(object?)notes??DBNull.Value),("@id",transactionId));
+
+    public async Task<bool> CompleteStatementAsync(long statementId)
+    {
+        var remaining=Convert.ToInt32(await ScalarAsync("SELECT COUNT(*) FROM dbo.bank_statement_transactions WHERE bank_statement_id=@id AND [status]='Unmatched'",("@id",statementId)) ?? 0);
+        if(remaining>0) return false;
+        await ExecuteAsync("UPDATE dbo.bank_statements SET [status]='Completed',completed_at=SYSUTCDATETIME() WHERE bank_statement_id=@id",("@id",statementId)); return true;
     }
 
 }

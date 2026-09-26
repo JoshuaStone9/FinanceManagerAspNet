@@ -1,0 +1,36 @@
+@model FinanceManagerAspNet.Models.StatementReconciliationIndexViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Statement Reconciliation";
+    var selected = new DateTime(Model.Year, Model.Month, 1);
+    var previous = selected.AddMonths(-1);
+    var next = selected.AddMonths(1);
+}
+<section class="fm-page-header">
+  <div><p class="fm-eyebrow">FINANCIAL INSPECTION</p><h1>Statement reconciliation</h1><p>Compare monthly statements with entries recorded in Finance Manager.</p></div>
+  <div class="fm-month-switcher">
+    <a asp-action="Index" asp-route-year="@previous.Year" asp-route-month="@previous.Month"><i data-lucide="chevron-left"></i></a>
+    <strong>@selected.ToString("MMMM yyyy")</strong>
+    <a asp-action="Index" asp-route-year="@next.Year" asp-route-month="@next.Month"><i data-lucide="chevron-right"></i></a>
+  </div>
+</section>
+
+@if (Model.Accounts.Count == 0)
+{
+  <section class="fm-panel fm-empty-state"><i data-lucide="file-search"></i><h2>No statement accounts</h2><p>Create an account with Statement reconciliation or Balance tracking + reconciliation enabled.</p><a class="fm-button fm-button-primary" asp-controller="Reconciliation" asp-action="Index">Manage accounts</a></section>
+}
+else
+{
+  <div class="statement-account-grid">
+  @foreach (var account in Model.Accounts)
+  {
+    var complete = account.Status == "Completed";
+    <article class="fm-panel statement-account-card">
+      <div class="statement-card-heading"><div><p class="fm-eyebrow">@account.Provider</p><h2>@account.AccountName</h2><p>@account.MaskedReference</p></div><span class="statement-status @(complete ? "is-complete" : account.StatementId.HasValue ? "is-review" : "")">@account.Status</span></div>
+      <div class="statement-metrics"><div><span>Transactions</span><strong>@account.TransactionCount</strong></div><div><span>Matched</span><strong>@account.MatchedCount</strong></div><div><span>Needs review</span><strong>@account.UnmatchedCount</strong></div></div>
+      @if (account.UploadedAt.HasValue) { <p class="statement-muted">Statement added @account.UploadedAt.Value.ToLocalTime().ToString("dd MMM yyyy")</p> }
+      <form asp-action="Start" method="post">@Html.AntiForgeryToken()<input type="hidden" name="accountId" value="@account.AccountId"/><input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><button class="fm-button fm-button-primary" type="submit">@(account.StatementId.HasValue ? "Open workspace" : "Start reconciliation")</button></form>
+    </article>
+  }
+  </div>
+}

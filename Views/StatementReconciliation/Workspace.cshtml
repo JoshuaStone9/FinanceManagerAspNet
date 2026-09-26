@@ -1,0 +1,55 @@
+@model FinanceManagerAspNet.Models.StatementWorkspaceViewModel
+@{
+ ViewData["Title"] = "Statement Workspace";
+ var month = new DateTime(Model.Year, Model.Month, 1);
+ var unresolved = Model.Transactions.Where(x => x.Status == "Unmatched").ToList();
+}
+<section class="fm-page-header">
+ <div><p class="fm-eyebrow">@Model.Provider · @month.ToString("MMMM yyyy")</p><h1>@Model.AccountName</h1><p>Review every statement line and connect it to the entry recorded in Finance Manager.</p></div>
+ <a class="fm-button" asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Back to accounts</a>
+</section>
+
+<div class="statement-summary-grid">
+ <div class="fm-panel"><span>Total lines</span><strong>@Model.Transactions.Count</strong></div>
+ <div class="fm-panel"><span>Matched</span><strong>@Model.MatchedCount</strong></div>
+ <div class="fm-panel"><span>Needs review</span><strong>@Model.UnmatchedCount</strong></div>
+ <div class="fm-panel"><span>Ignored</span><strong>@Model.IgnoredCount</strong></div>
+</div>
+
+<div class="statement-workspace-grid">
+ <div class="statement-main-column">
+  <section class="fm-panel">
+   <div class="statement-section-heading"><div><p class="fm-eyebrow">STATEMENT LINES</p><h2>Review transactions</h2></div><span class="statement-status">@Model.Status</span></div>
+   @if (Model.Transactions.Count == 0) { <div class="fm-empty-state"><p>No transactions have been entered yet. Add lines manually while PDF extraction is being prepared.</p></div> }
+   else
+   {
+    <div class="statement-transaction-list">
+    @foreach (var row in Model.Transactions)
+    {
+      <article class="statement-transaction-row status-@row.Status.ToLowerInvariant()">
+       <div class="statement-transaction-copy"><strong>@row.Description</strong><span>@row.TransactionDate.ToString("dd MMM yyyy") · @(row.Direction == "In" ? "Money in" : "Money out")</span>@if(!string.IsNullOrWhiteSpace(row.MatchLabel)){<small>Matched to @row.MatchLabel</small>}@if(!string.IsNullOrWhiteSpace(row.Notes)){<small>@row.Notes</small>}</div>
+       <strong class="statement-amount">@(row.Direction == "In" ? "+" : "-")@row.Amount.ToString("C")</strong>
+       <span class="statement-status">@row.Status</span>
+       <div class="statement-actions">
+       @if(row.Status == "Unmatched")
+       {
+        <form asp-action="Match" method="post" class="statement-match-form">@Html.AntiForgeryToken()<input type="hidden" name="statementId" value="@Model.StatementId"/><input type="hidden" name="transactionId" value="@row.Id"/><select name="candidateKey" required><option value="">Choose recorded entry...</option>@foreach(var candidate in Model.Candidates.Where(x => x.Direction == row.Direction)){<option value="@candidate.Key">@candidate.Label</option>}</select><button class="fm-button fm-button-primary" type="submit">Match</button></form>
+        <form asp-action="Ignore" method="post">@Html.AntiForgeryToken()<input type="hidden" name="statementId" value="@Model.StatementId"/><input type="hidden" name="transactionId" value="@row.Id"/><input type="hidden" name="notes" value="Ignored during manual review"/><button class="fm-button" type="submit">Ignore</button></form>
+       }
+       else
+       {
+        <form asp-action="Reopen" method="post">@Html.AntiForgeryToken()<input type="hidden" name="statementId" value="@Model.StatementId"/><input type="hidden" name="transactionId" value="@row.Id"/><button class="fm-button" type="submit">Reopen</button></form>
+       }
+       </div>
+      </article>
+    }
+    </div>
+   }
+  </section>
+ </div>
+ <aside class="statement-side-column">
+  <section class="fm-panel"><p class="fm-eyebrow">PDF STATEMENT</p><h2>Store statement</h2><p>Upload the original PDF now. Phase 14.3 will extract its transaction lines automatically.</p>@if(!string.IsNullOrWhiteSpace(Model.OriginalFileName)){<div class="statement-file"><i data-lucide="file-check-2"></i><span><strong>@Model.OriginalFileName</strong><small>Stored securely outside wwwroot</small></span></div>}<form asp-action="Upload" method="post" enctype="multipart/form-data">@Html.AntiForgeryToken()<input type="hidden" name="statementId" value="@Model.StatementId"/><input type="file" name="statementFile" accept="application/pdf,.pdf" required/><button class="fm-button fm-button-primary" type="submit">Upload PDF</button></form></section>
+  <section class="fm-panel"><p class="fm-eyebrow">MANUAL ENTRY</p><h2>Add statement line</h2><form asp-action="AddTransaction" method="post" class="statement-entry-form">@Html.AntiForgeryToken()<input type="hidden" name="statementId" value="@Model.StatementId"/><label>Date<input type="date" name="transactionDate" value="@month.ToString("yyyy-MM-dd")" required/></label><label>Description<input type="text" name="description" required/></label><label>Amount<input type="number" name="amount" min="0.01" step="0.01" required/></label><label>Direction<select name="direction"><option value="Out">Money out</option><option value="In">Money in</option></select></label><button class="fm-button fm-button-primary" type="submit">Add transaction</button></form></section>
+  <section class="fm-panel"><p class="fm-eyebrow">FINAL REVIEW</p><h2>Complete month</h2><p>@(Model.UnmatchedCount == 0 ? "Every transaction is resolved. You can complete this statement." : $"Resolve or ignore {Model.UnmatchedCount} transaction(s) before completion.")</p><form asp-action="Complete" method="post">@Html.AntiForgeryToken()<input type="hidden" name="statementId" value="@Model.StatementId"/><button class="fm-button fm-button-primary" type="submit" disabled="@(Model.UnmatchedCount > 0)">Complete reconciliation</button></form></section>
+ </aside>
+</div>
