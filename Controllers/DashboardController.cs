@@ -42,7 +42,7 @@ public sealed class DashboardController(
         {
             Year = y, Month = m, MonthlyIncome = monthlyIncome, OperatingIncome = operatingIncome, PassiveIncome = passiveIncome, CarryForwardAmount = carryForward,
             CarryForwardCalculated = carryForwardInfo.CalculatedAmount, CarryForwardOverride = carryForwardInfo.OverrideAmount,
-            CarryForwardOverrideReason = carryForwardInfo.OverrideReason, SickDays = 0,
+            CarryForwardOverrideReason = carryForwardInfo.OverrideReason, HasCarryForwardRecord = carryForwardInfo.Exists, SickDays = 0,
             Bills = bills, Expenses = everyday, ExtraExpenses = extras, Investments = investments, Savings = reserveAllocations,
             BillsTotal = bills.Sum(x => x.Amount), ExpensesTotal = everyday.Sum(x => x.Amount), ExtraExpensesTotal = extras.Sum(x => x.Amount),
             InvestmentsTotal = investments.Sum(x => x.Amount), SavingsTotal = reserveAllocations.Sum(x => x.Amount),
@@ -210,6 +210,17 @@ public sealed class DashboardController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteCarryForward(int year, int month)
+    {
+        if (!CanEdit()) return LoginRedirect();
+        if (month is < 1 or > 12) return BadRequest("Month must be between 1 and 12.");
+
+        await repo.DeleteCarryForwardAsync(year, month);
+        TempData["Success"] = "The starting adjustment was removed.";
+        return RedirectToDashboard(year, month, "carry-forward");
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AddPayment(int year, int month, string source, string name, decimal amount, DateTime date, string? category, string? type, string? length, string? notes, string? returnAnchor, bool isPermanent = false, int? accountBalanceId = null)
     {
         if (!CanEdit()) return LoginRedirect();
@@ -339,8 +350,7 @@ public sealed class DashboardController(
         {
             Year = year,
             Month = month,
-            Sections = sections,
-            MonthResult = await repo.GetMonthResultAsync(year, month)
+            Sections = sections
         });
     }
 
@@ -369,17 +379,9 @@ public sealed class DashboardController(
                 }));
         }
 
-        var monthResult = await repo.CarryMonthResultForwardAsync(year, month);
-        var resultText = monthResult switch
-        {
-            > 0 => $" An excess of {monthResult:C} was carried forward.",
-            < 0 => $" A shortfall of {Math.Abs(monthResult):C} was carried forward.",
-            _ => " No excess or shortfall needed carrying forward."
-        };
-
         TempData["Success"] = added == 0
-            ? $"{next:MMMM yyyy} was already prepared. Existing entries were left unchanged." + resultText
-            : $"{next:MMMM yyyy} prepared with {added} recurring entr{(added == 1 ? "y" : "ies")}." + resultText;
+            ? $"{next:MMMM yyyy} was already prepared. Existing entries were left unchanged and no balance was carried forward."
+            : $"{next:MMMM yyyy} prepared with {added} recurring entr{(added == 1 ? "y" : "ies")}. No balance was carried forward.";
 
         return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month });
     }

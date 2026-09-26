@@ -29,7 +29,15 @@
 <section class="fm-dashboard-section" aria-labelledby="overview-title">
     <div class="fm-dashboard-section-head"><div><p class="eyebrow">Financial overview</p><h2 id="overview-title">Your month at a glance</h2></div><span>@Model.Experience.RecordedItemCount recorded items</span></div>
     <div class="fm-metric-grid">
-        <article class="fm-metric-card"><span>Available income</span><strong>@Model.EffectiveIncome.ToString("C", gb)</strong><small>@Model.MonthlyIncome.ToString("C", gb) income · @Model.CarryForwardAmount.ToString("C", gb) carry forward</small></article>
+        <article class="fm-metric-card">
+            <span>Available income</span>
+            <strong>@Model.EffectiveIncome.ToString("C", gb)</strong>
+            <small>@Model.MonthlyIncome.ToString("C", gb) income · @Model.CarryForwardAmount.ToString("C", gb) starting adjustment</small>
+            @if (Model.HasCarryForwardRecord)
+            {
+                <a asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month" asp-route-manage="true" asp-fragment="carry-forward">Manage adjustment</a>
+            }
+        </article>
         <article class="fm-metric-card"><span>Core spending</span><strong>@((Model.BillsTotal + Model.ExpensesTotal + Model.ExtraExpensesTotal).ToString("C", gb))</strong><small>Bills, everyday and extra expenses</small></article>
         <article class="fm-metric-card"><span>Allocated to the future</span><strong>@Model.Experience.AllocatedToFuture.ToString("C", gb)</strong><small>Investments and Money Pots</small></article>
         <article class="fm-metric-card @(Model.IsOverBudget ? "is-danger" : "is-positive")"><span>Remaining</span><strong>@Model.RemainingFund.ToString("C", gb)</strong><small>@(Model.IsOverBudget ? "The month is currently over budget" : "Available after all recorded allocations")</small></article>

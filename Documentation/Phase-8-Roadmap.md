@@ -31,4 +31,4 @@ Recurring entry status, selectable month setup, latest-recorded-amount carry-for
 
 ### 8.4.8.5 — Prepare next month — Complete
 
-Replaced the duplicate editable Carry over review with a compact, non-destructive recurring-entry preparation flow. Carry-forward balances remain separate from recurring records.
+Replaced the duplicate editable Carry over review with a compact, non-destructive recurring-entry preparation flow. Monthly balances are not carried automatically; optional starting adjustments remain separate from recurring records and can be removed from Manage month.

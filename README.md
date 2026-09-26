@@ -311,7 +311,7 @@ Recurring controls now display only two visual states: **One-off** and **Repeats
 
 ## Phase 8.4.8.5 — Prepare next month
 
-The former editable Carry over review has been replaced by a compact Prepare next month workflow. It adds only missing recurring entries using their latest recorded amounts, never replaces existing destination-month entries, excludes one-off entries and extra expenses, and carries the completed month's excess or shortfall separately as a financial balance.
+The former editable Carry over review has been replaced by a compact Prepare next month workflow. It adds only missing recurring entries using their latest recorded amounts, never replaces existing destination-month entries, and excludes one-off entries and extra expenses. A new month starts from its own income; a starting adjustment is only included when it is added manually from Manage month, where it can also be removed completely.
 
 ## Phase 8.4.9 — Shared Components, Accessibility & UI Polish
 

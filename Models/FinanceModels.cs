@@ -59,6 +59,7 @@ public sealed class DashboardViewModel
     public decimal CarryForwardCalculated { get; set; }
     public decimal? CarryForwardOverride { get; set; }
     public string? CarryForwardOverrideReason { get; set; }
+    public bool HasCarryForwardRecord { get; set; }
     public bool HasCarryForwardOverride => CarryForwardOverride.HasValue;
     public decimal EffectiveIncome => MonthlyIncome + CarryForwardAmount;
     public int SickDays { get; set; }
@@ -1017,7 +1018,6 @@ public sealed class PrepareNextMonthViewModel
     public IReadOnlyList<PrepareNextMonthSection> Sections { get; init; } = [];
     public int RecurringEntryCount => Sections.Sum(x => x.Items.Count);
     public decimal RecurringTotal => Sections.Sum(x => x.Total);
-    public decimal MonthResult { get; init; }
 }
 
 public sealed class CarryOverItemInput

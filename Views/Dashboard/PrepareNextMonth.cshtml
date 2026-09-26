@@ -35,9 +35,9 @@
         <small>Using the latest recorded amounts</small>
     </article>
     <article class="fm-metric-card">
-        <span>@(Model.MonthResult >= 0 ? "Excess" : "Shortfall") to carry</span>
-        <strong>@Math.Abs(Model.MonthResult).ToString("C", gb)</strong>
-        <small>Financial balance carried separately from entries</small>
+        <span>Balance carry forward</span>
+        <strong>Not included</strong>
+        <small>The new month starts from its own income</small>
     </article>
 </section>
 
@@ -91,7 +91,7 @@
         <input type="hidden" name="month" value="@Model.Month" />
         <div>
             <strong>Ready to continue?</strong>
-            <span>You can adjust any amount from its monthly workspace after preparation.</span>
+            <span>Only recurring entries will be added. You can adjust them from their monthly workspaces.</span>
         </div>
         <button class="button primary" type="submit">
             @(Model.RecurringEntryCount == 0 ? "Continue to next month" : $"Prepare {Model.NextMonth:MMMM}")

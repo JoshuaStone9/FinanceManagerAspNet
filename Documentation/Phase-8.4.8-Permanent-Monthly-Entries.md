@@ -64,7 +64,7 @@ The old Carry over review duplicated recurring-entry management by presenting ed
 - Adds entries without replacing anything already recorded in the destination month.
 - Prevents duplicates through the existing month-setup safeguards.
 - Excludes one-off entries and extra expenses.
-- Carries excess or shortfall separately from recurring records.
+- Does not carry excess or shortfall automatically; a starting adjustment can be added or removed manually from Manage month.
 - Leaves amount adjustments to the dedicated monthly workspaces after preparation.
 
 The old `CarryOver` route redirects to `PrepareNextMonth` for compatibility.

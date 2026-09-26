@@ -50,7 +50,35 @@
 
 @if (canEdit && string.IsNullOrWhiteSpace(selectedSource))
 {
-<section class="card" id="carry-forward"><p class="eyebrow">Carry forward</p><h2>Edit this month's starting adjustment</h2><p class="muted">Calculated from the previous month: @Model.CarryForwardCalculated.ToString("C", gb).</p><form asp-action="SaveCarryForwardOverride" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Carry forward amount<input name="amount" type="number" step="0.01" value="@Model.CarryForwardAmount"/></label><label>Reason (optional)<input name="reason" maxlength="500" value="@Model.CarryForwardOverrideReason"/></label><button class="primary">Save override</button></form>@if (Model.HasCarryForwardOverride) { <form asp-action="RecalculateCarryForward" method="post" style="margin-top:12px" data-confirm="Remove the manual override?">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><button class="button">Use calculated amount</button></form> }</section>
+<section class="card" id="carry-forward">
+    <p class="eyebrow">Starting adjustment</p>
+    @if (Model.HasCarryForwardRecord)
+    {
+        <h2>Current adjustment: @Model.CarryForwardAmount.ToString("C", gb)</h2>
+    }
+    else
+    {
+        <h2>No starting adjustment</h2>
+    }
+    <p class="muted">Months now start from their own income. Add an adjustment only when you intentionally want to bring a balance into this month.</p>
+    <form asp-action="SaveCarryForwardOverride" method="post" class="account-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="year" value="@Model.Year"/>
+        <input type="hidden" name="month" value="@Model.Month"/>
+        <label>Adjustment amount<input name="amount" type="number" step="0.01" value="@Model.CarryForwardAmount"/></label>
+        <label>Reason (optional)<input name="reason" maxlength="500" value="@Model.CarryForwardOverrideReason"/></label>
+        <button class="primary">Save manual adjustment</button>
+    </form>
+    @if (Model.HasCarryForwardRecord)
+    {
+        <form asp-action="DeleteCarryForward" method="post" style="margin-top:12px" data-confirm="Remove this starting adjustment completely?">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="year" value="@Model.Year"/>
+            <input type="hidden" name="month" value="@Model.Month"/>
+            <button class="button danger-inline">Remove starting adjustment</button>
+        </form>
+    }
+</section>
 <section class="card" id="income"><p class="eyebrow">Income</p><h2>Household income</h2><form asp-action="SaveIncome" method="post" class="account-form">@Html.AntiForgeryToken()<input type="hidden" name="year" value="@Model.Year"/><input type="hidden" name="month" value="@Model.Month"/><label>Income<input name="amount" type="number" step="0.01" min="0" value="@Model.MonthlyIncome"/></label><input type="hidden" name="sickDays" value="@Model.SickDays"/><button class="primary">Save income</button></form></section>
 }
 

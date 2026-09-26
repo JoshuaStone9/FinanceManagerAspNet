@@ -4,7 +4,11 @@ using System.Data;
 
 namespace FinanceManagerAspNet.Services;
 
-public sealed record CarryForwardInfo(decimal CalculatedAmount, decimal? OverrideAmount, string? OverrideReason)
+public sealed record CarryForwardInfo(
+    decimal CalculatedAmount,
+    decimal? OverrideAmount,
+    string? OverrideReason,
+    bool Exists = false)
 {
     public decimal EffectiveAmount => OverrideAmount ?? CalculatedAmount;
 }
@@ -2077,7 +2081,7 @@ WHERE [year]=@year AND [month]=@month", connection);
         var calculated = reader.IsDBNull(0) ? 0m : reader.GetDecimal(0);
         decimal? overrideAmount = reader.IsDBNull(1) ? null : reader.GetDecimal(1);
         var reason = reader.IsDBNull(2) ? null : reader.GetString(2);
-        return new CarryForwardInfo(calculated, overrideAmount, reason);
+        return new CarryForwardInfo(calculated, overrideAmount, reason, Exists: true);
     }
 
     public async Task<decimal> GetCarryForwardAsync(int year, int month)
@@ -2098,6 +2102,14 @@ WHEN NOT MATCHED THEN INSERT([year],[month],amount,override_amount,override_reas
     {
         await EnsureModernTablesAsync();
         await ExecuteAsync("UPDATE dbo.monthly_carry_forward SET override_amount=NULL, override_reason=NULL, updated_at=SYSUTCDATETIME() WHERE [year]=@year AND [month]=@month",
+            ("@year", year), ("@month", month));
+    }
+
+    public async Task DeleteCarryForwardAsync(int year, int month)
+    {
+        await EnsureModernTablesAsync();
+        await ExecuteAsync(
+            "DELETE FROM dbo.monthly_carry_forward WHERE [year]=@year AND [month]=@month",
             ("@year", year), ("@month", month));
     }
 
