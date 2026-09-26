@@ -1,0 +1,193 @@
+@model ItemsIndexViewModel
+@{
+    ViewData["Title"] = "All items";
+}
+
+<section class="page-heading items-page-heading">
+    <div>
+        <span class="eyebrow">YOUR COMPLETE LIST</span>
+        <h1>Move-in items</h1>
+        <p>Choose a view to scan your items, compare costs, or see the full details.</p>
+    </div>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <div class="hero-actions">
+            <a asp-action="BulkCreate" class="btn btn-light">Bulk add Temu items</a>
+            <a asp-action="Create" class="btn btn-primary">+ Add item</a>
+        </div>
+    }
+</section>
+
+<section class="items-summary-grid mb-4" aria-label="Item list summary">
+    <article class="items-summary-card">
+        <span>Total items</span>
+        <strong>@Model.TotalItems</strong>
+        <small>Across @Model.Categories.Count categor@(Model.Categories.Count == 1 ? "y" : "ies")</small>
+    </article>
+    <article class="items-summary-card">
+        <span>Purchased</span>
+        <strong>@Model.PurchasedItems</strong>
+        <small>@Model.CompletionPercentage.ToString("0")% complete</small>
+    </article>
+    <article class="items-summary-card featured">
+        <span>Current plan value</span>
+        <strong>@Model.CurrentPlanValue.ToString("C")</strong>
+        <small>Purchased totals, preferred options, or cheapest fallback</small>
+    </article>
+    <article class="items-summary-card featured">
+        <span>Remaining plan value</span>
+        <strong>@Model.RemainingPlanValue.ToString("C")</strong>
+        <small>Remaining Balance After Purchased Items</small>
+    </article>
+    <article class="items-summary-card">
+        <span>Purchased value</span>
+        <strong>@Model.PurchasedValue.ToString("C")</strong>
+        <small>Logged actual or purchased-option totals</small>
+    </article>
+</section>
+
+<form method="get" class="filter-bar items-filter-bar mb-4">
+    <input type="hidden" name="view" value="@Model.View" />
+    <div class="search-field">
+        <span aria-hidden="true">⌕</span>
+        <input name="search" value="@Model.Search" placeholder="Search items…" aria-label="Search items" />
+    </div>
+    <select name="categoryId" asp-items="ViewBag.Categories" aria-label="Category">
+        <option value="">All categories</option>
+    </select>
+    <select name="status" aria-label="Status">
+        <option value="">All statuses</option>
+        <option value="NotPurchased" selected="@(Model.Status == "NotPurchased")">Not purchased</option>
+        @foreach (var purchaseStatus in Enum.GetValues<PurchaseStatus>())
+        {
+            <option value="@purchaseStatus" selected="@(Model.Status == purchaseStatus.ToString())">@purchaseStatus</option>
+        }
+    </select>
+    <button class="btn btn-dark">Filter</button>
+    <a asp-action="Index" asp-route-view="@Model.View" class="btn btn-light">Clear</a>
+</form>
+
+<nav class="items-view-switcher" aria-label="Item views">
+    <span>View</span>
+    @foreach (var option in new[] { (Key: "cards", Label: "Cards"), (Key: "compact", Label: "Compact list"), (Key: "table", Label: "Table") })
+    {
+        <a asp-action="Index" asp-route-view="@option.Key" asp-route-search="@Model.Search"
+           asp-route-categoryId="@Model.CategoryId" asp-route-status="@Model.Status"
+           class="items-view-option @(Model.View == option.Key ? "is-active" : null)"
+           aria-current="@(Model.View == option.Key ? "page" : null)">@option.Label</a>
+    }
+</nav>
+
+@if (Model.Categories.Count == 0)
+{
+    <div class="empty-state">
+        <h2>No items found</h2>
+        <p>Try clearing the filters or add your first item.</p>
+    </div>
+}
+else if (Model.View == "compact")
+{
+    <partial name="_CompactList" model="Model" />
+}
+else if (Model.View == "table")
+{
+    <partial name="_ItemsTable" model="Model" />
+}
+else
+{
+    <div class="category-section-list">
+        @foreach (var category in Model.Categories)
+        {
+            <details class="items-category-section" open>
+                <summary class="items-category-summary">
+                    <div class="category-summary-main">
+                        <span class="category-chevron" aria-hidden="true">⌄</span>
+                        <div>
+                            <h2>@category.Name</h2>
+                            <p>@category.PurchasedItems of @category.TotalItems purchased</p>
+                        </div>
+                    </div>
+
+                    <div class="category-summary-stats">
+                        <span><strong>@category.TotalItems</strong> items</span>
+                        <span><strong>@category.CurrentPlanValue.ToString("C")</strong> planned</span>
+                        <span><strong>@category.CompletionPercentage.ToString("0")%</strong> complete</span>
+                    </div>
+
+                    <div class="category-progress" aria-label="@category.Name completion @category.CompletionPercentage percent">
+                        <span style="width:@category.CompletionPercentage.ToString("0")%"></span>
+                    </div>
+                </summary>
+
+                <div class="category-items-grid">
+                    @foreach (var item in category.Items)
+                    {
+                        <article class="grouped-item-card @(item.Status == PurchaseStatus.Purchased ? "is-purchased" : null)">
+                            <div class="grouped-item-card-top">
+                                <div class="item-badges">
+                                    <span class="status-badge status-@item.Status.ToString().ToLowerInvariant()">@item.Status</span>
+                                    @if (item.IsEssentialForMoveIn)
+                                    {
+                                        <span class="essential-badge">Essential</span>
+                                    }
+                                </div>
+                                <span class="priority-badge priority-@item.Priority.ToString().ToLowerInvariant()">@item.Priority</span>
+                            </div>
+
+                            <h3><a asp-action="Details" asp-route-id="@item.Id">@item.Name</a></h3>
+                            <p class="grouped-item-notes">@(string.IsNullOrWhiteSpace(item.GeneralNotes) ? "No notes added yet." : item.GeneralNotes)</p>
+
+                            <div class="grouped-item-values">
+                                <div>
+                                    <span>Need</span>
+                                    <strong>@item.QuantityRequired</strong>
+                                </div>
+                                <div>
+                                    <span>Options</span>
+                                    <strong>@item.PurchaseOptionCount</strong>
+                                </div>
+                                <div>
+                                    <span>Maximum budget</span>
+                                    <strong>@(item.TargetBudget?.ToString("C") ?? "—")</strong>
+                                </div>
+                                <div class="plan-value-cell">
+                                    <span>@item.DisplayPlanLabel</span>
+                                    <strong>@(item.DisplayPlanValue?.ToString("C") ?? "—")</strong>
+                                </div>
+                            </div>
+
+                            <div class="grouped-item-footer">
+                                <span>
+                                    @if (item.Status == PurchaseStatus.Purchased && item.PurchaseOptionCount == 0)
+                                    {
+                                        @("Manual purchase total recorded")
+                                    }
+                                    else if (item.PreferredOptionCount > 0)
+                                    {
+                                        @($"{item.PreferredOptionCount} preferred option{(item.PreferredOptionCount == 1 ? "" : "s")}")
+                                    }
+                                    else if (item.PurchaseOptionCount > 0)
+                                    {
+                                        @("Using cheapest logged option")
+                                    }
+                                    else
+                                    {
+                                        @("No purchase options logged")
+                                    }
+                                </span>
+                                <a asp-action="Details" asp-route-id="@item.Id" class="text-link">Open →</a>
+                            </div>
+                        </article>
+                    }
+                </div>
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <div class="category-section-footer">
+                        <a asp-action="Create" asp-route-categoryId="@category.CategoryId" class="text-link">+ Add @category.Name item</a>
+                    </div>
+                }
+            </details>
+        }
+    </div>
+}

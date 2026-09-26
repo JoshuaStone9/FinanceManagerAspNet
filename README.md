@@ -2,6 +2,8 @@
 
 This is a mobile-friendly ASP.NET Core MVC version of the uploaded WinForms Finance Manager.
 
+The shared welcome screen also opens Personal Vault and the integrated **Move-in Planner**. Move-in Planner is hosted at `/MoveInPlanner`, retains its separate `MoveInPlannerDb` data, and uses the shared login for editing.
+
 ## What it keeps compatible
 
 It reads your existing SQL Server database `Finance_Manager` and keeps the existing table names used by the WinForms app:

@@ -1,0 +1,321 @@
+@model BulkCreateItemsViewModel
+@{
+    ViewData["Title"] = "Bulk add items";
+}
+
+<section class="page-heading bulk-page-heading">
+    <div>
+        <span class="eyebrow">BULK ADD</span>
+        <h1>Add Temu items together</h1>
+        <p>Paste a list or enter rows manually, review the categories and totals, then create every household item and its Temu purchase option in one transaction.</p>
+    </div>
+    <a asp-action="Index" class="btn btn-light">Back to all items</a>
+</section>
+
+<form asp-action="BulkCreate" method="post" id="bulk-create-form">
+    <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+
+    <section class="bulk-setup-panel">
+        <div class="bulk-defaults-grid">
+            <div>
+                <label asp-for="DefaultCategoryId" class="form-label"></label>
+                <select asp-for="DefaultCategoryId" asp-items="Model.Categories" class="form-select"></select>
+                <small>Rows set to “Use default” will use this category.</small>
+            </div>
+            <div class="bulk-purchased-setting">
+                <div class="form-check switch-card">
+                    <input asp-for="MarkAsPurchased" class="form-check-input" />
+                    <label asp-for="MarkAsPurchased" class="form-check-label">
+                        <strong>These items have already been purchased</strong>
+                        <span>Each Temu choice will be marked purchased and included in purchased totals.</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="bulk-paste-panel">
+            <div>
+                <h2>Paste from a spreadsheet</h2>
+                <p>Use one line per product in the order <strong>Name, unit price, quantity</strong>. Tabs work best; comma- and pipe-separated rows are also supported.</p>
+            </div>
+            <textarea id="bulk-paste-input" class="form-control" rows="5" placeholder="Heat-resistant kitchen gloves&#9;2.76&#9;1&#10;Cleaning cloths, 27-pack&#9;5.42&#9;1"></textarea>
+            <div class="bulk-paste-actions">
+                <button type="button" class="btn btn-dark" id="parse-paste-button">Load pasted rows</button>
+                <button type="button" class="btn btn-light" id="clear-paste-button">Clear paste box</button>
+                <span id="bulk-paste-status" role="status" aria-live="polite"></span>
+            </div>
+        </div>
+
+        <div class="bulk-rules">
+            <span>One household item + one Temu option per row</span>
+            <span>No preferred options are created</span>
+            <span>Maximum budget = price × quantity</span>
+            <span>A pack or set counts as quantity 1</span>
+        </div>
+    </section>
+
+    <div class="bulk-table-shell">
+        <table class="bulk-items-table">
+            <thead>
+                <tr>
+                    <th>Item name</th>
+                    <th>Category</th>
+                    <th>Unit price</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                    <th><span class="visually-hidden">Remove</span></th>
+                </tr>
+            </thead>
+            <tbody id="bulk-items-body">
+                @for (var index = 0; index < Model.Rows.Count; index++)
+                {
+                    <tr data-bulk-row>
+                        <td class="bulk-name-cell">
+                            <input asp-for="Rows[index].Name" class="form-control" placeholder="e.g. Kitchen gloves" data-field="name" />
+                            <span asp-validation-for="Rows[index].Name" class="text-danger"></span>
+                        </td>
+                        <td>
+                            <select asp-for="Rows[index].CategoryId" asp-items="Model.Categories" class="form-select" data-field="category">
+                                <option value="">Use default</option>
+                            </select>
+                            <span asp-validation-for="Rows[index].CategoryId" class="text-danger"></span>
+                        </td>
+                        <td>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input asp-for="Rows[index].Price" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" data-field="price" />
+                            </div>
+                            <span asp-validation-for="Rows[index].Price" class="text-danger"></span>
+                        </td>
+                        <td>
+                            <input asp-for="Rows[index].Quantity" class="form-control" min="1" max="999" data-field="quantity" />
+                            <span asp-validation-for="Rows[index].Quantity" class="text-danger"></span>
+                        </td>
+                        <td><output class="bulk-row-total" data-field="total">£0.00</output></td>
+                        <td><button type="button" class="btn btn-light bulk-remove-row" aria-label="Remove row">×</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="bulk-form-actions">
+        <button type="button" class="btn btn-light" id="add-bulk-row">+ Add another row</button>
+        <div>
+            <a asp-action="Index" class="btn btn-light">Cancel</a>
+            <button type="submit" class="btn btn-primary btn-lg" id="bulk-submit-button">Add all items</button>
+        </div>
+    </div>
+</form>
+
+<template id="bulk-row-template">
+    <tr data-bulk-row>
+        <td class="bulk-name-cell">
+            <input name="Rows[__index__].Name" id="Rows___index____Name" class="form-control" maxlength="150" placeholder="e.g. Kitchen gloves" data-field="name" />
+            <span class="text-danger field-validation-valid" data-valmsg-for="Rows[__index__].Name" data-valmsg-replace="true"></span>
+        </td>
+        <td>
+            <select name="Rows[__index__].CategoryId" id="Rows___index____CategoryId" class="form-select" data-field="category">
+                <option value="">Use default</option>
+                @foreach (var category in Model.Categories)
+                {
+                    <option value="@category.Value">@category.Text</option>
+                }
+            </select>
+            <span class="text-danger field-validation-valid" data-valmsg-for="Rows[__index__].CategoryId" data-valmsg-replace="true"></span>
+        </td>
+        <td>
+            <div class="input-group">
+                <span class="input-group-text">£</span>
+                <input name="Rows[__index__].Price" id="Rows___index____Price" type="number" class="form-control" min="0.01" max="1000000" step="0.01" inputmode="decimal" placeholder="0.00" data-field="price" />
+            </div>
+            <span class="text-danger field-validation-valid" data-valmsg-for="Rows[__index__].Price" data-valmsg-replace="true"></span>
+        </td>
+        <td>
+            <input name="Rows[__index__].Quantity" id="Rows___index____Quantity" type="number" class="form-control" min="1" max="999" value="1" data-field="quantity" />
+            <span class="text-danger field-validation-valid" data-valmsg-for="Rows[__index__].Quantity" data-valmsg-replace="true"></span>
+        </td>
+        <td><output class="bulk-row-total" data-field="total">£0.00</output></td>
+        <td><button type="button" class="btn btn-light bulk-remove-row" aria-label="Remove row">×</button></td>
+    </tr>
+</template>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const body = document.getElementById('bulk-items-body');
+            const template = document.getElementById('bulk-row-template');
+            const pasteInput = document.getElementById('bulk-paste-input');
+            const pasteStatus = document.getElementById('bulk-paste-status');
+            const submitButton = document.getElementById('bulk-submit-button');
+
+            function rowInputs(row) {
+                return {
+                    name: row.querySelector('[data-field="name"]'),
+                    category: row.querySelector('[data-field="category"]'),
+                    price: row.querySelector('[data-field="price"]'),
+                    quantity: row.querySelector('[data-field="quantity"]'),
+                    total: row.querySelector('[data-field="total"]')
+                };
+            }
+
+            function updateTotal(row) {
+                const fields = rowInputs(row);
+                const price = Number.parseFloat(fields.price.value) || 0;
+                const quantity = Number.parseInt(fields.quantity.value, 10) || 0;
+                fields.total.textContent = (price * quantity).toLocaleString('en-GB', {
+                    style: 'currency',
+                    currency: 'GBP'
+                });
+            }
+
+            function reindexRows() {
+                [...body.querySelectorAll('[data-bulk-row]')].forEach((row, index) => {
+                    row.querySelectorAll('[name]').forEach(element => {
+                        element.name = element.name.replace(/Rows\[\d+\]/, `Rows[${index}]`);
+                    });
+                    row.querySelectorAll('[id]').forEach(element => {
+                        element.id = element.id.replace(/Rows_\d+__/, `Rows_${index}__`);
+                    });
+                    row.querySelectorAll('[data-valmsg-for]').forEach(element => {
+                        element.dataset.valmsgFor = element.dataset.valmsgFor.replace(/Rows\[\d+\]/, `Rows[${index}]`);
+                    });
+                });
+            }
+
+            function addRow(values = {}) {
+                const index = body.querySelectorAll('[data-bulk-row]').length;
+                const html = template.innerHTML.replaceAll('__index__', index.toString());
+                body.insertAdjacentHTML('beforeend', html);
+                const row = body.lastElementChild;
+                const fields = rowInputs(row);
+
+                fields.name.value = values.name ?? '';
+                fields.price.value = values.price ?? '';
+                fields.quantity.value = values.quantity ?? 1;
+                fields.category.value = values.categoryId ?? '';
+                updateTotal(row);
+                return row;
+            }
+
+            function removeRow(row) {
+                const rows = body.querySelectorAll('[data-bulk-row]');
+                if (rows.length === 1) {
+                    const fields = rowInputs(row);
+                    fields.name.value = '';
+                    fields.category.value = '';
+                    fields.price.value = '';
+                    fields.quantity.value = 1;
+                    updateTotal(row);
+                    return;
+                }
+
+                row.remove();
+                reindexRows();
+            }
+
+            function splitDelimitedLine(line) {
+                const delimiter = line.includes('\t') ? '\t' : line.includes('|') ? '|' : ',';
+                const values = [];
+                let current = '';
+                let quoted = false;
+
+                for (let index = 0; index < line.length; index++) {
+                    const character = line[index];
+                    if (character === '"') {
+                        if (quoted && line[index + 1] === '"') {
+                            current += '"';
+                            index++;
+                        } else {
+                            quoted = !quoted;
+                        }
+                    } else if (character === delimiter && !quoted) {
+                        values.push(current.trim());
+                        current = '';
+                    } else {
+                        current += character;
+                    }
+                }
+
+                values.push(current.trim());
+                return values;
+            }
+
+            function normalisePrice(value) {
+                const cleaned = value.replace(/[£$\s,]/g, '');
+                const price = Number.parseFloat(cleaned);
+                return Number.isFinite(price) && price > 0 ? price.toFixed(2) : '';
+            }
+
+            function loadPastedRows() {
+                const lines = pasteInput.value
+                    .split(/\r?\n/)
+                    .map(line => line.trim())
+                    .filter(Boolean);
+
+                const parsedRows = lines
+                    .map(splitDelimitedLine)
+                    .filter(columns => columns.length > 0)
+                    .filter((columns, index) => {
+                        if (index !== 0) return true;
+                        const first = columns[0].toLowerCase();
+                        return first !== 'name' && first !== 'item' && first !== 'item name';
+                    })
+                    .map(columns => ({
+                        name: columns[0] ?? '',
+                        price: normalisePrice(columns[1] ?? ''),
+                        quantity: Math.max(1, Number.parseInt(columns[2] ?? '1', 10) || 1)
+                    }))
+                    .filter(row => row.name || row.price);
+
+                if (parsedRows.length === 0) {
+                    pasteStatus.textContent = 'No usable rows were found.';
+                    pasteStatus.className = 'is-error';
+                    return;
+                }
+
+                const existingRows = [...body.querySelectorAll('[data-bulk-row]')];
+                const existingAreBlank = existingRows.every(row => {
+                    const fields = rowInputs(row);
+                    return !fields.name.value.trim() && !fields.price.value;
+                });
+
+                if (existingAreBlank)
+                    body.innerHTML = '';
+
+                parsedRows.forEach(addRow);
+                reindexRows();
+                pasteStatus.textContent = `${parsedRows.length} row${parsedRows.length === 1 ? '' : 's'} loaded for review.`;
+                pasteStatus.className = 'is-success';
+            }
+
+            body.addEventListener('input', event => {
+                const row = event.target.closest('[data-bulk-row]');
+                if (row) updateTotal(row);
+            });
+
+            body.addEventListener('click', event => {
+                const button = event.target.closest('.bulk-remove-row');
+                if (button) removeRow(button.closest('[data-bulk-row]'));
+            });
+
+            document.getElementById('add-bulk-row').addEventListener('click', () => {
+                addRow().querySelector('[data-field="name"]').focus();
+            });
+            document.getElementById('parse-paste-button').addEventListener('click', loadPastedRows);
+            document.getElementById('clear-paste-button').addEventListener('click', () => {
+                pasteInput.value = '';
+                pasteStatus.textContent = '';
+                pasteStatus.className = '';
+            });
+
+            document.getElementById('bulk-create-form').addEventListener('submit', () => {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Adding items…';
+            });
+
+            body.querySelectorAll('[data-bulk-row]').forEach(updateTotal);
+        })();
+    </script>
+}

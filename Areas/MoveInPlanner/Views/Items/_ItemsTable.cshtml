@@ -1,0 +1,40 @@
+@model ItemsIndexViewModel
+
+<div class="items-table-shell" role="region" aria-label="Item comparison table" tabindex="0">
+    <table class="items-comparison-table">
+        <caption class="visually-hidden">Filtered move-in items, ordered by category and name</caption>
+        <thead>
+            <tr>
+                <th scope="col">Item</th>
+                <th scope="col">Category</th>
+                <th scope="col">Status</th>
+                <th scope="col">Priority</th>
+                <th scope="col" class="items-number">Qty</th>
+                <th scope="col" class="items-number">Options</th>
+                <th scope="col" class="items-number">Max budget</th>
+                <th scope="col" class="items-number">Plan / paid</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var category in Model.Categories)
+            {
+                @foreach (var item in category.Items)
+                {
+                    <tr>
+                        <th scope="row">
+                            <a asp-action="Details" asp-route-id="@item.Id">@item.Name</a>
+                            @if (item.IsEssentialForMoveIn){<small>Essential for move-in</small>}
+                        </th>
+                        <td>@category.Name</td>
+                        <td><span class="status-badge status-@item.Status.ToString().ToLowerInvariant()">@(item.Status == PurchaseStatus.NotNeeded ? "Not needed" : item.Status.ToString())</span></td>
+                        <td><span class="priority-badge priority-@item.Priority.ToString().ToLowerInvariant()">@item.Priority</span></td>
+                        <td class="items-number">@item.QuantityRequired</td>
+                        <td class="items-number">@item.PurchaseOptionCount</td>
+                        <td class="items-number">@(item.TargetBudget?.ToString("C") ?? "—")</td>
+                        <td class="items-number"><strong>@(item.DisplayPlanValue?.ToString("C") ?? "—")</strong><small>@item.DisplayPlanLabel</small></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>

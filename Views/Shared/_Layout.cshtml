@@ -32,22 +32,26 @@
             </div>
 
             <nav class="nav-section nav-section--primary">
-                <a class="nav-link fm-link" asp-controller="Dashboard" asp-action="Index">
-                    <i data-lucide="wallet"></i> <span>Finance Manager</span>
-                </a>
-                <a class="nav-link @(controller == "Items" && action == "Index" ? "active" : "")" asp-controller="Items" asp-action="Index">
+                <div class="vault-app-switcher" aria-label="Switch application">
+                    <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="Index">
+                        <i data-lucide="wallet"></i> <span>Finance Manager</span>
+                    </a>
+                    <a class="nav-link" asp-area="MoveInPlanner" asp-controller="Dashboard" asp-action="Index">
+                        <i data-lucide="house"></i> <span>Move In Planner</span>
+                    </a>
+                </div>
+                <a class="nav-link @(controller == "Items" && action == "Index" ? "active" : "")" asp-area="" asp-controller="Items" asp-action="Index">
                     <i data-lucide="layout-dashboard"></i> <span>Vault Dashboard</span>
                 </a>
-                <button class="theme-toggle-inline" id="themeToggleInline" type="button">Toggle theme</button>
       @if (isLoggedIn)
                 {
-                    <a class="nav-link nav-link--add @(controller == "Items" && action == "Create" ? "active" : "")" asp-controller="Items" asp-action="Create">
+                    <a class="nav-link nav-link--add @(controller == "Items" && action == "Create" ? "active" : "")" asp-area="" asp-controller="Items" asp-action="Create">
                         <i data-lucide="plus-circle"></i> <span>Add Item</span>
                     </a>
-                    <a class="nav-link @(controller == "Locations" ? "active" : "")" asp-controller="Locations" asp-action="Index">
+                    <a class="nav-link @(controller == "Locations" ? "active" : "")" asp-area="" asp-controller="Locations" asp-action="Index">
                         <i data-lucide="map-pin"></i> <span>Locations</span>
                     </a>
-                    <a class="nav-link @(controller == "VaultSettings" ? "active" : "")" asp-controller="VaultSettings" asp-action="Index">
+                    <a class="nav-link @(controller == "VaultSettings" ? "active" : "")" asp-area="" asp-controller="VaultSettings" asp-action="Index">
                         <i data-lucide="sliders-horizontal"></i> <span>Vault Settings</span>
                     </a>
                 }
@@ -59,7 +63,7 @@
                 {
                     foreach (var c in ViewBag.SidebarCategories)
                     {
-                        <a class="nav-link nav-link--sub" asp-controller="Items" asp-action="Index" asp-route-CategoryId="@c.Id">
+                        <a class="nav-link nav-link--sub" asp-area="" asp-controller="Items" asp-action="Index" asp-route-CategoryId="@c.Id">
                             <i data-lucide="tag"></i>
                             <span>@c.Name</span>
                             <span class="badge-count">@c.ItemCount</span>
@@ -80,22 +84,22 @@
                 <button class="icon-btn sidebar-toggle" id="sidebarToggle" type="button" title="Toggle sidebar">
                     <i data-lucide="menu"></i>
                 </button>
-                <form class="search-form" asp-controller="Items" asp-action="Index" method="get">
+                <form class="search-form" asp-area="" asp-controller="Items" asp-action="Index" method="get">
                     <i data-lucide="search" class="search-icon"></i>
                     <input type="text" name="Search" value="@(ViewBag.Filter?.Search)" placeholder="Search Personal Vault..." class="search-input" />
                 </form>
                 <div class="topbar-actions">
                     @if (isLoggedIn)
                     {
-                        <a class="btn btn-primary" asp-controller="Items" asp-action="Create"><i data-lucide="plus"></i> <span>Add Item</span></a>
-                        <form asp-controller="Auth" asp-action="Logout" method="post">
+                        <a class="btn btn-primary" asp-area="" asp-controller="Items" asp-action="Create"><i data-lucide="plus"></i> <span>Add Item</span></a>
+                        <form asp-area="" asp-controller="Auth" asp-action="Logout" method="post">
                             @Html.AntiForgeryToken()
                             <button type="submit" class="nav-button"><i data-lucide="log-out"></i> <span>Logout</span></button>
                         </form>
                     }
                     else
                     {
-                        <a class="btn btn-primary" asp-controller="Auth" asp-action="Login"><i data-lucide="log-in"></i> <span>Login</span></a>
+                        <a class="btn btn-primary" asp-area="" asp-controller="Auth" asp-action="Login"><i data-lucide="log-in"></i> <span>Login</span></a>
                     }
                 </div>
             </header>
@@ -121,14 +125,21 @@
 else
 {
   <header class="topbar">
-    <a class="brand" asp-controller="Auth" asp-action="Start">Finance Manager</a>
-    <nav>
-      <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
-      <a asp-controller="Statistics" asp-action="Index">Statistics</a>
-      <a asp-controller="Assets" asp-action="Index">Assets</a>
-      <a asp-controller="SavingPots" asp-action="Index">Saving Pots</a>
-      <a asp-controller="Items" asp-action="Index">Personal Vault</a>
-      <button class="theme-toggle-inline" id="themeToggle" type="button">Toggle theme</button>
+    <a class="brand" asp-area="" asp-controller="Auth" asp-action="Start">Finance Manager</a>
+    <nav class="finance-nav">
+      <div class="finance-nav-links">
+        <a asp-area="" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+        <a asp-area="" asp-controller="Statistics" asp-action="Index">Statistics</a>
+        <a asp-area="" asp-controller="Assets" asp-action="Index">Assets</a>
+        <a asp-area="" asp-controller="SavingPots" asp-action="Index">Saving Pots</a>
+      </div>
+      <div class="finance-app-switcher" aria-label="Switch application">
+        <a asp-area="" asp-controller="Items" asp-action="Index">Personal Vault</a>
+        <a asp-area="MoveInPlanner" asp-controller="Dashboard" asp-action="Index">Move In Planner</a>
+      </div>
+      <button class="theme-toggle-inline finance-theme-toggle" id="themeToggle" type="button" title="Switch colour theme" aria-label="Switch colour theme">
+        <i data-lucide="sun-moon"></i><span>Theme</span>
+      </button>
       @if (isLoggedIn)
       {
         <form asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">

@@ -82,6 +82,10 @@
             background: linear-gradient(135deg, #ff7a18, #ff3d2e);
             color: white;
         }
+        .start-button.move-in-planner {
+            background: linear-gradient(135deg, #317256, #1d4937);
+            color: white;
+        }
         .login-cta { background: #111827; color: white; }
         .danger { background: #fee2e2; color: #991b1b; }
         .login-divider { display: flex; align-items: center; gap: 12px; margin: 25px 0; }
@@ -118,13 +122,12 @@
 <body class="login-body">
     <main class="login-shell">
         <section class="login-card start-card">
-            <p class="eyebrow">Welcome back</p>
-            <h1>Finance Manager</h1>
-            <p class="muted">Open the finance app in read-only mode, or log in to unlock editing.</p>
+            <h1>Personal Hub</h1>
 
             <div class="start-actions">
-                <a class="start-button primary" href="@Url.Action("Index", "Dashboard")">Finance Manager</a>
-                <a class="start-button" href="@Url.Action("Index", "Items")">Personal Vault</a>
+                <a class="start-button primary" href="@Url.Action("Index", "Dashboard", new { area = "" })">Finance Manager</a>
+                <a class="start-button" href="@Url.Action("Index", "Items", new { area = "" })">Personal Vault</a>
+                <a class="start-button move-in-planner" href="@Url.Action("Index", "Dashboard", new { area = "MoveInPlanner" })">Move In Planner</a>
             </div>
 
             <div class="login-divider"><span>secure editing</span></div>

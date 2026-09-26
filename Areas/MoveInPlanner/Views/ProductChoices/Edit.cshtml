@@ -1,0 +1,5 @@
+@model ProductChoiceFormViewModel
+@{ ViewData["Title"] = "Edit product choice"; }
+<section class="page-heading compact"><div><span class="eyebrow">PRODUCT CHOICE</span><h1>Edit @Model.Name</h1><p>Update the Amazon or TikTok Shop link, price or decision details for @Model.HouseholdItemName.</p></div></section>
+<div class="form-shell"><form asp-action="Edit" method="post">@Html.AntiForgeryToken()<partial name="_Form" model="Model" /><div class="form-actions"><a asp-controller="Items" asp-action="Details" asp-route-id="@Model.HouseholdItemId" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save changes</button></div></form></div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

@@ -1,0 +1,26 @@
+@model ItemFormViewModel
+@{ ViewData["Title"] = "Add item"; }
+<section class="page-heading compact"><div><span class="eyebrow">ADD REQUIREMENT</span><h1>Add a move-in item</h1><p>Create the requirement, then add an Amazon or TikTok Shop choice—or record the total directly if you have already bought it.</p></div></section>
+<div class="form-shell">
+<form asp-action="Create" method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="form-section"><h2>What do you need?</h2><div class="row g-3">
+        <div class="col-md-8"><label asp-for="Name"></label><input asp-for="Name" class="form-control" placeholder="e.g. Slow cooker" /><span asp-validation-for="Name"></span></div>
+        <div class="col-md-4"><label asp-for="CategoryId"></label><select asp-for="CategoryId" asp-items="Model.Categories" class="form-select"></select></div>
+        <div class="col-md-4"><label asp-for="ChoiceType"></label><select asp-for="ChoiceType" asp-items="Html.GetEnumSelectList<ItemChoiceType>()" class="form-select"></select><small>Single pick, comparison or multiple items.</small></div>
+        <div class="col-md-4"><label asp-for="QuantityRequired"></label><input asp-for="QuantityRequired" class="form-control" /></div>
+        <div class="col-md-4"><label asp-for="TargetBudget">Maximum budget</label><div class="input-group"><span class="input-group-text">£</span><input asp-for="TargetBudget" class="form-control" /></div><small>Your spending limit. Current prices are entered on purchase options after saving.</small></div>
+    </div></div>
+    <div class="form-section"><h2>Priority and timing</h2><div class="row g-3">
+        <div class="col-md-4"><label asp-for="Priority"></label><select asp-for="Priority" asp-items="Html.GetEnumSelectList<ItemPriority>()" class="form-select"></select></div>
+        <div class="col-md-4"><label asp-for="Status"></label><select asp-for="Status" asp-items="Html.GetEnumSelectList<PurchaseStatus>()" class="form-select"></select></div>
+        <div class="col-md-4"><label asp-for="PurchasedPrice"></label><div class="input-group"><span class="input-group-text">£</span><input asp-for="PurchasedPrice" class="form-control" /></div><small>Optional total paid. Entering a value automatically sets the status to Purchased.</small><span asp-validation-for="PurchasedPrice" class="text-danger"></span></div>
+        <div class="col-md-4"><label asp-for="NeededBy"></label><input asp-for="NeededBy" class="form-control" /></div>
+        <div class="col-12"><div class="form-check switch-card"><input asp-for="IsEssentialForMoveIn" class="form-check-input" /><label asp-for="IsEssentialForMoveIn" class="form-check-label"><strong>Essential for moving day</strong><span>This item should be prioritised on the dashboard.</span></label></div></div>
+    </div></div>
+    <div class="form-section"><h2>Notes</h2><label asp-for="GeneralNotes"></label><textarea asp-for="GeneralNotes" rows="4" class="form-control" placeholder="Measurements, colour preferences, requirements…"></textarea></div>
+    <details class="advanced-fields"><summary>Comparison notes (optional)</summary><div class="pt-3"><label asp-for="DecisionReason"></label><textarea asp-for="DecisionReason" rows="3" class="form-control mb-3"></textarea><label asp-for="FullComparisonResponse"></label><textarea asp-for="FullComparisonResponse" rows="7" class="form-control"></textarea></div></details>
+    <div class="form-actions"><a asp-action="Index" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save item →</button></div>
+</form>
+</div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

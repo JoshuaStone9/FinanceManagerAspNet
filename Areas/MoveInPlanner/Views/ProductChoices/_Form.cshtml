@@ -1,0 +1,232 @@
+@model ProductChoiceFormViewModel
+<input asp-for="Id" type="hidden" />
+<input asp-for="HouseholdItemId" type="hidden" />
+<div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<div class="form-section"><h2>Product</h2><div class="row g-3">
+    <div class="col-md-8"><label asp-for="Name"></label><input asp-for="Name" class="form-control" placeholder="e.g. Ninja PossibleCooker MC1001UK" /><span asp-validation-for="Name"></span></div>
+    <div class="col-md-4"><label asp-for="Tier"></label><select asp-for="Tier" asp-items="Html.GetEnumSelectList<ProductTier>()" class="form-select"></select></div>
+    <div class="col-md-4"><label asp-for="Retailer"></label><input asp-for="Retailer" class="form-control" placeholder="Amazon, IKEA, Dunelm…" /></div>
+    <div class="col-md-4"><label asp-for="Price"></label><div class="input-group"><span class="input-group-text">£</span><input asp-for="Price" class="form-control" /></div><span asp-validation-for="Price"></span></div>
+    <div class="col-md-4"><label asp-for="Quantity"></label><input asp-for="Quantity" class="form-control" /><div class="form-text">How many units or packs of this exact product you plan to buy.</div></div>
+</div></div>
+<div class="form-section product-url-section">
+    <div class="url-callout">
+        <span class="url-icon">↗</span>
+        <div>
+            <h2>Product URL</h2>
+            <p>Paste a retailer URL. The retailer is detected automatically, then product details can be fetched when supported.</p>
+        </div>
+    </div>
+    <div class="product-import-row">
+        <input asp-for="ProductUrl" class="form-control form-control-lg" placeholder="https://www.amazon.co.uk/… or https://vm.tiktok.com/…" />
+        <button type="button" id="fetchProductDetails" class="btn btn-dark btn-lg">Fetch product details</button>
+    </div>
+    <span asp-validation-for="ProductUrl"></span>
+    <div id="retailerDetectedBadge" class="form-text mt-2"></div>
+
+    <div id="productImportStatus" class="product-import-status d-none" role="status" aria-live="polite"></div>
+    <p class="product-import-help">Amazon and TikTok Shop imports are best effort. Review the populated fields before saving because retailers may withhold or change their metadata.</p>
+</div>
+<div class="form-section product-image-url-section">
+    <div class="url-callout">
+        <span class="image-url-icon">▧</span>
+        <div>
+            <h2>Product image URL</h2>
+            <p>Paste a direct image address ending in formats such as .jpg, .png or .webp. This image will appear on the purchase-option card.</p>
+        </div>
+    </div>
+    <input asp-for="ImageUrl" class="form-control form-control-lg" placeholder="https://example.com/product-image.jpg" />
+    <span asp-validation-for="ImageUrl"></span>
+    <div id="imagePreviewContainer" class="product-form-image-preview mt-3 @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "d-none" : "")">
+        <img id="imagePreview" src="@Model.ImageUrl" alt="Product image preview" />
+        <div id="imagePreviewError" class="image-preview-error d-none">The image could not be displayed. Check that this is a direct public image URL.</div>
+    </div>
+</div>
+<script>
+    (() => {
+        const fetchButton = document.getElementById('fetchProductDetails');
+        const productUrl = document.getElementById('ProductUrl');
+        const name = document.getElementById('Name');
+        const price = document.getElementById('Price');
+        const retailer = document.getElementById('Retailer');
+        const imageUrl = document.getElementById('ImageUrl');
+        const status = document.getElementById('productImportStatus');
+        if (!fetchButton || !productUrl || !status) return;
+
+        
+        const badge = document.getElementById('retailerDetectedBadge');
+
+        function detectRetailer(url) {
+            let detected = null;
+
+            try {
+                const host = new URL(url).hostname.toLowerCase();
+
+                if (host === 'amzn.eu' || host === 'amazon.co.uk' ||
+                    host.endsWith('.amazon.co.uk') || host === 'amazon.com' ||
+                    host.endsWith('.amazon.com')) {
+                    detected = {
+                        name: 'Amazon UK',
+                        buttonText: 'Fetch Amazon details'
+                    };
+                } else if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) {
+                    detected = {
+                        name: 'TikTok Shop',
+                        buttonText: 'Fetch TikTok details'
+                    };
+                }
+            } catch {
+                // A partial URL is expected while the user is still typing.
+            }
+
+            if (detected) {
+                if (retailer) retailer.value = detected.name;
+                if (badge) badge.textContent = `Detected retailer: ${detected.name}`;
+                fetchButton.textContent = detected.buttonText;
+            } else {
+                if (badge) {
+                    badge.textContent = url.trim()
+                        ? 'Automatic import currently supports Amazon and TikTok Shop.'
+                        : '';
+                }
+
+                fetchButton.textContent = 'Fetch product details';
+            }
+
+            return detected;
+        }
+
+        productUrl.addEventListener('input', event =>
+            detectRetailer(event.target.value));
+        detectRetailer(productUrl.value);
+
+        const showStatus = (message, state) => {
+            status.textContent = message;
+            status.className = `product-import-status ${state}`;
+        };
+
+        fetchButton.addEventListener('click', async () => {
+            const url = productUrl.value.trim();
+            if (!url) {
+                showStatus('Paste an Amazon or TikTok Shop product URL first.', 'is-error');
+                productUrl.focus();
+                return;
+            }
+
+            const detectedRetailer = detectRetailer(url);
+            if (!detectedRetailer) {
+                showStatus('Automatic import currently supports Amazon and TikTok Shop links.', 'is-error');
+                productUrl.focus();
+                return;
+            }
+
+            fetchButton.disabled = true;
+            fetchButton.textContent = 'Fetching…';
+            showStatus(`Contacting ${detectedRetailer.name} and reading available product metadata…`, 'is-loading');
+
+            try {
+                const token = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (!token) {
+                    showStatus('The security token could not be found. Refresh the page and try again.', 'is-error');
+                    return;
+                }
+
+                const body = new URLSearchParams();
+                body.append('ProductUrl', url);
+                body.append('__RequestVerificationToken', token.value);
+
+                const response = await fetch('@Url.Action("FetchProductMetadata", "ProductChoices")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    body
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    showStatus(result.errorMessage || 'The product details could not be imported.', 'is-error');
+                    return;
+                }
+
+                const hasExistingValues =
+                    (name?.value.trim()) ||
+                    (price?.value && Number(price.value) > 0) ||
+                    (imageUrl?.value.trim());
+
+                const overwrite = !hasExistingValues || window.confirm(
+                    'Some product fields already contain values. Replace them with the imported product details?');
+
+                if (overwrite) {
+                    if (result.name && name) name.value = result.name;
+                    if (result.price != null && price) price.value = Number(result.price).toFixed(2);
+                    if (result.retailer && retailer) retailer.value = result.retailer;
+                    if (result.imageUrl && imageUrl) {
+                        imageUrl.value = result.imageUrl;
+                        imageUrl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                }
+
+                if (result.resolvedUrl) {
+                    productUrl.value = result.resolvedUrl;
+                    detectRetailer(productUrl.value);
+                }
+
+                const imported = [
+                    result.name ? 'name' : null,
+                    result.price != null ? 'price' : null,
+                    result.imageUrl ? 'image' : null
+                ].filter(Boolean);
+
+                showStatus(
+                    imported.length
+                        ? `Imported ${imported.join(', ')}. Please check the details before saving.`
+                        : 'The URL was resolved, but the retailer did not expose name, price or image metadata.',
+                    imported.length ? 'is-success' : 'is-warning');
+            } catch {
+                showStatus('The import request failed. You can still enter the details manually.', 'is-error');
+            } finally {
+                fetchButton.disabled = false;
+                detectRetailer(productUrl.value);
+            }
+        });
+    })();
+</script>
+<script>
+    (() => {
+        const input = document.getElementById('ImageUrl');
+        const container = document.getElementById('imagePreviewContainer');
+        const image = document.getElementById('imagePreview');
+        const error = document.getElementById('imagePreviewError');
+        if (!input || !container || !image || !error) return;
+
+        const previewEndpoint = '@Url.Action("ImagePreview", "ProductChoices")';
+
+        const updatePreview = () => {
+            const value = input.value.trim();
+            if (!value) {
+                container.classList.add('d-none');
+                error.classList.add('d-none');
+                image.removeAttribute('src');
+                return;
+            }
+
+            container.classList.remove('d-none');
+            error.classList.add('d-none');
+            image.classList.remove('d-none');
+            image.src = `${previewEndpoint}?url=${encodeURIComponent(value)}`;
+        };
+
+        image.addEventListener('load', () => {
+            image.classList.remove('d-none');
+            error.classList.add('d-none');
+        });
+
+        image.addEventListener('error', () => {
+            image.classList.add('d-none');
+            error.classList.remove('d-none');
+        });
+
+        input.addEventListener('input', updatePreview);
+        updatePreview();
+    })();
+</script>
+<div class="form-section"><h2>Decision details</h2><div class="row g-3"><div class="col-md-5"><label asp-for="PriceCheckedOn"></label><input asp-for="PriceCheckedOn" class="form-control" /></div><div class="col-12"><label asp-for="Notes"></label><textarea asp-for="Notes" class="form-control" rows="4" placeholder="Why this choice stands out, delivery details, dimensions…"></textarea></div><div class="col-md-6"><div class="form-check switch-card"><input asp-for="IsPreferred" class="form-check-input" /><label asp-for="IsPreferred" class="form-check-label"><strong>Include in preferred plan</strong><span>You can include more than one option. Their totals are added together.</span></label></div></div><div class="col-md-6"><div class="form-check switch-card"><input asp-for="IsPurchased" class="form-check-input" /><label asp-for="IsPurchased" class="form-check-label"><strong>Already purchased</strong><span>Updates the item and dashboard.</span></label></div></div></div></div>

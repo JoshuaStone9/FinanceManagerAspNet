@@ -1,0 +1,5 @@
+@model ProductChoiceFormViewModel
+@{ ViewData["Title"] = "Add product choice"; }
+<section class="page-heading compact"><div><span class="eyebrow">STEP 2 OF 2</span><h1>Add a product choice</h1><p>For <strong>@Model.HouseholdItemName</strong>. Paste an Amazon or TikTok Shop link to import the available product details.</p></div></section>
+<div class="form-shell"><form asp-action="Create" method="post">@Html.AntiForgeryToken()<partial name="_Form" model="Model" /><div class="form-actions"><a asp-controller="Items" asp-action="Details" asp-route-id="@Model.HouseholdItemId" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save product choice</button></div></form></div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

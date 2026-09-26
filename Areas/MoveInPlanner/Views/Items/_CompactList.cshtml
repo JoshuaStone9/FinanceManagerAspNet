@@ -1,0 +1,28 @@
+@model ItemsIndexViewModel
+
+<div class="items-compact-list">
+    @foreach (var category in Model.Categories)
+    {
+        <section class="items-compact-category" aria-labelledby="compact-category-@category.CategoryId">
+            <div class="items-compact-heading">
+                <h2 id="compact-category-@category.CategoryId">@category.Name</h2>
+                <span>@category.Items.Count items</span>
+            </div>
+            @foreach (var item in category.Items)
+            {
+                <a asp-action="Details" asp-route-id="@item.Id" class="items-compact-row">
+                    <span class="items-compact-name">
+                        <strong>@item.Name</strong>
+                        <small>Qty @item.QuantityRequired · @item.Priority priority@if (item.IsEssentialForMoveIn){<span> · Essential</span>}</small>
+                    </span>
+                    <span class="status-badge status-@item.Status.ToString().ToLowerInvariant()">@(item.Status == PurchaseStatus.NotNeeded ? "Not needed" : item.Status.ToString())</span>
+                    <span class="items-compact-price">
+                        <strong>@(item.DisplayPlanValue?.ToString("C") ?? "—")</strong>
+                        <small>@item.DisplayPlanLabel</small>
+                    </span>
+                    <span class="items-row-arrow" aria-hidden="true">→</span>
+                </a>
+            }
+        </section>
+    }
+</div>

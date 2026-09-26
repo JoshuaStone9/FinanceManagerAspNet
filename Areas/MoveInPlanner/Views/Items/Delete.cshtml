@@ -1,0 +1,18 @@
+@model HouseholdItem
+@{ ViewData["Title"] = "Delete item"; }
+<section class="delete-shell">
+    <span class="eyebrow">DELETE ITEM</span>
+    <h1>Delete @Model.Name?</h1>
+    <p>This permanently removes the overall item and all <strong>@Model.ProductChoices.Count</strong> purchase option(s) attached to it.</p>
+
+    <div class="delete-summary">
+        <div><span>Category</span><strong>@Model.Category.Name</strong></div>
+        <div><span>Maximum budget</span><strong>@(Model.TargetBudget?.ToString("C") ?? "Not set")</strong></div>
+        <div><span>Purchase options</span><strong>@Model.ProductChoices.Count</strong></div>
+    </div>
+
+    <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="delete-actions">
+        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light btn-lg">Keep item</a>
+        <button type="submit" class="btn btn-danger btn-lg">Delete item and options</button>
+    </form>
+</section>

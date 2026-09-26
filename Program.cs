@@ -5,12 +5,39 @@ using FinanceManagerAspNet.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Data.SqlClient;
+using MoveInPlanner.Data;
+using MoveInPlanner.Services.ProductMetadata;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("FinanceManager")));
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(
+        Environment.GetEnvironmentVariable("MIP_CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("MoveInPlanner")));
+builder.Services.AddSingleton<IRetailerProductMetadataProvider, AmazonProductMetadataProvider>();
+builder.Services.AddSingleton<IRetailerProductMetadataProvider, TikTokProductMetadataProvider>();
+builder.Services.AddSingleton<ProductImageRequestPolicy>();
+builder.Services.AddHttpClient<IProductMetadataService, ProductMetadataService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(12);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    AutomaticDecompression = System.Net.DecompressionMethods.All
+});
+builder.Services.AddHttpClient("ProductImageProxy", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(12);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    AutomaticDecompression = System.Net.DecompressionMethods.All
+});
 
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
@@ -61,7 +88,28 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    var editsMoveInPlanner = context.Request.Path.StartsWithSegments("/MoveInPlanner")
+        && !HttpMethods.IsGet(context.Request.Method)
+        && !HttpMethods.IsHead(context.Request.Method)
+        && !HttpMethods.IsOptions(context.Request.Method);
+
+    if (editsMoveInPlanner && context.User.Identity?.IsAuthenticated != true)
+    {
+        var returnUrl = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+        context.Response.Redirect($"/Auth/Login?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        return;
+    }
+
+    await next();
+});
 app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "move-in-planner",
+    pattern: "MoveInPlanner/{controller=Dashboard}/{action=Index}/{id?}",
+    defaults: new { area = "MoveInPlanner" });
 
 app.MapControllerRoute(
     name: "vault",
@@ -84,6 +132,14 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
     await EnsurePersonalVaultSchemaAsync(db);
+
+    var moveInPlannerConnectionString = Environment.GetEnvironmentVariable("MIP_CONNECTION_STRING")
+        ?? configuration.GetConnectionString("MoveInPlanner")
+        ?? throw new InvalidOperationException("Missing MoveInPlanner connection string.");
+    EnsureSqlDatabaseExists(moveInPlannerConnectionString);
+
+    var moveInPlannerDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    moveInPlannerDb.Database.EnsureCreated();
 
     var financeRepository = scope.ServiceProvider.GetRequiredService<FinanceRepository>();
     await financeRepository.EnsureModernTablesAsync();

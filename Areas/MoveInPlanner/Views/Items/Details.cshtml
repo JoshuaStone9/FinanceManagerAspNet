@@ -1,0 +1,134 @@
+@model ItemDetailsViewModel
+@{
+    ViewData["Title"] = Model.Item.Name;
+    var item = Model.Item;
+    var canEdit = User.Identity?.IsAuthenticated == true;
+}
+
+@{
+    var successMessage = TempData["SuccessMessage"] as string ?? TempData["Success"] as string;
+}
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @successMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<nav class="breadcrumb-line"><a asp-action="Index">All items</a><span>/</span><span>@item.Name</span></nav>
+<section class="detail-hero">
+    <div>
+        <div class="d-flex gap-2 mb-3">
+            <span class="category-tag">@item.Category.Name</span>
+            <span class="status-badge status-@item.Status.ToString().ToLowerInvariant()">@item.Status</span>
+            @if(item.IsEssentialForMoveIn){<span class="essential-badge">Essential</span>}
+        </div>
+        <h1>@item.Name</h1>
+        <p>Compare purchase options, record current prices and choose the best fit for your move.</p>
+    </div>
+    @if (canEdit)
+    {
+        <div class="hero-actions">
+            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-light btn-lg">Edit item</a>
+            <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger btn-lg">Delete</a>
+            <a asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary btn-lg">+ Add purchase option</a>
+        </div>
+    }
+</section>
+
+<div class="detail-stats detail-stats-six mb-4">
+    <div><span>Quantity needed</span><strong>@item.QuantityRequired</strong></div>
+    <div><span>Maximum budget</span><strong>@(item.TargetBudget?.ToString("C") ?? "Not set")</strong></div>
+    <div><span>Priority</span><strong>@item.Priority</strong></div>
+    <div><span>Purchase options</span><strong>@item.ProductChoices.Count</strong></div>
+    <div><span>Logged options total</span><strong>@Model.LoggedOptionsValue.ToString("C")</strong></div>
+    @if (item.Status == PurchaseStatus.Purchased)
+    {
+        <div class="preferred-total-stat"><span>Purchased total</span><strong>@Model.PurchasedValue.ToString("C")</strong>@if(item.ActualPurchasePrice.HasValue){<small>Manual total recorded</small>}else if(Model.PurchasedChoicesValue.HasValue){<small>From purchased choices</small>}else if(Model.PreferredOptionValue.HasValue){<small>Preferred-plan fallback</small>}</div>
+    }
+    else
+    {
+        <div class="preferred-total-stat"><span>Preferred plan</span><strong>@(Model.PreferredOptionValue?.ToString("C") ?? "Not selected")</strong>@if(Model.PreferredOptionCount > 0){<small>@Model.PreferredOptionCount option(s) included</small>}</div>
+    }
+</div>
+
+<section class="notes-panel general-notes-panel mb-5">
+    <div class="notes-panel-heading">
+        <div><span class="eyebrow">OVERALL ITEM</span><h2>General notes</h2></div>
+        @if (canEdit)
+        {
+            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-light">Edit notes</a>
+        }
+    </div>
+    @if (string.IsNullOrWhiteSpace(item.GeneralNotes))
+    {
+        <p class="empty-copy">No general notes have been added. Use this area for measurements, colour preferences, timing or product requirements.</p>
+    }
+    else
+    {
+        <div class="general-notes-copy">@item.GeneralNotes</div>
+    }
+</section>
+
+@if (item.ProductChoices.Any())
+{
+    <div class="option-total-grid mb-5">
+        <article><span>Cheapest logged option</span><strong>@(Model.CheapestOptionValue?.ToString("C") ?? "—")</strong></article>
+        <article><span>Highest logged option</span><strong>@(Model.HighestOptionValue?.ToString("C") ?? "—")</strong></article>
+        <article><span>All options logged</span><strong>@Model.LoggedOptionsValue.ToString("C")</strong><small>Includes alternatives, so this is not your planned spend.</small></article>
+    </div>
+}
+
+<div class="section-heading"><div><span class="eyebrow">COMPARE YOUR OPTIONS</span><h2>Purchase options</h2></div></div>
+@if (!item.ProductChoices.Any())
+{
+    @if (item.Status == PurchaseStatus.Purchased && item.ActualPurchasePrice.HasValue)
+    {
+        <div class="empty-state"><div class="empty-icon">✓</div><h2>Manual purchase recorded</h2><p>The total paid is recorded without requiring a product choice.</p>@if(canEdit){<a asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary">Add optional purchase option</a>}</div>
+    }
+    else
+    {
+        <div class="empty-state"><div class="empty-icon">↗</div><h2>No purchase options yet</h2><p>No product choices have been added.</p>@if(canEdit){<a asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary">Add first purchase option</a>}</div>
+    }
+}
+else
+{
+    <div class="product-grid">
+    @foreach (var choice in item.ProductChoices.OrderByDescending(x => x.IsPreferred).ThenBy(x => x.Price * x.Quantity))
+    {
+        var total = choice.Price * choice.Quantity;
+        <article class="product-card @(choice.IsPreferred ? "preferred" : "")">
+            @if(choice.IsPreferred){<div class="winner-ribbon">Included in preferred plan</div>}
+            <div class="product-image-shell">
+                @if (!string.IsNullOrWhiteSpace(choice.ImageUrl))
+                {
+                    <img src="@Url.Action("ImagePreview", "ProductChoices", new { url = choice.ImageUrl })"
+                         alt="@choice.Name"
+                         class="product-preview-image"
+                         loading="lazy"
+                         referrerpolicy="no-referrer"
+                         onerror="this.classList.add('d-none'); this.nextElementSibling.classList.remove('d-none');" />
+                    <div class="product-image-placeholder d-none"><span>Image unavailable</span><small>Edit this option to update its image URL.</small></div>
+                }
+                else
+                {
+                    <div class="product-image-placeholder"><span>No preview image</span><small>Edit this option to add a direct product image URL.</small></div>
+                }
+            </div>
+            <div class="product-card-header"><div><span class="tier-badge tier-@choice.Tier.ToString().ToLowerInvariant()">@choice.Tier</span><h3>@choice.Name</h3><p>@(choice.Retailer ?? "Retailer not set")</p></div><div class="product-price"><strong>@total.ToString("C")</strong>@if(choice.Quantity > 1){<small>@choice.Quantity × @choice.Price.ToString("C")</small>}else{<small>Current price</small>}</div></div>
+            @if(!string.IsNullOrWhiteSpace(choice.Notes)){<p class="product-notes">@choice.Notes</p>}
+            <div class="product-meta"><span>Checked @(choice.PriceCheckedOn?.ToString("d MMM yyyy") ?? "—")</span>@if(choice.IsPurchased){<span class="purchased-check">✓ Purchased</span>}</div>
+            <div class="product-actions">
+                @if(!string.IsNullOrWhiteSpace(choice.ProductUrl)){<a href="@choice.ProductUrl" target="_blank" rel="noopener noreferrer" class="btn btn-dark flex-grow-1">Open product page ↗</a>}else{<span class="missing-url flex-grow-1">No URL saved</span>}
+                @if(canEdit){<a asp-controller="ProductChoices" asp-action="Edit" asp-route-id="@choice.Id" class="btn btn-light">Edit</a>}
+            </div>
+            @if(canEdit){<form asp-controller="ProductChoices" asp-action="MakePreferred" asp-route-id="@choice.Id" method="post" class="mt-2"><button class="btn @(choice.IsPreferred ? "btn-outline-danger" : "btn-outline-primary") w-100">@(choice.IsPreferred ? "Remove from preferred plan" : "Include in preferred plan")</button></form>}
+        </article>
+    }
+    </div>
+}
+@if(!string.IsNullOrWhiteSpace(item.DecisionReason) || !string.IsNullOrWhiteSpace(item.FullComparisonResponse))
+{
+    <section class="notes-panel mt-5"><span class="eyebrow">YOUR RESEARCH</span><h2>Decision notes</h2>@if(!string.IsNullOrWhiteSpace(item.DecisionReason)){<p>@item.DecisionReason</p>}@if(!string.IsNullOrWhiteSpace(item.FullComparisonResponse)){<details><summary>Read full comparison response</summary><div class="comparison-copy">@item.FullComparisonResponse</div></details>}</section>
+}

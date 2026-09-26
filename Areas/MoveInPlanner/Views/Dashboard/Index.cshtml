@@ -1,0 +1,75 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<section class="hero-panel mb-4">
+    <div>
+        <span class="eyebrow">YOUR MOVE AT A GLANCE</span>
+        <h1>Move-in dashboard</h1>
+        <p>Compare products, control the budget and see exactly what still needs deciding.</p>
+    </div>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <a asp-controller="Items" asp-action="Create" class="btn btn-primary btn-lg">+ Add move-in item</a>
+    }
+</section>
+
+<div class="stat-grid stat-grid-six mb-4">
+    <article class="stat-card"><span>Completion</span><strong>@Model.CompletionPercentage%</strong><small>@Model.PurchasedItems of @Model.TotalItems purchased</small></article>
+    <article class="stat-card"><span>Maximum budgets</span><strong>@Model.PlannedBudget.ToString("C")</strong><small>Combined spending limits</small></article>
+    <article class="stat-card featured"><span>Current plan value</span><strong>@Model.CurrentPlanValue.ToString("C")</strong><small>Purchased totals, preferred options, or cheapest fallback</small></article>
+    <article class="stat-card"><span>All options logged</span><strong>@Model.LoggedOptionsValue.ToString("C")</strong><small>Includes every alternative entered</small></article>
+    <article class="stat-card"><span>Purchased spend</span><strong>@Model.PurchasedSpend.ToString("C")</strong><small>Actual recorded spend</small></article>
+    <article class="stat-card warning"><span>Needs attention</span><strong>@(Model.EssentialOutstanding + Model.ItemsWithoutChoices)</strong><small>Essential or missing choices</small></article>
+</div>
+
+<div class="progress progress-thick mb-5" role="progressbar" aria-label="Move-in completion" aria-valuenow="@Model.CompletionPercentage" aria-valuemin="0" aria-valuemax="100">
+    <div class="progress-bar" style="width: @Model.CompletionPercentage%"></div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="section-heading">
+            <div><span class="eyebrow">ORGANISED BY AREA</span><h2>Categories</h2></div>
+            <a asp-controller="Items" asp-action="Index" class="text-link">View all items →</a>
+        </div>
+
+        <div class="category-grid">
+            @foreach (var group in Model.Categories)
+            {
+                <article class="category-card">
+                    <div class="category-card-header">
+                        <div><h3>@group.Name</h3><span>@group.Purchased / @group.Total purchased</span></div>
+                        <span class="count-pill">@group.Total</span>
+                    </div>
+                    <div class="mini-progress"><span style="width:@(group.Total == 0 ? 0 : group.Purchased * 100 / group.Total)%"></span></div>
+                    <div class="category-items">
+                        @foreach (var item in group.Items)
+                        {
+                            <a asp-controller="Items" asp-action="Details" asp-route-id="@item.Id" class="category-item-row">
+                                <span class="status-dot @(item.Status == PurchaseStatus.Purchased ? "done" : item.ProductChoices.Count == 0 ? "empty" : "")"></span>
+                                <span class="flex-grow-1">@item.Name</span>
+                                <small>@item.Status</small>
+                            </a>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="section-heading"><div><span class="eyebrow">WHAT TO DO NEXT</span><h2>Next actions</h2></div></div>
+        <div class="action-list">
+            @foreach (var item in Model.NextActions)
+            {
+                <a asp-controller="Items" asp-action="Details" asp-route-id="@item.Id" class="action-card">
+                    <div class="action-card-top"><strong>@item.Name</strong><span class="priority-badge priority-@item.Priority.ToString().ToLowerInvariant()">@item.Priority</span></div>
+                    <p>@(item.ProductChoices.Count == 0 ? "Add the first product choice" : item.Status == PurchaseStatus.Researching ? "Review available choices" : "Finish this decision")</p>
+                    <small>@item.Category.Name · @item.ProductChoices.Count choice(s)</small>
+                </a>
+            }
+        </div>
+    </div>
+</div>
