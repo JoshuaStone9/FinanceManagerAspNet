@@ -13,7 +13,7 @@ public sealed record CarryForwardInfo(
     public decimal EffectiveAmount => OverrideAmount ?? CalculatedAmount;
 }
 
-public sealed class FinanceRepository(IConfiguration config, IFundingEngineService fundingEngine)
+public sealed partial class FinanceRepository(IConfiguration config, IFundingEngineService fundingEngine)
 {
     private string ConnStr => Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
         ?? config.GetConnectionString("FinanceManager")

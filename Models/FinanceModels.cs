@@ -1005,8 +1005,8 @@ public sealed class PrepareNextMonthSection
 {
     public string Source { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
-    public IReadOnlyList<MonthlyEntryTemplate> Items { get; init; } = [];
-    public decimal Total => Items.Sum(x => x.DefaultAmount);
+    public IReadOnlyList<MonthPreparationItem> Items { get; init; } = [];
+    public decimal Total => Items.Where(x => x.IsRecurring).Sum(x => x.Amount);
 }
 
 public sealed class PrepareNextMonthViewModel
@@ -1016,8 +1016,11 @@ public sealed class PrepareNextMonthViewModel
     public DateTime CurrentMonth => new(Year, Month, 1);
     public DateTime NextMonth => CurrentMonth.AddMonths(1);
     public IReadOnlyList<PrepareNextMonthSection> Sections { get; init; } = [];
-    public int RecurringEntryCount => Sections.Sum(x => x.Items.Count);
+    public int EntryCount => Sections.Sum(x => x.Items.Count);
+    public int RecurringEntryCount => Sections.Sum(x => x.Items.Count(i => i.IsRecurring));
     public decimal RecurringTotal => Sections.Sum(x => x.Total);
+    public decimal IncomeTotal => Sections.Where(x => x.Source == "income").Sum(x => x.Total);
+    public decimal AllocationTotal => Sections.Where(x => x.Source != "income").Sum(x => x.Total);
 }
 
 public sealed class CarryOverItemInput

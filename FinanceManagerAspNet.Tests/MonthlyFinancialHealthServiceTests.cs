@@ -1,4 +1,5 @@
 using FinanceManagerAspNet.Models;
+using Xunit;
 using FinanceManagerAspNet.Services;
 
 namespace FinanceManagerAspNet.Tests;

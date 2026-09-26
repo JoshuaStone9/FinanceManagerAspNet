@@ -57,13 +57,18 @@ The recurring control has exactly two visible states: **One-off** and **Repeats 
 
 ## Phase 8.4.8.5 — Prepare next month
 
-The old Carry over review duplicated recurring-entry management by presenting editable names, amounts and inclusion checkboxes again. It has been replaced with a compact confirmation screen that:
+Prepare next month is available beneath the dashboard month selector and in the monthly workspaces. It provides a selectable review of the selected month's entries:
 
-- Summarises missing recurring entries for the next month.
-- Uses each entry's latest recorded amount.
+- Includes income, essential bills, everyday spending, investments, Money Pot contributions and extra expenses.
+- Preselects recurring entries; one-off entries and extra expenses are offered unchecked.
+- Supports individual selection and Select all / Clear controls per section, with live income and spending/allocation totals.
+- Uses the latest recorded entry per name within each source section in the selected month.
 - Adds entries without replacing anything already recorded in the destination month.
-- Prevents duplicates through the existing month-setup safeguards.
-- Excludes one-off entries and extra expenses.
+- Rechecks eligibility on submission and prevents duplicates by section and normalized entry name; linked Money Pots also match by pot ID.
+- Preserves amounts, account links, categories, types, notes and recurrence settings. Dates keep the source day, capped to the target month's final day.
+- Skipping an entry does not change its recurring setting. Copying a one-off does not make it recurring.
+- Excludes inactive or paused Money Pots, withdrawals, and managed allocations without an eligible Money Pot.
+- Records selected entries, income totals, pot balance changes and contribution events in one database transaction. Derived pot funding summaries are refreshed after the transaction.
 - Does not carry excess or shortfall automatically; a starting adjustment can be added or removed manually from Manage month.
 - Leaves amount adjustments to the dedicated monthly workspaces after preparation.
 

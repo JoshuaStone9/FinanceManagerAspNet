@@ -16,11 +16,20 @@
         <p>See where this month's money has gone, what remains and what needs attention next.</p>
         <time datetime="@DateTime.Today.ToString("yyyy-MM-dd")">@DateTime.Today.ToString("dddd, d MMMM yyyy")</time>
     </div>
-    <nav class="fm-dashboard-month" aria-label="Change dashboard month">
-        <a class="fm-month-button" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month"><i data-lucide="chevron-left"></i></a>
-        <span class="fm-month-label" aria-live="polite">@Model.MonthStart.ToString("MMMM yyyy")</span>
-        <a class="fm-month-button" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month"><i data-lucide="chevron-right"></i></a>
-    </nav>
+    <div class="fm-dashboard-month-actions">
+        <nav class="fm-dashboard-month" aria-label="Change dashboard month">
+            <a class="fm-month-button" asp-route-year="@Model.PreviousMonth.Year" asp-route-month="@Model.PreviousMonth.Month" aria-label="Previous month"><i data-lucide="chevron-left"></i></a>
+            <span class="fm-month-label" aria-live="polite">@Model.MonthStart.ToString("MMMM yyyy")</span>
+            <a class="fm-month-button" asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month" aria-label="Next month"><i data-lucide="chevron-right"></i></a>
+        </nav>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <a class="button primary" asp-action="PrepareNextMonth" asp-route-year="@Model.Year" asp-route-month="@Model.Month">
+                <i data-lucide="calendar-plus" aria-hidden="true"></i>
+                Prepare next month
+            </a>
+        }
+    </div>
 </header>
 
 @if (TempData["CarryMessage"] != null) { <div class="fm-dashboard-notice">@TempData["CarryMessage"]</div> }

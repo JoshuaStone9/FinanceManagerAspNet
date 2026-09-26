@@ -317,34 +317,9 @@ public sealed class DashboardController(
     public async Task<IActionResult> PrepareNextMonth(int year, int month)
     {
         if (!CanEdit()) return LoginRedirect();
-        if (month is < 1 or > 12) return BadRequest("Month must be between 1 and 12.");
+        if (year is < 1 or > 9998 || month is < 1 or > 12) return BadRequest("Invalid month or year.");
 
-        var next = new DateTime(year, month, 1).AddMonths(1);
-        var definitions = new[]
-        {
-            (Source: "bills", Title: "Essential bills"),
-            (Source: "everyday_spending", Title: "Everyday spending"),
-            (Source: "investments", Title: "Investments"),
-            (Source: "savings", Title: "Money pots")
-        };
-
-        var sections = new List<PrepareNextMonthSection>();
-        foreach (var definition in definitions)
-        {
-            var items = await repo.GetMissingMonthlyEntryTemplatesAsync(
-                definition.Source,
-                next.Year,
-                next.Month);
-
-            if (items.Count == 0) continue;
-
-            sections.Add(new PrepareNextMonthSection
-            {
-                Source = definition.Source,
-                Title = definition.Title,
-                Items = items
-            });
-        }
+        var sections = await repo.GetMonthPreparationSectionsAsync(year, month);
 
         return View(new PrepareNextMonthViewModel
         {
@@ -355,33 +330,17 @@ public sealed class DashboardController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ConfirmPrepareNextMonth(int year, int month)
+    public async Task<IActionResult> ConfirmPrepareNextMonth(int year, int month, List<string>? selectedEntries)
     {
         if (!CanEdit()) return LoginRedirect();
-        if (month is < 1 or > 12) return BadRequest("Month must be between 1 and 12.");
+        if (year is < 1 or > 9998 || month is < 1 or > 12) return BadRequest("Invalid month or year.");
 
         var next = new DateTime(year, month, 1).AddMonths(1);
-        var sources = new[] { "bills", "everyday_spending", "investments", "savings" };
-        var added = 0;
-
-        foreach (var source in sources)
-        {
-            var items = await repo.GetMissingMonthlyEntryTemplatesAsync(source, next.Year, next.Month);
-            added += await repo.SetupMonthFromTemplatesAsync(
-                next.Year,
-                next.Month,
-                source,
-                items.Select(x => new MonthSetupItemInput
-                {
-                    TemplateId = x.Id,
-                    Include = true,
-                    Amount = x.DefaultAmount
-                }));
-        }
+        var added = await repo.PrepareSelectedMonthEntriesAsync(year, month, selectedEntries ?? []);
 
         TempData["Success"] = added == 0
-            ? $"{next:MMMM yyyy} was already prepared. Existing entries were left unchanged and no balance was carried forward."
-            : $"{next:MMMM yyyy} prepared with {added} recurring entr{(added == 1 ? "y" : "ies")}. No balance was carried forward.";
+            ? $"No entries were added to {next:MMMM yyyy}. Existing entries were left unchanged."
+            : $"{next:MMMM yyyy} prepared with {added} selected entr{(added == 1 ? "y" : "ies")}. No balance was carried forward.";
 
         return RedirectToAction(nameof(Index), new { year = next.Year, month = next.Month });
     }

@@ -44,11 +44,11 @@ public sealed class WhatIfForecastServiceTests
     private static HouseholdReserveAccountSummary Summary() => new()
     {
         Baseline = 12000m,
-        SelectedAccounts = [new ReserveAccountOption(1, "Reserve", 12000m, 0m, 0m, true)]
+        SelectedAccounts = [new ReserveAccountOption(1, "Reserve", 12000m, 0m, 0m, true, "Tax Free", 0m, null)]
     };
 
     private static ReservePot Pot() => new(
         1, "Holiday", 0m, 100m, 100m, "Monthly", null, true, true,
         null, null, null, DateTime.Today, 1200m, DateTime.Today.AddMonths(12),
-        1, true, null, DateTime.Today);
+        1, true, null, 0m, DateTime.Today);
 }

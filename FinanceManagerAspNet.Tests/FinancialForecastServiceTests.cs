@@ -122,7 +122,7 @@ public sealed class FinancialForecastServiceTests
 
         var pot = result.Pots.Single();
         Assert.Equal(12, pot.MonthsEarlyOrLate);
-        Assert.Contains("Increase", pot.RecommendedAction);
+        Assert.Contains("additional", pot.RecommendedAction);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class FinancialForecastServiceTests
         });
 
     private static ReserveAccountOption Account(int id, decimal balance, decimal rate, decimal monthlyContribution)
-        => new(id, $"Account {id}", balance, rate, monthlyContribution, true);
+        => new(id, $"Account {id}", balance, rate, monthlyContribution, true, "Tax Free", 0m, null);
 
     private static ReservePot Pot(decimal balance, decimal? target, decimal contribution, DateTime? dueDate)
         => new(
@@ -217,5 +217,6 @@ public sealed class FinancialForecastServiceTests
             1,
             true,
             null,
+            balance,
             Start);
 }
