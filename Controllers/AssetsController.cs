@@ -1,10 +1,10 @@
-using FinanceManagerAspNet.Data;
-using FinanceManagerAspNet.Models;
-using FinanceManagerAspNet.Services;
+using PersonalHub.Data;
+using PersonalHub.Models;
+using PersonalHub.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public sealed class AssetsController(FinanceRepository repo, MarketPriceService prices, AppDbContext vaultDb) : Controller
 {

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using FinanceManagerAspNet.Services;
+using PersonalHub.Services;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public class LocationsController(
     ILocationService locationService,

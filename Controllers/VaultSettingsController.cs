@@ -1,9 +1,9 @@
-using FinanceManagerAspNet.Data;
-using FinanceManagerAspNet.Models;
+using PersonalHub.Data;
+using PersonalHub.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public class VaultSettingsController(AppDbContext db) : Controller
 {

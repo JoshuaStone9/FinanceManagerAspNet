@@ -1,7 +1,7 @@
-using FinanceManagerAspNet.Services;
+using PersonalHub.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public sealed class AuthController(AppAuthService auth) : Controller
 {

@@ -1,4 +1,4 @@
-@model FinanceManagerAspNet.Models.DashboardViewModel
+@model PersonalHub.Models.DashboardViewModel
 @using System.Globalization
 @{
     ViewData["Title"] = "Dashboard"; var gb = CultureInfo.GetCultureInfo("en-GB"); var canEdit = User.Identity?.IsAuthenticated == true; var currentUrl = Context.Request.Path.ToString() + Context.Request.QueryString.ToString();

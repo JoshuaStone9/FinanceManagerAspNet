@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using FinanceManagerAspNet.Models;
+using PersonalHub.Models;
 
-namespace FinanceManagerAspNet.DTOs;
+namespace PersonalHub.DTOs;
 
 // ─── Item DTOs ────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
-using FinanceManagerAspNet.DTOs;
-using FinanceManagerAspNet.Models;
+using PersonalHub.DTOs;
+using PersonalHub.Models;
 
-namespace FinanceManagerAspNet.Services;
+namespace PersonalHub.Services;
 
 public interface IItemService
 {

@@ -1,10 +1,10 @@
-using FinanceManagerAspNet.Models;
-using FinanceManagerAspNet.Services;
-using FinanceManagerAspNet.Data;
+using PersonalHub.Models;
+using PersonalHub.Services;
+using PersonalHub.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public sealed class StatisticsController(FinanceRepository repo, FinanceCalculator calc, IConfiguration config, AppDbContext vaultDb) : Controller
 {

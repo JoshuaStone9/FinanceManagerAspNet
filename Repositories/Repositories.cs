@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using FinanceManagerAspNet.Data;
-using FinanceManagerAspNet.DTOs;
-using FinanceManagerAspNet.Models;
+using PersonalHub.Data;
+using PersonalHub.DTOs;
+using PersonalHub.Models;
 
-namespace FinanceManagerAspNet.Repositories;
+namespace PersonalHub.Repositories;
 
 public class ItemRepository(AppDbContext db) : IItemRepository
 {

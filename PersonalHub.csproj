@@ -3,6 +3,8 @@
 	  <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	  <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PersonalHub</AssemblyName>
+    <RootNamespace>PersonalHub</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

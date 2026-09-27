@@ -1,12 +1,12 @@
 using Microsoft.EntityFrameworkCore;
-using FinanceManagerAspNet.Data;
-using FinanceManagerAspNet.DTOs;
-using FinanceManagerAspNet.Models;
-using FinanceManagerAspNet.Repositories;
+using PersonalHub.Data;
+using PersonalHub.DTOs;
+using PersonalHub.Models;
+using PersonalHub.Repositories;
 using System.Text;
 using System.Text.Json;
 
-namespace FinanceManagerAspNet.Services;
+namespace PersonalHub.Services;
 
 // ─── Mapping helpers ──────────────────────────────────────────────────────────
 

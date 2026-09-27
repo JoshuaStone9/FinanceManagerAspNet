@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using FinanceManagerAspNet.Models;
+using PersonalHub.Models;
 
-namespace FinanceManagerAspNet.Data;
+namespace PersonalHub.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {

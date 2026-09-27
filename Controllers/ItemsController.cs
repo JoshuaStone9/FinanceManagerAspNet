@@ -1,13 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using FinanceManagerAspNet.DTOs;
-using FinanceManagerAspNet.Models;
-using FinanceManagerAspNet.Repositories;
-using FinanceManagerAspNet.Services;
-using FinanceManagerAspNet.Data;
+using PersonalHub.DTOs;
+using PersonalHub.Models;
+using PersonalHub.Repositories;
+using PersonalHub.Services;
+using PersonalHub.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public class ItemsController(
     IItemService itemService,

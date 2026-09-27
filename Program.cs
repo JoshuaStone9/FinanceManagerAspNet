@@ -1,7 +1,7 @@
-using FinanceManagerAspNet.Services;
-using FinanceManagerAspNet.Data;
-using FinanceManagerAspNet.Repositories;
-using FinanceManagerAspNet.Models;
+using PersonalHub.Services;
+using PersonalHub.Data;
+using PersonalHub.Repositories;
+using PersonalHub.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Data.SqlClient;

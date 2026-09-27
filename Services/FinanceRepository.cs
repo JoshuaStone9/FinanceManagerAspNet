@@ -1,8 +1,8 @@
-using FinanceManagerAspNet.Models;
+using PersonalHub.Models;
 using Microsoft.Data.SqlClient;
 using System.Data;
 
-namespace FinanceManagerAspNet.Services;
+namespace PersonalHub.Services;
 
 public sealed class FinanceRepository(IConfiguration config)
 {

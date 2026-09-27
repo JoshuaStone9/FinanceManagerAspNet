@@ -1,6 +1,6 @@
-using FinanceManagerAspNet.Models;
+using PersonalHub.Models;
 
-namespace FinanceManagerAspNet.Services;
+namespace PersonalHub.Services;
 
 public sealed class FinanceCalculator
 {

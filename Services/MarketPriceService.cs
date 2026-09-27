@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using FinanceManagerAspNet.Models;
+using PersonalHub.Models;
 
-namespace FinanceManagerAspNet.Services;
+namespace PersonalHub.Services;
 
 public sealed class MarketPriceService(HttpClient http)
 {
@@ -173,7 +173,7 @@ public sealed class MarketPriceService(HttpClient http)
     {
         var url = $"https://stooq.com/q/l/?s={Uri.EscapeDataString(symbol.ToLowerInvariant())}&f=sd2t2ohlcv&h&e=csv";
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.UserAgent.ParseAdd("FinanceManagerAspNet/1.0");
+        request.Headers.UserAgent.ParseAdd("PersonalHub/1.0");
         using var response = await http.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode) return null;
         var csv = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -206,7 +206,7 @@ public sealed class MarketPriceService(HttpClient http)
     private static HttpRequestMessage JsonRequest(string url)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.UserAgent.ParseAdd("FinanceManagerAspNet/1.0");
+        request.Headers.UserAgent.ParseAdd("PersonalHub/1.0");
         request.Headers.Accept.ParseAdd("application/json");
         return request;
     }

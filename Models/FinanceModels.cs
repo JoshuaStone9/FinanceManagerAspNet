@@ -1,4 +1,4 @@
-namespace FinanceManagerAspNet.Models;
+namespace PersonalHub.Models;
 
 public sealed record AccountBalance(int Id, string Name, decimal Amount, decimal InterestRate, decimal MonthlyContribution, bool IncludeInGlobalGoal, DateTime UpdatedAt, bool IncludeInSavingsCommand = false);
 public sealed record LastModifiedInfo(string KeyName, DateTime? UpdatedAt);

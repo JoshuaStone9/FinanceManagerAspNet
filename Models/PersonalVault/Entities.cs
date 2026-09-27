@@ -1,4 +1,4 @@
-namespace FinanceManagerAspNet.Models;
+namespace PersonalHub.Models;
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 

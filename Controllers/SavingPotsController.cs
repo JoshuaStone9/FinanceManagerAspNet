@@ -1,8 +1,8 @@
-using FinanceManagerAspNet.Models;
-using FinanceManagerAspNet.Services;
+using PersonalHub.Models;
+using PersonalHub.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace FinanceManagerAspNet.Controllers;
+namespace PersonalHub.Controllers;
 
 public sealed class SavingPotsController(FinanceRepository repo) : Controller
 {

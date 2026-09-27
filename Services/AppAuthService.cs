@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 
-namespace FinanceManagerAspNet.Services;
+namespace PersonalHub.Services;
 
 public sealed class AppAuthService(FinanceRepository repo, IConfiguration config)
 {
