@@ -32,7 +32,7 @@
                 <p class="muted">Tick only the accounts you want this page to use. For your current setup, keep Emergency Fund ticked and leave other ISAs/pots off unless you want them included in the £12k baseline and overflow calculation.</p>
             </div>
         </div>
-        <form asp-action="SaveSavingsSources" method="post" class="source-selector-form">
+        <form asp-area="" asp-controller="SavingPots" asp-action="SaveSavingsSources" method="post" class="source-selector-form">
             @Html.AntiForgeryToken()
             <input type="hidden" name="year" value="@Model.Year" />
             <div class="source-selector-grid">
@@ -82,7 +82,7 @@
                     </div>
                     <div class="reserved-actions">
                         <strong>@fund.Amount.ToString("C", gb)</strong>
-                        <form asp-action="DeleteReservedFund" method="post" onsubmit="return confirm('Remove this reserved fund?');">
+                        <form asp-area="" asp-controller="SavingPots" asp-action="DeleteReservedFund" method="post" onsubmit="return confirm('Remove this reserved fund?');">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="id" value="@fund.Id" />
                             <input type="hidden" name="year" value="@Model.Year" />
@@ -92,7 +92,7 @@
                 </div>
             }
         </div>
-        <form asp-action="SaveReservedFund" method="post" class="planner-form compact-form reserved-add-form">
+        <form asp-area="" asp-controller="SavingPots" asp-action="SaveReservedFund" method="post" class="planner-form compact-form reserved-add-form">
             @Html.AntiForgeryToken()
             <input type="hidden" name="id" value="0" />
             <input type="hidden" name="year" value="@Model.Year" />
@@ -116,7 +116,7 @@
             <p class="eyebrow">Manual fund update</p>
             <h2>Adjust overall selected cash total</h2>
             <p class="muted">Use this when your real emergency-fund lump sum changes. For now, this updates the Emergency Fund total, so interest and overflow recalculate automatically.</p>
-            <form asp-action="ManualFundUpdate" method="post" class="planner-form compact-form">
+            <form asp-area="" asp-controller="SavingPots" asp-action="ManualFundUpdate" method="post" class="planner-form compact-form">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="year" value="@Model.Year" />
                 <label>New total<input type="number" step="0.01" name="newTotal" value="@Model.GrossSelectedFundTotal" required /></label>
@@ -129,7 +129,7 @@
             <p class="eyebrow">Contribution schedule</p>
             <h2>Plan future monthly changes</h2>
             <p class="muted">Keep your current saving pace in Financial Brain, then add future changes such as £200/month from a later date.</p>
-            <form asp-action="AddContributionChange" method="post" class="planner-form compact-form">
+            <form asp-area="" asp-controller="SavingPots" asp-action="AddContributionChange" method="post" class="planner-form compact-form">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="year" value="@Model.Year" />
                 <label>From date<input type="date" name="startsOn" value="@DateTime.Today.ToString("yyyy-MM-dd")" required /></label>
@@ -145,7 +145,7 @@
                         <div>
                             <span><strong>@change.StartsOn.ToString("dd MMM yyyy")</strong> → @change.MonthlyAmount.ToString("C", gb)/month</span>
                             <small>@(change.Note ?? "No note")</small>
-                            <form asp-action="DeleteContributionChange" method="post">
+                            <form asp-area="" asp-controller="SavingPots" asp-action="DeleteContributionChange" method="post">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="id" value="@change.Id" />
                                 <input type="hidden" name="year" value="@Model.Year" />
@@ -349,7 +349,7 @@
     <section class="card brain-card">
         <details>
             <summary><strong>Financial Brain settings</strong> · emergency baseline, saving pace and target date</summary>
-            <form asp-action="SaveBrain" method="post" class="planner-form brain-form">
+            <form asp-area="" asp-controller="SavingPots" asp-action="SaveBrain" method="post" class="planner-form brain-form">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="year" value="@Model.Year" />
                 <label>Emergency baseline<input type="number" step="0.01" name="emergencyBaseline" value="@Model.EmergencyBaseline" /></label>
@@ -363,7 +363,7 @@
 
     <section class="card">
         <p class="eyebrow">Add new priority pot</p>
-        <form asp-action="SavePot" method="post" class="planner-form advanced-pot-form">
+        <form asp-area="" asp-controller="SavingPots" asp-action="SavePot" method="post" class="planner-form advanced-pot-form">
             @Html.AntiForgeryToken()
             <input type="hidden" name="id" value="0" />
             <input type="hidden" name="year" value="@Model.Year" />
@@ -470,7 +470,7 @@ else
                     <details class="pot-edit">
                         <summary>Edit this pot / add manual extra</summary>
                         <div class="pot-edit-grid">
-                            <form asp-action="SavePot" method="post" class="stack-form edit-pot-form">
+                            <form asp-area="" asp-controller="SavingPots" asp-action="SavePot" method="post" class="stack-form edit-pot-form">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="id" value="@row.Pot.Id" />
                                 <input type="hidden" name="year" value="@Model.Year" />
@@ -501,7 +501,7 @@ else
                                 <button type="submit">Save details</button>
                             </form>
 
-                            <form asp-action="AddExtra" method="post" class="stack-form">
+                            <form asp-area="" asp-controller="SavingPots" asp-action="AddExtra" method="post" class="stack-form">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="potId" value="@row.Pot.Id" />
                                 <input type="hidden" name="year" value="@Model.Year" />
@@ -511,7 +511,7 @@ else
                                 <button type="submit" class="primary">Add extra</button>
                             </form>
 
-                            <form asp-action="DeletePot" method="post" class="stack-form delete-pot-form" onsubmit="return confirm('Delete this saving pot?');">
+                            <form asp-area="" asp-controller="SavingPots" asp-action="DeletePot" method="post" class="stack-form delete-pot-form" onsubmit="return confirm('Delete this saving pot?');">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="id" value="@row.Pot.Id" />
                                 <input type="hidden" name="year" value="@Model.Year" />

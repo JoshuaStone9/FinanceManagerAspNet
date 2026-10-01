@@ -128,7 +128,7 @@
   <p class="muted">You can now update or delete/reset accounts from Statistics as well as the Dashboard.</p>
   @foreach (var a in Model.Accounts)
   {
-    <form asp-action="SaveAccount" method="post" class="account-form">
+    <form asp-area="" asp-controller="Statistics" asp-action="SaveAccount" method="post" class="account-form">
       <input type="hidden" name="id" value="@a.Id" />
       <label>Name<input name="name" value="@a.Name" @(a.Id == 0 ? "readonly" : "") /></label>
       <label>Amount<input name="amount" type="number" step="0.01" value="@a.Amount" /></label>
@@ -137,12 +137,12 @@
       <input type="hidden" name="includeInGlobalGoal" value="true" />
       <button type="submit">Save</button>
     </form>
-    <form asp-action="DeleteAccount" method="post" data-confirm="Delete/reset this account?" style="margin-bottom:14px">
+    <form asp-area="" asp-controller="Statistics" asp-action="DeleteAccount" method="post" data-confirm="Delete/reset this account?" style="margin-bottom:14px">
       <input type="hidden" name="id" value="@a.Id" />
       <button class="danger-inline" type="submit">@(a.Id == 0 ? "Reset emergency fund" : "Delete account")</button>
     </form>
   }
-  <form asp-action="SaveAccount" method="post" class="account-form">
+  <form asp-area="" asp-controller="Statistics" asp-action="SaveAccount" method="post" class="account-form">
     <input type="hidden" name="id" value="0" />
     <input name="name" placeholder="New account name" />
     <input name="amount" type="number" step="0.01" placeholder="Amount" />

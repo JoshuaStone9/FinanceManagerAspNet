@@ -7,7 +7,7 @@
 <section class="card">
     <h1>Edit @Model.Source.Replace("_", " ")</h1>
 
-    <form asp-action="EditPayment" method="post" class="account-form">
+    <form asp-area="" asp-controller="Dashboard" asp-action="EditPayment" method="post" class="account-form">
         <input type="hidden" name="year" value="@Model.Date.Year" />
         <input type="hidden" name="month" value="@Model.Date.Month" />
         <input type="hidden" name="source" value="@Model.Source" />

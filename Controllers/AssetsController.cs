@@ -81,5 +81,5 @@ public sealed class AssetsController(FinanceRepository repo, MarketPriceService 
     }
 
     private bool CanEdit() => User.Identity?.IsAuthenticated == true;
-    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { area = "", returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
 }

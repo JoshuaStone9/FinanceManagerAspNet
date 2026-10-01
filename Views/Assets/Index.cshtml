@@ -42,7 +42,7 @@
 <section class="card actions">
   @if (canEdit)
   {
-    <form asp-action="UpdateLivePrices" method="post">
+    <form asp-area="" asp-controller="Assets" asp-action="UpdateLivePrices" method="post">
       <button class="primary" type="submit">Sync portfolio</button>
     </form>
   }
@@ -55,7 +55,7 @@
 <section class="card">
   <h2>Add asset</h2>
   <p class="muted">Stocks and ETFs use a ticker. Gold and silver use weight, purity and optional premium instead of a stock symbol.</p>
-  <form asp-action="Save" method="post" class="asset-form-grid">
+  <form asp-area="" asp-controller="Assets" asp-action="Save" method="post" class="asset-form-grid">
     <input type="hidden" name="Id" value="0" />
     <label>Name<input name="Name" placeholder="Nvidia, VWRP, XRP, Britannia 1/4oz" required /></label>
     <label>Broker
@@ -86,7 +86,7 @@
   <hr />
   <h3>Quick add bullion</h3>
   <p class="muted">Use this for Royal Mint gold/silver coins and bars. No ticker needed — sync uses live metal spot pricing.</p>
-  <form asp-action="Save" method="post" class="asset-form-grid">
+  <form asp-area="" asp-controller="Assets" asp-action="Save" method="post" class="asset-form-grid">
     <input type="hidden" name="Id" value="0" />
     <input type="hidden" name="UseLivePrice" value="true" />
     <input type="hidden" name="PriceSource" value="Auto" />
@@ -224,7 +224,7 @@
               @if (isBullion)
               {
                 var weightOptions = a.AssetType == "Gold" ? goldWeights : silverWeights;
-                <form asp-action="Save" method="post" class="asset-form-grid">
+                <form asp-area="" asp-controller="Assets" asp-action="Save" method="post" class="asset-form-grid">
                   <input type="hidden" name="Id" value="@a.Id" />
                   <input type="hidden" name="AssetType" value="@a.AssetType" />
                   <input type="hidden" name="Symbol" value="@(a.AssetType == "Gold" ? "XAU" : "XAG")" />
@@ -284,7 +284,7 @@
               }
               else
               {
-                <form asp-action="Save" method="post" class="asset-form-grid">
+                <form asp-area="" asp-controller="Assets" asp-action="Save" method="post" class="asset-form-grid">
                   <input type="hidden" name="Id" value="@a.Id" />
                   <input type="hidden" name="CurrentPrice" value="@a.CurrentPrice" />
                   <input type="hidden" name="CurrentValue" value="@a.CurrentValue" />
@@ -315,7 +315,7 @@
                   <div class="asset-actions"><button type="submit">Save</button></div>
                 </form>
               }
-              <form asp-action="Delete" method="post" data-confirm="Delete this asset?" class="asset-actions">
+              <form asp-area="" asp-controller="Assets" asp-action="Delete" method="post" data-confirm="Delete this asset?" class="asset-actions">
                 <input type="hidden" name="id" value="@a.Id" />
                 <button class="danger-inline" type="submit">Delete</button>
               </form>

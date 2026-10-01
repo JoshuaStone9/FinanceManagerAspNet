@@ -33,10 +33,10 @@
 
             <nav class="nav-section nav-section--primary">
                 <div class="vault-app-switcher" aria-label="Switch application">
-                    <a class="nav-link" asp-area="" asp-controller="Dashboard" asp-action="Index">
+                    <a class="nav-link" href="/Dashboard/Index">
                         <i data-lucide="wallet"></i> <span>Finance Manager</span>
                     </a>
-                    <a class="nav-link" asp-area="MoveInPlanner" asp-controller="Dashboard" asp-action="Index">
+                    <a class="nav-link" href="/MoveInPlanner/Dashboard/Index">
                         <i data-lucide="house"></i> <span>Move In Planner</span>
                     </a>
                 </div>
@@ -134,8 +134,8 @@ else
         <a asp-area="" asp-controller="SavingPots" asp-action="Index">Saving Pots</a>
       </div>
       <div class="finance-app-switcher" aria-label="Switch application">
-        <a asp-area="" asp-controller="Items" asp-action="Index">Personal Vault</a>
-        <a asp-area="MoveInPlanner" asp-controller="Dashboard" asp-action="Index">Move In Planner</a>
+        <a href="/Items/Index">Personal Vault</a>
+        <a href="/MoveInPlanner/Dashboard/Index">Move In Planner</a>
       </div>
       <button class="theme-toggle-inline finance-theme-toggle" id="themeToggle" type="button" title="Switch colour theme" aria-label="Switch colour theme">
         <i data-lucide="sun-moon"></i><span>Theme</span>

@@ -348,5 +348,5 @@ public sealed class SavingPotsController(FinanceRepository repo) : Controller
 
     private bool CanEdit() => User.Identity?.IsAuthenticated == true;
 
-    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { area = "", returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
 }

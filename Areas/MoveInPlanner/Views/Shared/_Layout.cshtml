@@ -22,8 +22,8 @@
             <a asp-controller="Items" asp-action="Index">All items</a>
         </div>
         <div class="app-switcher" aria-label="Switch application">
-            <a asp-area="" asp-controller="Dashboard" asp-action="Index">Finance Manager</a>
-            <a asp-area="" asp-controller="Items" asp-action="Index">Personal Vault</a>
+            <a href="/Dashboard/Index">Finance Manager</a>
+            <a href="/Items/Index">Personal Vault</a>
         </div>
         @if (isLoggedIn)
         {

@@ -5,6 +5,7 @@ using PersonalHub.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Data.SqlClient;
+using System.Security.Claims;
 using MoveInPlanner.Data;
 using MoveInPlanner.Services.ProductMetadata;
 
@@ -90,6 +91,19 @@ app.UseRouting();
 app.UseAuthentication();
 app.Use(async (context, next) =>
 {
+    if (app.Configuration.GetValue<bool>("AppSecurity:BypassAuthentication")
+        && context.User.Identity?.IsAuthenticated != true)
+    {
+        var identity = new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.Name, "Local owner"),
+                new Claim("CanEdit", "true")
+            ],
+            "LocalBypass");
+
+        context.User = new ClaimsPrincipal(identity);
+    }
+
     var editsMoveInPlanner = context.Request.Path.StartsWithSegments("/MoveInPlanner")
         && !HttpMethods.IsGet(context.Request.Method)
         && !HttpMethods.IsHead(context.Request.Method)
