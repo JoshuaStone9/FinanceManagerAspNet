@@ -2,9 +2,9 @@ using PersonalHub.Services;
 using PersonalHub.Data;
 using PersonalHub.Repositories;
 using PersonalHub.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Data.SqlClient;
 using System.Security.Claims;
 using MoveInPlanner.Data;
 using MoveInPlanner.Services.ProductMetadata;
@@ -13,7 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("FinanceManager")));
+    options.UseSqlServer(
+        Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("FinanceManager")));
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         Environment.GetEnvironmentVariable("MIP_CONNECTION_STRING")
@@ -137,11 +139,10 @@ app.MapControllerRoute(
 using (var scope = app.Services.CreateScope())
 {
     var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    var connectionString = Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
+    var financeConnectionString = Environment.GetEnvironmentVariable("FM_CONNECTION_STRING")
         ?? configuration.GetConnectionString("FinanceManager")
         ?? throw new InvalidOperationException("Missing FinanceManager connection string.");
-
-    EnsureSqlDatabaseExists(connectionString);
+    EnsureSqlDatabaseExists(financeConnectionString);
 
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
@@ -171,12 +172,23 @@ static void EnsureSqlDatabaseExists(string connectionString)
         return;
     }
 
+    try
+    {
+        using var databaseConnection = new SqlConnection(builder.ConnectionString);
+        databaseConnection.Open();
+        return;
+    }
+    catch (SqlException exception) when (exception.Number == 4060)
+    {
+        // The SQL Server instance is available, but the requested database is not.
+    }
+
     builder.InitialCatalog = "master";
 
-    using var connection = new SqlConnection(builder.ConnectionString);
-    connection.Open();
+    using var masterConnection = new SqlConnection(builder.ConnectionString);
+    masterConnection.Open();
 
-    using var command = connection.CreateCommand();
+    using var command = masterConnection.CreateCommand();
     command.CommandText = @"
 IF DB_ID(@databaseName) IS NULL
 BEGIN
@@ -184,7 +196,15 @@ BEGIN
     EXEC(@sql);
 END";
     command.Parameters.AddWithValue("@databaseName", databaseName);
-    command.ExecuteNonQuery();
+
+    try
+    {
+        command.ExecuteNonQuery();
+    }
+    catch (SqlException exception) when (exception.Number == 1801)
+    {
+        // Another process created the database after the existence check.
+    }
 }
 
 
