@@ -51,7 +51,7 @@
         <div class="card"><span>Savings goal balance</span><strong>@Model.TotalGoalBalance.ToString("C", gb)</strong></div>
         <div class="card"><span>Asset + savings view</span><strong>@(Model.TotalGoalBalance + Model.VaultTotalValue).ToString("C", gb)</strong></div>
     </div>
-    <div class="actions"><a class="button primary" asp-controller="Items" asp-action="Index">Open Personal Vault</a></div>
+    <div class="actions"><a class="button primary" asp-area="" asp-controller="Items" asp-action="Index">Open Personal Vault</a></div>
 </section>
 
 @if (canEdit)
@@ -79,13 +79,13 @@
         <button type="button" class="primary" data-open="addPaymentModal">Add payment / bill</button>
         <button type="button" class="primary" data-open="carryModal">Carry items into next month</button>
         <button type="button" data-open="accountModal">Update ISA / pots / hidden interest</button>
-        <a class="button" asp-controller="Assets" asp-action="Index">Assets</a>
+        <a asp-area="" class="button" asp-controller="Assets" asp-action="Index">Assets</a>
     }
     else
     {
-        <a class="button primary" asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@currentUrl">Login to edit</a>
+        <a asp-area="" class="button primary" asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@currentUrl">Login to edit</a>
     }
-    <a class="button" asp-controller="Statistics" asp-action="Index">Open statistics</a>
+    <a asp-area="" class="button" asp-controller="Statistics" asp-action="Index">Open statistics</a>
 </section>
 
 @foreach (var group in new[] { ("Bills", Model.Bills), ("Extra Expenses", Model.Expenses), ("Investments", Model.Investments), ("Savings", Model.Savings) })
@@ -115,7 +115,7 @@
                             }
                         </td>
                         <td>@r.Notes</td>
-                        @if (canEdit) { <td><a class="button" asp-area="" asp-controller="Dashboard" asp-action="EditPayment" asp-route-source="@r.Source" asp-route-id="@r.Id" asp-route-year="@Model.Year" asp-route-month="@Model.Month">Edit</a><form asp-area="" asp-controller="Dashboard" asp-action="DeletePayment" method="post" style="display:inline" data-confirm="Delete this item?"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="source" value="@r.Source" /><input type="hidden" name="id" value="@r.Id" /><button class="button danger-inline" type="submit">Delete</button></form></td> }
+                        @if (canEdit) { <td><a class="button" href="/Dashboard/EditPayment?source=@Uri.EscapeDataString(r.Source)&amp;id=@r.Id&amp;year=@Model.Year&amp;month=@Model.Month">Edit</a><form asp-area="" asp-controller="Dashboard" asp-action="DeletePayment" method="post" style="display:inline" data-confirm="Delete this item?"><input type="hidden" name="year" value="@Model.Year" /><input type="hidden" name="month" value="@Model.Month" /><input type="hidden" name="source" value="@r.Source" /><input type="hidden" name="id" value="@r.Id" /><button class="button danger-inline" type="submit">Delete</button></form></td> }
                     </tr>
                 }
             </tbody>

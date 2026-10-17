@@ -80,6 +80,7 @@ public record ItemDetailDto(
 
 public class CreateItemDto
 {
+    public string? ExistingImage { get; set; }
 
     [Required]
     public string Name { get; set; } = string.Empty;

@@ -50,9 +50,27 @@ document.querySelectorAll('input[type="file"][data-preview]').forEach(input => {
         const target = document.querySelector(input.dataset.preview);
         if (!target || !input.files?.[0]) return;
         const reader = new FileReader();
-        reader.onload = e => { target.src = e.target.result; };
+        reader.onload = e => { target.src = e.target.result; target.hidden = false; };
+        const noExistingImage = input.form?.querySelector('input[name="ExistingImage"][value=""]');
+        if (noExistingImage) noExistingImage.checked = true;
         reader.readAsDataURL(input.files[0]);
     });
+});
+
+const itemPhotoPreview = document.getElementById('imgPreview');
+const originalItemPhoto = itemPhotoPreview?.getAttribute('src');
+document.querySelectorAll('input[name="ExistingImage"]').forEach(input => {
+    const updatePreview = () => {
+        if (!itemPhotoPreview || !input.checked) return;
+        const source = input.dataset.existingImage || originalItemPhoto;
+        if (source) itemPhotoPreview.src = source;
+        else itemPhotoPreview.removeAttribute('src');
+        itemPhotoPreview.hidden = !source;
+        const upload = input.form?.querySelector('input[type="file"][name="image"]');
+        if (upload) upload.value = '';
+    };
+    input.addEventListener('change', updatePreview);
+    if (input.checked && input.value) updatePreview();
 });
 
 // ── Personal Vault: template item helper ───────────────────────────────────

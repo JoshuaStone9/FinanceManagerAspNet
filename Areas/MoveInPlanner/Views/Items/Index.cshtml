@@ -12,8 +12,8 @@
     @if (User.Identity?.IsAuthenticated == true)
     {
         <div class="hero-actions">
-            <a asp-action="BulkCreate" class="btn btn-light">Bulk add Temu items</a>
-            <a asp-action="Create" class="btn btn-primary">+ Add item</a>
+            <a asp-area="MoveInPlanner" asp-action="BulkCreate" class="btn btn-light">Bulk add Temu items</a>
+            <a asp-area="MoveInPlanner" asp-action="Create" class="btn btn-primary">+ Add item</a>
         </div>
     }
 </section>
@@ -64,14 +64,14 @@
         }
     </select>
     <button class="btn btn-dark">Filter</button>
-    <a asp-action="Index" asp-route-view="@Model.View" class="btn btn-light">Clear</a>
+    <a asp-area="MoveInPlanner" asp-action="Index" asp-route-view="@Model.View" class="btn btn-light">Clear</a>
 </form>
 
 <nav class="items-view-switcher" aria-label="Item views">
     <span>View</span>
     @foreach (var option in new[] { (Key: "cards", Label: "Cards"), (Key: "compact", Label: "Compact list"), (Key: "table", Label: "Table") })
     {
-        <a asp-action="Index" asp-route-view="@option.Key" asp-route-search="@Model.Search"
+        <a asp-area="MoveInPlanner" asp-action="Index" asp-route-view="@option.Key" asp-route-search="@Model.Search"
            asp-route-categoryId="@Model.CategoryId" asp-route-status="@Model.Status"
            class="items-view-option @(Model.View == option.Key ? "is-active" : null)"
            aria-current="@(Model.View == option.Key ? "page" : null)">@option.Label</a>
@@ -134,7 +134,7 @@ else
                                 <span class="priority-badge priority-@item.Priority.ToString().ToLowerInvariant()">@item.Priority</span>
                             </div>
 
-                            <h3><a asp-action="Details" asp-route-id="@item.Id">@item.Name</a></h3>
+                            <h3><a asp-area="MoveInPlanner" asp-action="Details" asp-route-id="@item.Id">@item.Name</a></h3>
                             <p class="grouped-item-notes">@(string.IsNullOrWhiteSpace(item.GeneralNotes) ? "No notes added yet." : item.GeneralNotes)</p>
 
                             <div class="grouped-item-values">
@@ -175,7 +175,7 @@ else
                                         @("No purchase options logged")
                                     }
                                 </span>
-                                <a asp-action="Details" asp-route-id="@item.Id" class="text-link">Open →</a>
+                                <a asp-area="MoveInPlanner" asp-action="Details" asp-route-id="@item.Id" class="text-link">Open →</a>
                             </div>
                         </article>
                     }
@@ -184,7 +184,7 @@ else
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <div class="category-section-footer">
-                        <a asp-action="Create" asp-route-categoryId="@category.CategoryId" class="text-link">+ Add @category.Name item</a>
+                        <a asp-area="MoveInPlanner" asp-action="Create" asp-route-categoryId="@category.CategoryId" class="text-link">+ Add @category.Name item</a>
                     </div>
                 }
             </details>

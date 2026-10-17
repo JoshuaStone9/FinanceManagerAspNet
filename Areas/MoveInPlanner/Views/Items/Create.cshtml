@@ -2,7 +2,7 @@
 @{ ViewData["Title"] = "Add item"; }
 <section class="page-heading compact"><div><span class="eyebrow">ADD REQUIREMENT</span><h1>Add a move-in item</h1><p>Create the requirement, then add an Amazon or TikTok Shop choice—or record the total directly if you have already bought it.</p></div></section>
 <div class="form-shell">
-<form asp-action="Create" method="post">
+<form asp-area="MoveInPlanner" asp-action="Create" method="post">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="form-section"><h2>What do you need?</h2><div class="row g-3">
         <div class="col-md-8"><label asp-for="Name"></label><input asp-for="Name" class="form-control" placeholder="e.g. Slow cooker" /><span asp-validation-for="Name"></span></div>
@@ -20,7 +20,7 @@
     </div></div>
     <div class="form-section"><h2>Notes</h2><label asp-for="GeneralNotes"></label><textarea asp-for="GeneralNotes" rows="4" class="form-control" placeholder="Measurements, colour preferences, requirements…"></textarea></div>
     <details class="advanced-fields"><summary>Comparison notes (optional)</summary><div class="pt-3"><label asp-for="DecisionReason"></label><textarea asp-for="DecisionReason" rows="3" class="form-control mb-3"></textarea><label asp-for="FullComparisonResponse"></label><textarea asp-for="FullComparisonResponse" rows="7" class="form-control"></textarea></div></details>
-    <div class="form-actions"><a asp-action="Index" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save item →</button></div>
+    <div class="form-actions"><a asp-area="MoveInPlanner" asp-action="Index" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save item →</button></div>
 </form>
 </div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

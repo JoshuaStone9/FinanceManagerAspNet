@@ -8,7 +8,7 @@
     </div>
 </section>
 <div class="form-shell">
-<form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+<form asp-area="MoveInPlanner" asp-action="Edit" asp-route-id="@Model.Id" method="post">
     <input asp-for="Id" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="form-section"><h2>What do you need?</h2><div class="row g-3">
@@ -27,7 +27,7 @@
     </div></div>
     <div class="form-section"><h2>General notes</h2><label asp-for="GeneralNotes"></label><textarea asp-for="GeneralNotes" rows="5" class="form-control" placeholder="Measurements, colours, requirements, when to buy, or anything else relevant…"></textarea><span asp-validation-for="GeneralNotes"></span></div>
     <details class="advanced-fields"><summary>Comparison notes</summary><div class="pt-3"><label asp-for="DecisionReason"></label><textarea asp-for="DecisionReason" rows="3" class="form-control mb-3"></textarea><label asp-for="FullComparisonResponse"></label><textarea asp-for="FullComparisonResponse" rows="7" class="form-control"></textarea></div></details>
-    <div class="form-actions"><a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save changes</button></div>
+    <div class="form-actions"><a asp-area="MoveInPlanner" asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light">Cancel</a><button class="btn btn-primary btn-lg">Save changes</button></div>
 </form>
 </div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

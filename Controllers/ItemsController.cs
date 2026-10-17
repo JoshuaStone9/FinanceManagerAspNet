@@ -81,7 +81,7 @@ public class ItemsController(
     public async Task<IActionResult> Create(CreateItemDto dto, IFormFile? image, List<IFormFile> photos)
     {
         if (!CanEdit()) return LoginRedirect();
-
+        ValidateImageSelection(dto, image);
 
         if (!ModelState.IsValid)
         {
@@ -158,10 +158,12 @@ public class ItemsController(
     public async Task<IActionResult> Edit(int id, UpdateItemDto dto, IFormFile? image, List<IFormFile> photos)
     {
         if (!CanEdit()) return LoginRedirect();
+        ValidateImageSelection(dto, image);
 
         if (!ModelState.IsValid)
         {
             await PopulateDropdownsAsync();
+            ViewBag.CurrentImagePath = (await itemService.GetByIdAsync(id))?.ImagePath;
             return View(dto);
         }
 
@@ -315,6 +317,7 @@ public class ItemsController(
 
     private async Task PopulateDropdownsAsync()
     {
+        ViewBag.ExistingImages = imageService.GetExistingImages();
         var cats = await categoryService.GetAllAsync();
         var locs = await locationService.GetAllAsync();
         var tags = await tagService.GetAllAsync();
@@ -355,7 +358,17 @@ public class ItemsController(
     }
 
 
+    private void ValidateImageSelection(CreateItemDto dto, IFormFile? image)
+    {
+        if (image is { Length: > 0 } && !string.IsNullOrEmpty(dto.ExistingImage))
+            ModelState.AddModelError(nameof(dto.ExistingImage), "Choose an existing picture or upload a new one, rather than both.");
+        if (image is { Length: > 0 } && !imageService.IsValidImage(image))
+            ModelState.AddModelError(nameof(dto.ExistingImage), "Upload a JPG, PNG or WebP picture up to 5 MB.");
+        if (!string.IsNullOrEmpty(dto.ExistingImage) && !imageService.IsExistingImage(dto.ExistingImage))
+            ModelState.AddModelError(nameof(dto.ExistingImage), "That picture is no longer available. Please choose another.");
+    }
+
     private bool CanEdit() => User.Identity?.IsAuthenticated == true;
 
-    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
+    private IActionResult LoginRedirect() => RedirectToAction("Login", "Auth", new { area = "", returnUrl = Request.Path.ToString() + Request.QueryString.ToString() });
 }

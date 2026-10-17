@@ -10,7 +10,7 @@
             </div>
             @foreach (var item in category.Items)
             {
-                <a asp-action="Details" asp-route-id="@item.Id" class="items-compact-row">
+                <a asp-area="MoveInPlanner" asp-action="Details" asp-route-id="@item.Id" class="items-compact-row">
                     <span class="items-compact-name">
                         <strong>@item.Name</strong>
                         <small>Qty @item.QuantityRequired · @item.Priority priority@if (item.IsEssentialForMoveIn){<span> · Essential</span>}</small>

@@ -16,10 +16,10 @@
 <body>
 <header class="app-header">
     <nav class="container nav-shell">
-        <a asp-controller="Dashboard" asp-action="Index" class="brand"><span class="brand-mark">M</span><span>Move In Planner</span></a>
+        <a asp-area="MoveInPlanner" asp-controller="Dashboard" asp-action="Index" class="brand"><span class="brand-mark">M</span><span>Move In Planner</span></a>
         <div class="nav-links">
-            <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
-            <a asp-controller="Items" asp-action="Index">All items</a>
+            <a asp-area="MoveInPlanner" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+            <a asp-area="MoveInPlanner" asp-controller="Items" asp-action="Index">All items</a>
         </div>
         <div class="app-switcher" aria-label="Switch application">
             <a href="/Dashboard/Index">Finance Manager</a>
@@ -27,7 +27,7 @@
         </div>
         @if (isLoggedIn)
         {
-            <a asp-controller="Items" asp-action="Create" class="btn btn-primary btn-sm">+ Add item</a>
+            <a asp-area="MoveInPlanner" asp-controller="Items" asp-action="Create" class="btn btn-primary btn-sm">+ Add item</a>
         }
         else
         {

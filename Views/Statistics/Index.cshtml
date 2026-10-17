@@ -109,10 +109,10 @@
     <article class="card"><p class="eyebrow">Average growth</p><h2>@Model.LiveAssetsGrowthRate.ToString("0.##")%</h2></article>
   </div>
   <div class="actions">
-    <a class="button primary" asp-controller="Assets" asp-action="Index">Open Assets</a>
+    <a asp-area="" class="button primary" asp-controller="Assets" asp-action="Index">Open Assets</a>
     @if (User.Identity?.IsAuthenticated == true)
     {
-      <form asp-controller="Assets" asp-action="UpdateLivePrices" method="post"><button type="submit">Sync portfolio</button></form>
+      <form asp-area="" asp-controller="Assets" asp-action="UpdateLivePrices" method="post"><button type="submit">Sync portfolio</button></form>
     }
   </div>
 </section>

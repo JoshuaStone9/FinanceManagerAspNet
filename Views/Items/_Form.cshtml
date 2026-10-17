@@ -9,6 +9,8 @@
     var tags = (IEnumerable<TagDto>)ViewBag.Tags;
     var templates = (IEnumerable<Item>)(ViewBag.TemplateItems ?? Enumerable.Empty<Item>());
     var currentImage = ViewBag.CurrentImagePath as string;
+    var existingImages = (IReadOnlyList<string>)(ViewBag.ExistingImages ?? Array.Empty<string>());
+    var imageIndex = 0;
     var dropdownOptions = (IEnumerable<DropdownOption>)(ViewBag.DropdownOptions ?? Enumerable.Empty<DropdownOption>());
     IEnumerable<string> Options(string key) => dropdownOptions.Where(o => o.ListKey == key).OrderBy(o => o.SortOrder).ThenBy(o => o.Value).Select(o => o.Value);
 }
@@ -38,10 +40,31 @@
             }
             else
             {
-                <div id="imgPreview" class="item-photo-preview item-photo-preview--empty"><i data-lucide="image"></i></div>
+                <img id="imgPreview" class="item-photo-preview" alt="Selected item photo" hidden />
                 <p class="small-note muted">Leave this blank unless you have a real item photo. The app will show a clean placeholder instead of guessing an image.</p>
             }
             <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp" data-preview="#imgPreview" />
+            <span asp-validation-for="ExistingImage" class="field-error"></span>
+            <details class="existing-image-picker">
+                <summary>Pick from existing</summary>
+                <p class="small-note muted">Choose a picture already available on this server.</p>
+                <label><input type="radio" asp-for="ExistingImage" id="existingImageNone" value="" /> Keep current picture / use upload</label>
+                <div class="existing-image-grid">
+                    @foreach (var fileName in existingImages)
+                    {
+                        var imageUrl = Url.Content("~/images/items/" + Uri.EscapeDataString(fileName));
+                        <label class="existing-image-option">
+                            <input type="radio" asp-for="ExistingImage" id="@($"existingImage_{imageIndex++}")" value="@fileName" data-existing-image="@imageUrl" />
+                            <img src="@imageUrl" alt="@fileName" loading="lazy" />
+                            <span>@fileName</span>
+                        </label>
+                    }
+                </div>
+                @if (existingImages.Count == 0)
+                {
+                    <p class="small-note muted">No existing pictures are available. Upload a picture above.</p>
+                }
+            </details>
         </div>
 
         <div class="form-grid">
@@ -168,7 +191,7 @@
                 <div class="field">
                     <label asp-for="PlatformId">Platform</label>
                     <select asp-for="PlatformId" asp-items="platformItems"><option value="">— None —</option></select>
-                    <p class="small-note muted"><a asp-controller="VaultSettings" asp-action="Index">Add categories, types, platforms and reusable dropdown options</a></p>
+                    <p class="small-note muted"><a asp-area="" asp-controller="VaultSettings" asp-action="Index">Add categories, types, platforms and reusable dropdown options</a></p>
                 </div>
                 <div class="field">
                     <label asp-for="Condition">Condition</label>

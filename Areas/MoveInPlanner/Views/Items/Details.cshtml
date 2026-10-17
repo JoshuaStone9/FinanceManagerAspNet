@@ -16,7 +16,7 @@
     </div>
 }
 
-<nav class="breadcrumb-line"><a asp-action="Index">All items</a><span>/</span><span>@item.Name</span></nav>
+<nav class="breadcrumb-line"><a asp-area="MoveInPlanner" asp-action="Index">All items</a><span>/</span><span>@item.Name</span></nav>
 <section class="detail-hero">
     <div>
         <div class="d-flex gap-2 mb-3">
@@ -30,9 +30,9 @@
     @if (canEdit)
     {
         <div class="hero-actions">
-            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-light btn-lg">Edit item</a>
-            <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger btn-lg">Delete</a>
-            <a asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary btn-lg">+ Add purchase option</a>
+            <a asp-area="MoveInPlanner" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-light btn-lg">Edit item</a>
+            <a asp-area="MoveInPlanner" asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger btn-lg">Delete</a>
+            <a asp-area="MoveInPlanner" asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary btn-lg">+ Add purchase option</a>
         </div>
     }
 </section>
@@ -58,7 +58,7 @@
         <div><span class="eyebrow">OVERALL ITEM</span><h2>General notes</h2></div>
         @if (canEdit)
         {
-            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-light">Edit notes</a>
+            <a asp-area="MoveInPlanner" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-light">Edit notes</a>
         }
     </div>
     @if (string.IsNullOrWhiteSpace(item.GeneralNotes))
@@ -85,11 +85,11 @@
 {
     @if (item.Status == PurchaseStatus.Purchased && item.ActualPurchasePrice.HasValue)
     {
-        <div class="empty-state"><div class="empty-icon">✓</div><h2>Manual purchase recorded</h2><p>The total paid is recorded without requiring a product choice.</p>@if(canEdit){<a asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary">Add optional purchase option</a>}</div>
+        <div class="empty-state"><div class="empty-icon">✓</div><h2>Manual purchase recorded</h2><p>The total paid is recorded without requiring a product choice.</p>@if(canEdit){<a asp-area="MoveInPlanner" asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary">Add optional purchase option</a>}</div>
     }
     else
     {
-        <div class="empty-state"><div class="empty-icon">↗</div><h2>No purchase options yet</h2><p>No product choices have been added.</p>@if(canEdit){<a asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary">Add first purchase option</a>}</div>
+        <div class="empty-state"><div class="empty-icon">↗</div><h2>No purchase options yet</h2><p>No product choices have been added.</p>@if(canEdit){<a asp-area="MoveInPlanner" asp-controller="ProductChoices" asp-action="Create" asp-route-itemId="@item.Id" class="btn btn-primary">Add first purchase option</a>}</div>
     }
 }
 else
@@ -121,9 +121,9 @@ else
             <div class="product-meta"><span>Checked @(choice.PriceCheckedOn?.ToString("d MMM yyyy") ?? "—")</span>@if(choice.IsPurchased){<span class="purchased-check">✓ Purchased</span>}</div>
             <div class="product-actions">
                 @if(!string.IsNullOrWhiteSpace(choice.ProductUrl)){<a href="@choice.ProductUrl" target="_blank" rel="noopener noreferrer" class="btn btn-dark flex-grow-1">Open product page ↗</a>}else{<span class="missing-url flex-grow-1">No URL saved</span>}
-                @if(canEdit){<a asp-controller="ProductChoices" asp-action="Edit" asp-route-id="@choice.Id" class="btn btn-light">Edit</a>}
+                @if(canEdit){<a asp-area="MoveInPlanner" asp-controller="ProductChoices" asp-action="Edit" asp-route-id="@choice.Id" class="btn btn-light">Edit</a>}
             </div>
-            @if(canEdit){<form asp-controller="ProductChoices" asp-action="MakePreferred" asp-route-id="@choice.Id" method="post" class="mt-2"><button class="btn @(choice.IsPreferred ? "btn-outline-danger" : "btn-outline-primary") w-100">@(choice.IsPreferred ? "Remove from preferred plan" : "Include in preferred plan")</button></form>}
+            @if(canEdit){<form asp-area="MoveInPlanner" asp-controller="ProductChoices" asp-action="MakePreferred" asp-route-id="@choice.Id" method="post" class="mt-2"><button class="btn @(choice.IsPreferred ? "btn-outline-danger" : "btn-outline-primary") w-100">@(choice.IsPreferred ? "Remove from preferred plan" : "Include in preferred plan")</button></form>}
         </article>
     }
     </div>

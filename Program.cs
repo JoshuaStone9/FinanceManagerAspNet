@@ -1,3 +1,4 @@
+using PersonalHub.Routing;
 using PersonalHub.Services;
 using PersonalHub.Data;
 using PersonalHub.Repositories;
@@ -122,19 +123,7 @@ app.Use(async (context, next) =>
 });
 app.UseAuthorization();
 
-app.MapControllerRoute(
-    name: "move-in-planner",
-    pattern: "MoveInPlanner/{controller=Dashboard}/{action=Index}/{id?}",
-    defaults: new { area = "MoveInPlanner" });
-
-app.MapControllerRoute(
-    name: "vault",
-    pattern: "PersonalVault/{action=Index}/{id?}",
-    defaults: new { controller = "Items" });
-
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Auth}/{action=Start}/{year?}/{month?}");
+app.MapApplicationRoutes();
 
 using (var scope = app.Services.CreateScope())
 {

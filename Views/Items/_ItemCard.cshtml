@@ -1,6 +1,6 @@
 @model ItemSummaryDto
 
-<a class="item-card" asp-controller="Items" asp-action="Detail" asp-route-id="@Model.Id">
+<a class="item-card" asp-area="" asp-controller="Items" asp-action="Detail" asp-route-id="@Model.Id">
     <div class="item-card-image">
         @if (!string.IsNullOrEmpty(Model.ImagePath))
         {

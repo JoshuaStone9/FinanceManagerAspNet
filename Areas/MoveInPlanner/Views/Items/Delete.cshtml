@@ -11,8 +11,8 @@
         <div><span>Purchase options</span><strong>@Model.ProductChoices.Count</strong></div>
     </div>
 
-    <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="delete-actions">
-        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light btn-lg">Keep item</a>
+    <form asp-area="MoveInPlanner" asp-action="Delete" asp-route-id="@Model.Id" method="post" class="delete-actions">
+        <a asp-area="MoveInPlanner" asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light btn-lg">Keep item</a>
         <button type="submit" class="btn btn-danger btn-lg">Delete item and options</button>
     </form>
 </section>

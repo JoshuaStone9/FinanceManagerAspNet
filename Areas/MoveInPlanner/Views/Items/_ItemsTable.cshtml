@@ -22,7 +22,7 @@
                 {
                     <tr>
                         <th scope="row">
-                            <a asp-action="Details" asp-route-id="@item.Id">@item.Name</a>
+                            <a asp-area="MoveInPlanner" asp-action="Details" asp-route-id="@item.Id">@item.Name</a>
                             @if (item.IsEssentialForMoveIn){<small>Essential for move-in</small>}
                         </th>
                         <td>@category.Name</td>

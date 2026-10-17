@@ -15,10 +15,10 @@
     </div>
     <div class="detail-actions">
         <span class="status-pill detail-status @Model.Status">@(string.IsNullOrWhiteSpace(Model.CustomStatus) ? Model.Status.ToDisplayName() : Model.CustomStatus)</span>
-        @if (canEdit) { <a class="btn" asp-action="Duplicate" asp-route-id="@Model.Id"><i data-lucide="copy"></i> Duplicate as template</a> <a class="btn" asp-action="Edit" asp-route-id="@Model.Id"><i data-lucide="pencil"></i> Edit</a> }
+        @if (canEdit) { <a class="btn" asp-area="" asp-action="Duplicate" asp-route-id="@Model.Id"><i data-lucide="copy"></i> Duplicate as template</a> <a class="btn" asp-area="" asp-action="Edit" asp-route-id="@Model.Id"><i data-lucide="pencil"></i> Edit</a> }
         @if (canEdit)
         {
-            <form method="post" asp-action="Delete" asp-route-id="@Model.Id" data-confirm="Permanently delete '@Model.Name'?">
+            <form method="post" asp-area="" asp-action="Delete" asp-route-id="@Model.Id" data-confirm="Permanently delete '@Model.Name'?">
                 @Html.AntiForgeryToken()
                 <button class="btn btn-danger" type="submit"><i data-lucide="trash-2"></i> Delete</button>
             </form>
@@ -62,7 +62,7 @@
                             <img src="@photo.ImagePath" alt="Additional photo for @Model.Name" />
                             @if (canEdit)
                             {
-                                <form method="post" asp-action="DeletePhoto" data-confirm="Remove this photo?">
+                                <form method="post" asp-area="" asp-action="DeletePhoto" data-confirm="Remove this photo?">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@photo.Id" />
                                     <input type="hidden" name="itemId" value="@Model.Id" />
@@ -79,7 +79,7 @@
             }
             @if (canEdit)
             {
-                <form method="post" asp-action="AddPhotos" enctype="multipart/form-data" class="form-grid compact-form-grid" style="margin-top:12px">
+                <form method="post" asp-area="" asp-action="AddPhotos" enctype="multipart/form-data" class="form-grid compact-form-grid" style="margin-top:12px">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <div class="field full"><label>Add pictures</label><input type="file" name="photos" multiple accept=".jpg,.jpeg,.png,.webp" /></div>
@@ -164,7 +164,7 @@
                     </div>
                     @if (canEdit && !l.IsReturned)
                     {
-                        <form method="post" asp-action="ReturnLoan" style="margin-top:6px">
+                        <form method="post" asp-area="" asp-action="ReturnLoan" style="margin-top:6px">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="loanId" value="@l.Id" />
                             <input type="hidden" name="itemId" value="@Model.Id" />
@@ -181,7 +181,7 @@
             {
             <details>
                 <summary class="btn btn-sm" style="display:inline-flex;cursor:pointer">+ Loan this item</summary>
-                <form method="post" asp-action="Loan" class="form-grid" style="margin-top:12px">
+                <form method="post" asp-area="" asp-action="Loan" class="form-grid" style="margin-top:12px">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="ItemId" value="@Model.Id" />
                     <div class="field"><label>Loaned to</label><input name="LoanedTo" required /></div>
@@ -215,7 +215,7 @@
             {
             <details>
                 <summary class="btn btn-sm" style="display:inline-flex;cursor:pointer">+ Log maintenance</summary>
-                <form method="post" asp-action="AddMaintenance" class="form-grid" style="margin-top:12px">
+                <form method="post" asp-area="" asp-action="AddMaintenance" class="form-grid" style="margin-top:12px">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="ItemId" value="@Model.Id" />
                     <div class="field full"><label>Description</label><input name="Description" required /></div>

@@ -48,14 +48,14 @@
     <div class="detail-actions">
         @if (canEdit)
         {
-            <a class="btn" asp-action="ExportCsv" asp-all-route-data="@RouteValuesFromFilter(filter)"><i data-lucide="download"></i> CSV</a>
-            <a class="btn" asp-action="ExportJson" asp-all-route-data="@RouteValuesFromFilter(filter)"><i data-lucide="download"></i> JSON</a>
-            <a class="btn" asp-controller="Locations" asp-action="Index"><i data-lucide="map-pin"></i> Locations</a>
+            <a class="btn" asp-area="" asp-action="ExportCsv" asp-all-route-data="@RouteValuesFromFilter(filter)"><i data-lucide="download"></i> CSV</a>
+            <a class="btn" asp-area="" asp-action="ExportJson" asp-all-route-data="@RouteValuesFromFilter(filter)"><i data-lucide="download"></i> JSON</a>
+            <a class="btn" asp-area="" asp-controller="Locations" asp-action="Index"><i data-lucide="map-pin"></i> Locations</a>
         }
     </div>
 </div>
 
-<form method="get" asp-action="Index" class="filter-bar">
+<form method="get" asp-area="" asp-action="Index" class="filter-bar">
     <input type="hidden" name="Search" value="@filter.Search" />
 
     <label>Category</label>
@@ -128,7 +128,7 @@
 
     @if (!string.IsNullOrEmpty(filter.Search) || filter.CategoryId.HasValue || filter.LocationId.HasValue || filter.Status.HasValue || filter.Condition.HasValue)
     {
-        <a class="btn btn-sm" asp-action="Index"><i data-lucide="x"></i> Clear filters</a>
+        <a class="btn btn-sm" asp-area="" asp-action="Index"><i data-lucide="x"></i> Clear filters</a>
     }
 </form>
 
@@ -140,11 +140,11 @@
         <p>Try adjusting your filters, or add your first item to the vault.</p>
         @if (canEdit)
         {
-            <a class="btn btn-primary" asp-action="Create"><i data-lucide="plus"></i> Add Item</a>
+            <a class="btn btn-primary" asp-area="" asp-action="Create"><i data-lucide="plus"></i> Add Item</a>
         }
         else
         {
-            <a class="btn btn-primary" asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@loginReturnUrl">Login to add/edit</a>
+            <a class="btn btn-primary" asp-area="" asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@loginReturnUrl">Login to add/edit</a>
         }
     </div>
 }
@@ -162,15 +162,15 @@ else
         <div class="pagination">
             @if (Model.HasPreviousPage)
             {
-                <a asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, Model.Page - 1)"><i data-lucide="chevron-left"></i></a>
+                <a asp-area="" asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, Model.Page - 1)"><i data-lucide="chevron-left"></i></a>
             }
             @for (var p = Math.Max(1, Model.Page - 2); p <= Math.Min(Model.TotalPages, Model.Page + 2); p++)
             {
-                <a class="@(p == Model.Page ? "active" : "")" asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, p)">@p</a>
+                <a class="@(p == Model.Page ? "active" : "")" asp-area="" asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, p)">@p</a>
             }
             @if (Model.HasNextPage)
             {
-                <a asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, Model.Page + 1)"><i data-lucide="chevron-right"></i></a>
+                <a asp-area="" asp-action="Index" asp-all-route-data="@RouteValuesFromFilter(filter, Model.Page + 1)"><i data-lucide="chevron-right"></i></a>
             }
         </div>
     }

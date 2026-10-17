@@ -43,6 +43,9 @@ public interface ITagService
 
 public interface IImageService
 {
+    IReadOnlyList<string> GetExistingImages();
+    bool IsExistingImage(string fileName);
+    Task<string> CopyExistingImageAsync(string fileName, int itemId);
     Task<string?> SaveItemImageAsync(IFormFile file, int itemId);
     Task DeleteImageAsync(string? imagePath);
     bool IsValidImage(IFormFile file);

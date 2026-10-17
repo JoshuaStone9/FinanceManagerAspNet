@@ -19,7 +19,7 @@
         </div>
     </div>
 
-    <form asp-controller="Locations" asp-action="Create" method="post" class="location-add-form">
+    <form asp-area="" asp-controller="Locations" asp-action="Create" method="post" class="location-add-form">
         @Html.AntiForgeryToken()
         <div class="field">
             <label for="name">Location name *</label>
@@ -51,7 +51,7 @@
         </div>
         @if (locations.Any())
         {
-            <form asp-controller="Locations" asp-action="DeleteAll" method="post" onsubmit="return confirm('Remove all locations? Items using them will be set to no location.');">
+            <form asp-area="" asp-controller="Locations" asp-action="DeleteAll" method="post" onsubmit="return confirm('Remove all locations? Items using them will be set to no location.');">
                 @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="trash-2"></i> Remove all</button>
             </form>
@@ -91,7 +91,7 @@
 
                     <div class="location-actions">
                         <span class="badge-count">@location.ItemCount item@(location.ItemCount == 1 ? "" : "s")</span>
-                        <form asp-controller="Locations" asp-action="Delete" method="post" onsubmit="return confirm('Remove this location? Items using it will be set to no location.');">
+                        <form asp-area="" asp-controller="Locations" asp-action="Delete" method="post" onsubmit="return confirm('Remove this location? Items using it will be set to no location.');">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="id" value="@location.Id" />
                             <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="trash-2"></i> Remove</button>

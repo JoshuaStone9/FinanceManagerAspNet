@@ -142,14 +142,14 @@ else
       </button>
       @if (isLoggedIn)
       {
-        <form asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">
+        <form asp-area="" asp-controller="Auth" asp-action="Logout" method="post" class="nav-form">
           @Html.AntiForgeryToken()
           <button type="submit" class="nav-button">Logout</button>
         </form>
       }
       else
       {
-        <a asp-controller="Auth" asp-action="Login">Login</a>
+        <a asp-area="" asp-controller="Auth" asp-action="Login">Login</a>
       }
     </nav>
   </header>

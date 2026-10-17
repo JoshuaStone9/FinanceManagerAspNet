@@ -104,6 +104,8 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
 
         if (image is not null && images.IsValidImage(image))
             created.ImagePath = await images.SaveItemImageAsync(image, created.Id);
+        else if (!string.IsNullOrEmpty(dto.ExistingImage))
+            created.ImagePath = await images.CopyExistingImageAsync(dto.ExistingImage, created.Id);
 
         if (dto.TagIds.Count > 0)
         {
@@ -158,8 +160,18 @@ public class ItemService(IItemRepository items, AppDbContext db, IImageService i
 
         if (image is not null && images.IsValidImage(image))
         {
+            var replacement = await images.SaveItemImageAsync(image, id);
+            if (replacement is not null)
+            {
+                await images.DeleteImageAsync(item.ImagePath);
+                item.ImagePath = replacement;
+            }
+        }
+        else if (!string.IsNullOrEmpty(dto.ExistingImage))
+        {
+            var replacement = await images.CopyExistingImageAsync(dto.ExistingImage, id);
             await images.DeleteImageAsync(item.ImagePath);
-            item.ImagePath = await images.SaveItemImageAsync(image, id);
+            item.ImagePath = replacement;
         }
 
         // Sync tags
@@ -345,6 +357,33 @@ public class ImageService(IConfiguration config, IWebHostEnvironment env, ILogge
 {
     private static readonly string[] AllowedExts = [".jpg", ".jpeg", ".png", ".webp"];
     private const long MaxSize = 5 * 1024 * 1024; // 5 MB
+
+    public IReadOnlyList<string> GetExistingImages()
+    {
+        var folder = Path.Combine(env.WebRootPath, "images", "items");
+        return Directory.Exists(folder)
+            ? Directory.EnumerateFiles(folder)
+                .Where(path => AllowedExts.Contains(Path.GetExtension(path).ToLowerInvariant()))
+                .Select(Path.GetFileName).OfType<string>().OrderBy(name => name).ToArray()
+            : [];
+    }
+
+    public bool IsExistingImage(string fileName) =>
+        !string.IsNullOrWhiteSpace(fileName)
+        && !fileName.Contains('/') && !fileName.Contains('\\') && !fileName.Contains(':')
+        && AllowedExts.Contains(Path.GetExtension(fileName).ToLowerInvariant())
+        && File.Exists(Path.Combine(env.WebRootPath, "images", "items", fileName));
+
+    public async Task<string> CopyExistingImageAsync(string fileName, int itemId)
+    {
+        if (!IsExistingImage(fileName)) throw new ArgumentException("Choose an available item image.", nameof(fileName));
+        var folder = Path.Combine(env.WebRootPath, "images", "items");
+        var copyName = $"item_{itemId}_{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}";
+        await using var source = File.OpenRead(Path.Combine(folder, fileName));
+        await using var destination = File.Create(Path.Combine(folder, copyName));
+        await source.CopyToAsync(destination);
+        return $"/images/items/{copyName}";
+    }
 
     public bool IsValidImage(IFormFile file)
     {

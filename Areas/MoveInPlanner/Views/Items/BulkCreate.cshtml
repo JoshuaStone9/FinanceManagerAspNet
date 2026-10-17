@@ -9,10 +9,10 @@
         <h1>Add Temu items together</h1>
         <p>Paste a list or enter rows manually, review the categories and totals, then create every household item and its Temu purchase option in one transaction.</p>
     </div>
-    <a asp-action="Index" class="btn btn-light">Back to all items</a>
+    <a asp-area="MoveInPlanner" asp-action="Index" class="btn btn-light">Back to all items</a>
 </section>
 
-<form asp-action="BulkCreate" method="post" id="bulk-create-form">
+<form asp-area="MoveInPlanner" asp-action="BulkCreate" method="post" id="bulk-create-form">
     <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
 
     <section class="bulk-setup-panel">
@@ -102,7 +102,7 @@
     <div class="bulk-form-actions">
         <button type="button" class="btn btn-light" id="add-bulk-row">+ Add another row</button>
         <div>
-            <a asp-action="Index" class="btn btn-light">Cancel</a>
+            <a asp-area="MoveInPlanner" asp-action="Index" class="btn btn-light">Cancel</a>
             <button type="submit" class="btn btn-primary btn-lg" id="bulk-submit-button">Add all items</button>
         </div>
     </div>
