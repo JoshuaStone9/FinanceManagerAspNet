@@ -1,9 +1,10 @@
 using FinanceManagerAspNet.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Text;
 
 namespace FinanceManagerAspNet.Controllers;
 
-public sealed class StatementReconciliationController(FinanceRepository repo, IWebHostEnvironment environment) : Controller
+public sealed class StatementReconciliationController(FinanceRepository repo, IWebHostEnvironment environment, IStatementImportService importer) : Controller
 {
     [HttpGet]
     public async Task<IActionResult> Index(int? year, int? month)
@@ -37,12 +38,47 @@ public sealed class StatementReconciliationController(FinanceRepository repo, IW
             TempData["Error"] = "Choose a PDF statement up to 10 MB.";
             return RedirectToAction(nameof(Workspace), new { id = statementId });
         }
+        var workspace = await repo.GetStatementWorkspaceAsync(statementId);
+        if (workspace is null) return NotFound();
         var folder = Path.Combine(environment.ContentRootPath, "App_Data", "statements");
         Directory.CreateDirectory(folder);
         var storedName = $"{statementId}-{Guid.NewGuid():N}.pdf";
-        await using (var stream = System.IO.File.Create(Path.Combine(folder, storedName))) await statementFile.CopyToAsync(stream);
+        var storedPath = Path.Combine(folder, storedName);
+        await using (var stream = System.IO.File.Create(storedPath)) await statementFile.CopyToAsync(stream);
+        await using (var signatureStream = System.IO.File.OpenRead(storedPath))
+        {
+            var signature = new byte[5];
+            if (await signatureStream.ReadAsync(signature) != signature.Length || Encoding.ASCII.GetString(signature) != "%PDF-")
+            {
+                System.IO.File.Delete(storedPath);
+                TempData["Error"] = "The selected file is not a valid PDF document.";
+                return RedirectToAction(nameof(Workspace), new { id = statementId });
+            }
+        }
         await repo.AttachStatementFileAsync(statementId, statementFile.FileName, storedName);
-        TempData["Success"] = "Statement stored. PDF extraction will be added in the next phase; transactions can be entered manually now.";
+        try
+        {
+            var rows = await importer.ExtractAsync(storedPath, workspace.StatementParser, workspace.Year, workspace.Month, HttpContext.RequestAborted);
+            await repo.ReplaceStatementImportPreviewAsync(statementId, rows);
+            TempData[rows.Count > 0 ? "Success" : "Error"] = rows.Count > 0
+                ? $"Statement stored and {rows.Count} transaction line{(rows.Count == 1 ? "" : "s")} extracted for review."
+                : $"Statement stored, but no transaction lines were found for {new DateTime(workspace.Year, workspace.Month, 1):MMMM yyyy}. Check that the statement month matches this workspace, or add its lines manually.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            TempData["Error"] = "Statement stored, but its text could not be extracted. The PDF may be scanned or password protected.";
+        }
+        return RedirectToAction(nameof(Workspace), new { id = statementId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Import(long statementId, long[]? selectedRows)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        var imported = await repo.ImportStatementPreviewAsync(statementId, selectedRows ?? []);
+        TempData[imported > 0 ? "Success" : "Error"] = imported > 0
+            ? $"Imported {imported} statement transaction{(imported == 1 ? "" : "s")}."
+            : "Select at least one new transaction to import.";
         return RedirectToAction(nameof(Workspace), new { id = statementId });
     }
 
@@ -86,11 +122,45 @@ public sealed class StatementReconciliationController(FinanceRepository repo, IW
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateEntry(long statementId, long transactionId, string source, string title)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        try
+        {
+            await repo.CreateEntryFromStatementAsync(statementId, transactionId, source, title);
+            TempData["Success"] = $"Created “{title.Trim()}” and matched the statement transaction.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            TempData["Error"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Workspace), new { id = statementId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteTransaction(long statementId, long transactionId)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        await repo.DeleteStatementTransactionAsync(statementId, transactionId);
+        TempData["Success"] = "Statement transaction removed.";
+        return RedirectToAction(nameof(Workspace), new { id = statementId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReopenStatement(long statementId)
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+        await repo.ReopenStatementAsync(statementId);
+        TempData["Success"] = "Statement reopened for review.";
+        return RedirectToAction(nameof(Workspace), new { id = statementId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Complete(long statementId)
     {
         if (User.Identity?.IsAuthenticated != true) return Unauthorized();
         var completed = await repo.CompleteStatementAsync(statementId);
-        TempData[completed ? "Success" : "Error"] = completed ? "Statement reconciliation completed." : "Resolve or ignore every transaction before completing the statement.";
+        TempData[completed ? "Success" : "Error"] = completed ? "Statement reconciliation completed." : "Add at least one transaction and resolve or ignore every line before completing the statement.";
         return RedirectToAction(nameof(Workspace), new { id = statementId });
     }
 }

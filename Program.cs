@@ -55,6 +55,7 @@ builder.Services.AddSingleton<FinanceEventExportService>();
 builder.Services.AddScoped<FinanceCalculator>();
 builder.Services.AddHttpClient<MarketPriceService>();
 builder.Services.AddScoped<AppAuthService>();
+builder.Services.AddScoped<IStatementImportService, StatementImportService>();
 
 var app = builder.Build();
 
