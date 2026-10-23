@@ -4,7 +4,7 @@
 
 ## Start here
 
-- [Phase documentation](phases/README.md) — Phases 1–14, with a guide for each documented phase, reading order and historical context.
+- [Phase documentation](phases/README.md) — delivered records through Phase 14 and proposed simplification work in Phases 15–17.
 - [Planning guide](plans/roadmap.md) — proposals and roadmap history, separated from delivered records.
 - [Dashboard testing checklist](testing/dashboard-testing-checklist.md) — manual verification.
 

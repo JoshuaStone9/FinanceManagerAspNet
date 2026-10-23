@@ -4,7 +4,7 @@ An ASP.NET Core MVC application for monthly budgeting, household reserves, Money
 
 ## Documentation
 
-Start with the [documentation index](docs/README.md) or [phase guides](docs/phases/README.md). The latest standalone phase document covers [14.2: Statement Reconciliation Workspace](docs/phases/phase-14/phase-14.2-statement-reconciliation-workspace.md).
+Start with the [documentation index](docs/README.md) or [phase guides](docs/phases/README.md). Phase 14 records the latest delivered statement-reconciliation work; Phases 15–17 describe the proposed simplification programme.
 
 ## Main areas
 

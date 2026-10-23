@@ -17,11 +17,15 @@ Each folder combines briefs, delivered feature records and refinements for one m
 - [Phase 11: Investment, interest and reconciliation](phase-11/README.md)
 - [Phase 12: Account purposes and Emergency Fund](phase-12/README.md)
 - [Phase 14: Statement reconciliation](phase-14/README.md)
+- [Phase 15: Simplified monthly experience](phase-15/README.md) — Proposed.
+- [Phase 16: Consolidated financial hubs](phase-16/README.md) — Proposed.
+- [Phase 17: Internal simplification](phase-17/README.md) — Proposed.
 
 ## Numbering and historical context
 
 - Phases 1–6 have implementation records, not just future plans.
 - Early Reporting & Export and Automation proposals are retained under the history folders within Phases 8 and 9; their numbers were later used for other work.
 - No standalone Phase 13 document was present in the reviewed collection.
-- The latest standalone phase record is 14.2. Future plans mentioned inside a record are not evidence of implementation.
+- Phase 14.3 is the latest delivered feature record in this collection.
+- Phases 15–17 are approved planning specifications, not evidence of implementation. Their documents must be updated as work is delivered or scope changes.
 - Some refinements existed only inside the original root README or roadmap. They now have dedicated records, with full historical snapshots retained.
